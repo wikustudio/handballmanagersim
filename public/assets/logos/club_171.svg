@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="grad-HSGWIESBADEN" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#003399" />
+      <stop offset="100%" stop-color="#001f5c" />
+    </linearGradient>
+    <filter id="shadow-HSGWIESBADEN" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+  <!-- Main Shield -->
+  <path d="M 60 8 C 84 8 106 14 106 42 C 106 78 60 112 60 112 C 60 112 14 78 14 42 C 14 14 36 8 60 8 Z" fill="url(#grad-HSGWIESBADEN)" stroke="#fbbf24" stroke-width="3" filter="url(#shadow-HSGWIESBADEN)" />
+  <!-- Inner Border Line -->
+  <path d="M 60 15 C 80 15 98 20 98 44 C 98 74 60 102 60 102 C 60 102 22 74 22 44 C 22 20 40 15 60 15 Z" fill="none" stroke="#fbbf24" stroke-width="1.2" opacity="0.6" />
+  
+  
+        <!-- Wiesbaden Three Lilies & Handball -->
+        <g transform="translate(60, 52)">
+          <!-- Top Left Lily -->
+          <path d="M -16 -16 C -16 -24 -24 -24 -22 -14 C -20 -10 -16 -8 -16 -8 C -16 -8 -12 -10 -10 -14 C -8 -24 -16 -24 -16 -16 Z" fill="#fbbf24" stroke="#d97706" stroke-width="0.8"/>
+          <!-- Top Right Lily -->
+          <path d="M 16 -16 C 16 -24 8 -24 10 -14 C 12 -10 16 -8 16 -8 C 16 -8 20 -10 22 -14 C 24 -24 16 -24 16 -16 Z" fill="#fbbf24" stroke="#d97706" stroke-width="0.8"/>
+          <!-- Central Handball -->
+          <circle cx="0" cy="-2" r="16" fill="#ffffff" stroke="#fbbf24" stroke-width="2.5"/>
+          <path d="M -8 -15 C -2 -6 -2 6 -8 15" fill="none" stroke="#003399" stroke-width="1.4"/>
+          <path d="M 8 -15 C 2 -6 2 6 8 15" fill="none" stroke="#003399" stroke-width="1.4"/>
+          <path d="M -16 -2 L 16 -2" stroke="#003399" stroke-width="1.4"/>
+          <!-- Bottom Lily -->
+          <path d="M 0 16 C 0 10 -6 10 -4 18 C -3 21 0 23 0 23 C 0 23 3 21 4 18 C 6 10 0 10 0 16 Z" fill="#fbbf24" stroke="#d97706" stroke-width="0.8"/>
+        </g>
+        
+
+  <!-- Bottom Ribbon / Club Label -->
+  <rect x="16" y="82" width="88" height="15" rx="3" fill="#fbbf24" stroke="#fbbf24" stroke-width="1" />
+  <text x="60" y="90" font-family="system-ui, -apple-system, sans-serif" font-size="7.5" font-weight="900" fill="#002266" text-anchor="middle" dominant-baseline="central" letter-spacing="0.5">HSG WIESBADEN</text>
+  <!-- Sublabel -->
+  <text x="60" y="103" font-family="system-ui, -apple-system, sans-serif" font-size="5.5" font-weight="800" fill="#fbbf24" text-anchor="middle" letter-spacing="0.8">HESSEN</text>
+</svg>
