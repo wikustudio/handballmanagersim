@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#090a0f" />
+    <meta name="color-scheme" content="dark" />
+    <script>
+      (function() {
+        // Disarm any active or stale service worker immediately to prevent cached chunk lock
+        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for (var i = 0; i < regs.length; i++) {
+              regs[i].unregister();
+            }
+          }).catch(function() {});
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(keys) {
+            for (var i = 0; i < keys.length; i++) {
+              caches.delete(keys[i]);
+            }
+          }).catch(function() {});
+        }
+      })();
+    </script>
+    <style>
+      html, body {
+        background-color: #090a0f !important;
+        overscroll-behavior-y: auto !important;
+        overscroll-behavior-x: none;
+        -webkit-overflow-scrolling: touch;
+      }
+    </style>
+    
+    <!-- Apple Mobile Web App & PWA Meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="HandballSim" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- Primary SEO Meta Tags -->
+    <title>Handball Manager Sim – Career & Strategy Game</title>
+    <link rel="canonical" href="https://handballmanagersim.com/" />
+    
+    <!-- Multilingual Alternate Links (hreflang) -->
+    <link rel="alternate" hreflang="x-default" href="https://handballmanagersim.com/" />
+    <link rel="alternate" hreflang="en" href="https://handballmanagersim.com/" />
+    <link rel="alternate" hreflang="de" href="https://handballmanagersim.com/?lang=de" />
+    <link rel="alternate" hreflang="es" href="https://handballmanagersim.com/?lang=es" />
+    <link rel="alternate" hreflang="fr" href="https://handballmanagersim.com/?lang=fr" />
+    <link rel="alternate" hreflang="da" href="https://handballmanagersim.com/?lang=da" />
+    <link rel="alternate" hreflang="pl" href="https://handballmanagersim.com/?lang=pl" />
+
+    <meta name="description" content="Lead your handball club to glory. Manage transfers, master tactical systems, expand your arena, and compete in domestic leagues, national cups, and the EHF Champions League." />
+    <meta name="keywords" content="handball manager, handball manager online, free handball manager, handball simulation, handball game, handball tactics, EHF Champions League game, european handball manager, sports management sim, handball career mode, browser sports game, handball coach game, online handball managerspiel, free sports game, mobile handball sim" />
+    <meta name="author" content="Handball Manager Sim" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    
+    <!-- Open Graph / Social Sharing Cards -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Handball Manager Sim" />
+    <meta property="og:url" content="https://handballmanagersim.com/" />
+    <meta property="og:title" content="Handball Manager Sim – Career & Strategy Game" />
+    <meta property="og:description" content="Lead your handball club to glory. Manage transfers, master tactical systems, expand your arena, and compete in domestic leagues, national cups, and the EHF Champions League." />
+    <meta property="og:image" content="/handballsim_official.png" />
+    <meta property="og:image:width" content="400" />
+    <meta property="og:image:height" content="400" />
+    <meta property="og:image:alt" content="Handball Manager Sim Official Crest" />
+    
+    <!-- Twitter / X Social Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://handballmanagersim.com/" />
+    <meta name="twitter:title" content="Handball Manager Sim – Career & Strategy Game" />
+    <meta name="twitter:description" content="Lead your handball club to glory. Manage transfers, master tactical systems, expand your arena, and compete in domestic leagues, national cups, and the EHF Champions League." />
+    <meta name="twitter:image" content="/handballsim_official.png" />
+    <meta name="twitter:image:alt" content="Handball Manager Sim Official Crest" />
+    
+    <!-- Schema.org JSON-LD Structured Data (WebApplication, VideoGame & FAQPage Rich Snippet) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "@id": "https://handballmanagersim.com/#app",
+          "name": "Handball Manager Sim",
+          "alternateName": "HandballSim",
+          "applicationCategory": "GameApplication",
+          "applicationSubCategory": "Sports Management Simulation",
+          "operatingSystem": "All modern browsers (Chrome, Safari, Firefox, Edge, iOS, Android)",
+          "browserRequirements": "Requires JavaScript. Requires HTML5.",
+          "description": "Lead your handball club to glory. Manage transfers, master tactical systems, expand your arena, and compete in domestic leagues, national cups, and the EHF Champions League.",
+          "genre": ["Sports Game", "Simulation", "Strategy"],
+          "inLanguage": ["en", "de"],
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock"
+          },
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "ratingCount": "240",
+            "bestRating": "5",
+            "worstRating": "1"
+          }
+        },
+        {
+          "@type": "VideoGame",
+          "@id": "https://handballmanagersim.com/#game",
+          "name": "Handball Manager Sim",
+          "description": "Realistic club management simulation featuring European leagues, national cup brackets, Champions League, tactical systems, transfer market dynamics, and stadium infrastructure development.",
+          "gamePlatform": ["Web Browser", "Mobile Web", "PWA"],
+          "genre": ["Sports", "Management", "Turn-Based Strategy"],
+          "playMode": "SinglePlayer",
+          "inLanguage": ["en", "de"],
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "ratingCount": "240"
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://handballmanagersim.com/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is Handball Manager Sim?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Handball Manager Sim is a comprehensive browser-based sports management game. You step into the role of a head coach and manager: oversee squad tactics, negotiate player transfers and loans, expand your home arena, scout youth academy talents, and compete for trophies in domestic leagues, national cups, and the EHF Champions League."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is Handball Manager Sim free to play?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, Handball Manager Sim is 100% free to play directly in your web browser with no paywalls, microtransactions, or pay-to-win mechanics."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Which handball leagues and tournaments are included?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "The simulation features deep European domestic pyramids including Germany (from Bundesliga down to regional tiers), France, Denmark, Spain, Poland, and Croatia, along with single-elimination National Cups and European continental tournaments including the Champions League."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I play on mobile phones or install it as a PWA?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes! The game features responsive proportional mobile scaling (100dvh, iOS zoom guards, touch latency optimization) and full Progressive Web App (PWA) offline support for iOS and Android."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+    
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="manifest" href="/manifest.json" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- Google Consent Mode v2 (EU GDPR & ePrivacy Directive Compliant) -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+
+      var storedConsent = null;
+      try {
+        var raw = localStorage.getItem('hms_cookie_consent_v2');
+        if (raw) storedConsent = JSON.parse(raw);
+      } catch (e) {}
+
+      if (storedConsent && storedConsent.status === 'configured') {
+        gtag('consent', 'default', {
+          'ad_storage': storedConsent.marketing ? 'granted' : 'denied',
+          'ad_user_data': storedConsent.marketing ? 'granted' : 'denied',
+          'ad_personalization': storedConsent.marketing ? 'granted' : 'denied',
+          'analytics_storage': storedConsent.analytics ? 'granted' : 'denied',
+          'functionality_storage': storedConsent.preferences ? 'granted' : 'denied',
+          'personalization_storage': storedConsent.preferences ? 'granted' : 'denied',
+          'security_storage': 'granted',
+          'wait_for_update': 500
+        });
+      } else {
+        gtag('consent', 'default', {
+          'ad_storage': 'denied',
+          'ad_user_data': 'denied',
+          'ad_personalization': 'denied',
+          'analytics_storage': 'denied',
+          'functionality_storage': 'denied',
+          'personalization_storage': 'denied',
+          'security_storage': 'granted',
+          'wait_for_update': 500
+        });
+      }
+      gtag('set', 'ads_data_redaction', true);
+      gtag('set', 'url_passthrough', false);
+    </script>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-L8CWHLRP1G"></script>
+    <script>
+      gtag('js', new Date());
+      gtag('config', 'G-L8CWHLRP1G');
+    </script>
+  </head>
+  <body>
+    <noscript>
+      <div style="padding: 32px 24px; max-width: 900px; margin: 0 auto; color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6;">
+        <h1 style="font-size: 28px; font-weight: 800; color: #38bdf8; margin-bottom: 12px;">Handball Manager Sim – Free European Handball Strategy Game</h1>
+        <p style="font-size: 16px; color: #d4d4d8; margin-bottom: 24px;">
+          Lead your European handball club to glory. Manage transfers, master tactical systems, expand your home arena, and compete across domestic leagues, national cups, and continental tournaments including the EHF Champions League.
+        </p>
+
+        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Deep European League Pyramids</h2>
+        <p style="color: #a1a1aa;">
+          Compete in authentic domestic divisions across Europe: Germany (from the 1. Bundesliga down through 2. Bundesliga, 3. Liga, and Regional divisions), France (Starligue and Proligue), Denmark (Handboldligaen and 1. Division), Spain (Liga ASOBAL), Poland (Superliga), and Croatia (Premijer Liga). Experience promotion, relegation, and insolvency battles.
+        </p>
+
+        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Authentic Handball Tactical Systems</h2>
+        <p style="color: #a1a1aa;">
+          Fine-tune your match plan with real handball tactical archetypes:
+        </p>
+        <ul style="color: #d4d4d8; padding-left: 20px;">
+          <li><strong>6:0 Wall Defense:</strong> Compact, physically imposing wall that forces outside shots.</li>
+          <li><strong>5:1 Disruptive Point:</strong> Active point defender hunting steals and breaking passing lines.</li>
+          <li><strong>3:2:1 Dynamic Pyramid:</strong> High-pressure perimeter defense generating rapid turnovers.</li>
+          <li><strong>Fast Break Transition:</strong> Lightning-fast counter-attacks capitalizing on opponent mistakes.</li>
+          <li><strong>7-on-6 Empty Goal Attack:</strong> Extra field player power play creating numerical overloads.</li>
+        </ul>
+
+        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Continental Silverware & National Cups</h2>
+        <p style="color: #a1a1aa;">
+          Qualify for the prestigious EHF Champions League, European League, and European Cup. Battle through single-elimination National Cup and Regional Cup brackets, and earn invitations to the global IHF Super Globe.
+        </p>
+
+        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Transfers, Youth Incubator & Arena Expansion</h2>
+        <p style="color: #a1a1aa;">
+          Scout domestic and international talent, negotiate contracts, develop youth academy prospects, and expand your home arena from a modest 1,500-seat gym into an elite 30,000-seat sports temple. Take your club public via an Initial Public Offering (IPO) and pay dividends to shareholders.
+        </p>
+
+        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Global Hall of Fame & Dynasty Scoring</h2>
+        <p style="color: #a1a1aa;">
+          Track your 35-year managerial career score calibrated around an elite ~5.5M ceiling based on match victories, trophies won, stadium infrastructure, manager skill points, and financial treasury reserves.
+        </p>
+
+        <p style="margin-top: 32px; font-size: 14px; color: #71717a; border-top: 1px solid #27272a; padding-top: 16px;">
+          <em>JavaScript is required to launch the interactive real-time match engine and graphical dashboard. Please enable JavaScript in your browser settings.</em>
+        </p>
+      </div>
+    </noscript>
+    <div id="root"></div>
+    <div id="app-loading-fallback" style="position: fixed; inset: 0; z-index: 99999; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #090a0f; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif; padding: 20px; text-align: center;">
+      <div style="width: 56px; height: 56px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03);">
+        <img src="/handballsim_official.png" alt="Handball Manager Sim" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='/favicon.svg'" />
+      </div>
+      <h1 style="font-size: 18px; font-weight: 700; letter-spacing: -0.015em; color: #ffffff; margin: 0 0 6px 0;">Handball Manager Sim</h1>
+      <p style="font-size: 13px; color: #a1a1aa; max-width: 380px; margin: 0 0 16px 0;">European handball club career, tactics, transfers & arena management simulation.</p>
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8e8e93; margin-bottom: 20px;">
+        <div style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <span>Loading stadium & rosters...</span>
+      </div>
+      <div id="slow-load-recovery" style="display: none; flex-direction: column; align-items: center; gap: 8px;">
+        <p id="load-error-detail" style="display: none; font-size: 11px; color: #f87171; max-width: 320px; margin: 0; word-break: break-word; font-mono;"></p>
+        <p style="font-size: 11px; color: #71717a; max-width: 280px; margin: 0;">Taking longer than expected? You can refresh or reset cache.</p>
+        <button onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){} if('caches' in window){caches.keys().then(function(k){k.forEach(function(c){caches.delete(c);});});} if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(regs){regs.forEach(function(r){r.unregister();});});} setTimeout(function(){window.location.href = window.location.origin + window.location.pathname + '?reset=' + Date.now();}, 150);" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e4e4e7; font-size: 11px; font-weight: 600; padding: 6px 14px; border-radius: 10px; cursor: pointer;">
+          Clear Cache & Restart
+        </button>
+      </div>
+      <!-- Pre-rendered semantic SEO summary for instant crawler parsing -->
+      <div style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;">
+        <h2>Lead European Handball Clubs in Bundesliga, Starligue, Handboldligaen and Champions League</h2>
+        <p>Handball Manager Sim is a free browser sports management simulation game. Master tactical setups (6:0, 5:1, 3:2:1), sign star players and loans, develop academy recruits, expand stadiums up to 30,000 seats, and win the EHF Champions League.</p>
+      </div>
+      <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+      </style>
+      <script>
+        setTimeout(function() {
+          var el = document.getElementById('slow-load-recovery');
+          if (el) el.style.display = 'flex';
+        }, 3500);
+      </script>
+    </div>
+    <script>
+      window.addEventListener('error', function(e) {
+        var el = document.getElementById('slow-load-recovery');
+        if (el) el.style.display = 'flex';
+        var detail = document.getElementById('load-error-detail');
+        if (detail && e && e.message) {
+          detail.textContent = e.message;
+          detail.style.display = 'block';
+        }
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        var el = document.getElementById('slow-load-recovery');
+        if (el) el.style.display = 'flex';
+        var detail = document.getElementById('load-error-detail');
+        if (detail && e && e.reason) {
+          detail.textContent = String(e.reason.message || e.reason);
+          detail.style.display = 'block';
+        }
+      });
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

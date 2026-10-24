@@ -1,0 +1,56 @@
+{
+  "id": "/",
+  "name": "Handball Manager Sim",
+  "short_name": "HandballSim",
+  "description": "Step into the shoes of a Handball Manager. Plan strategies, manage squad budgets, upgrade your arena, and compete in domestic and European leagues in this comprehensive simulation.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#090a0f",
+  "theme_color": "#090a0f",
+  "categories": ["games", "sports", "entertainment"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Continue Career",
+      "short_name": "Career",
+      "description": "Resume your handball management career",
+      "url": "/",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Global Leaderboard",
+      "short_name": "Hall of Fame",
+      "description": "Check the global manager highscores",
+      "url": "/?view=leaderboard",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tactics & Game Guide",
+      "short_name": "Guide",
+      "description": "Learn defensive systems and financial rules",
+      "url": "/?view=about",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

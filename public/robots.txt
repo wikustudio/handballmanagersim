@@ -1,0 +1,29 @@
+User-agent: *
+Allow: /
+Allow: /assets/
+Allow: /mod-data/
+Allow: /*.png
+Allow: /*.svg
+Allow: /*.ico
+Allow: /*.json
+
+# Explicit rules for major search crawlers and social preview bots
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Discordbot
+Allow: /
+
+Sitemap: https://handballmanagersim.com/sitemap.xml

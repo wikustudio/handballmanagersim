@@ -1,0 +1,6 @@
+{
+  "name": "Handball Manager Sim",
+  "description": "Lead your handball club to glory. Manage transfers, master tactical systems, expand your arena, and compete in domestic leagues, national cups, and the EHF Champions League.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
