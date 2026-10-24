@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="grad-BAHÍAALMERÍA" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="100%" stop-color="#172554" />
+    </linearGradient>
+    <filter id="shadow-BAHÍAALMERÍA" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+  <!-- Main Shield -->
+  <path d="M 60 8 C 84 8 106 14 106 42 C 106 78 60 112 60 112 C 60 112 14 78 14 42 C 14 14 36 8 60 8 Z" fill="url(#grad-BAHÍAALMERÍA)" stroke="#ea580c" stroke-width="3" filter="url(#shadow-BAHÍAALMERÍA)" />
+  <!-- Inner Border Line -->
+  <path d="M 60 15 C 80 15 98 20 98 44 C 98 74 60 102 60 102 C 60 102 22 74 22 44 C 22 20 40 15 60 15 Z" fill="none" stroke="#ea580c" stroke-width="1.2" opacity="0.6" />
+  
+  
+        <!-- Mediterranean Indalo & Waves -->
+        <g transform="translate(60, 48)">
+          <circle cx="0" cy="-12" r="5" fill="#ea580c"/>
+          <path d="M -16 -4 Q 0 -22 16 -4 Q 10 14 0 16 Q -10 14 -16 -4 Z" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+          <circle cx="0" cy="4" r="10" fill="#ffffff" stroke="#1e3a8a" stroke-width="1.5"/>
+        </g>
+        
+
+  <!-- Bottom Ribbon / Club Label -->
+  <rect x="16" y="82" width="88" height="15" rx="3" fill="#ea580c" stroke="#ea580c" stroke-width="1" />
+  <text x="60" y="90" font-family="system-ui, -apple-system, sans-serif" font-size="7.5" font-weight="900" fill="#ffffff" text-anchor="middle" dominant-baseline="central" letter-spacing="0.5">BAHÍA ALMERÍA</text>
+  <!-- Sublabel -->
+  <text x="60" y="103" font-family="system-ui, -apple-system, sans-serif" font-size="5.5" font-weight="800" fill="#ea580c" text-anchor="middle" letter-spacing="0.8">ANDALUCÍA</text>
+</svg>
