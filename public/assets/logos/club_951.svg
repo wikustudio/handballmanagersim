@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="grad-KOZÁRMISLENY" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0369a1" />
+      <stop offset="100%" stop-color="#075985" />
+    </linearGradient>
+    <filter id="shadow-KOZÁRMISLENY" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+  <!-- Main Shield -->
+  <path d="M 60 8 C 84 8 106 14 106 42 C 106 78 60 112 60 112 C 60 112 14 78 14 42 C 14 14 36 8 60 8 Z" fill="url(#grad-KOZÁRMISLENY)" stroke="#fbbf24" stroke-width="3" filter="url(#shadow-KOZÁRMISLENY)" />
+  <!-- Inner Border Line -->
+  <path d="M 60 15 C 80 15 98 20 98 44 C 98 74 60 102 60 102 C 60 102 22 74 22 44 C 22 20 40 15 60 15 Z" fill="none" stroke="#fbbf24" stroke-width="1.2" opacity="0.6" />
+  
+  
+        <!-- Baranya Crown & Handball -->
+        <g transform="translate(60, 48)">
+          <polygon points="-18,-8 -22,-20 -11,-14 0,-22 11,-14 22,-20 18,-8" fill="#fbbf24" stroke="#ffffff" stroke-width="1"/>
+          <circle cx="0" cy="8" r="14" fill="#ffffff" stroke="#0369a1" stroke-width="2"/>
+          <path d="M -7 -4 C -2 3 -2 13 -7 20" fill="none" stroke="#075985" stroke-width="1.3"/>
+          <path d="M 7 -4 C 2 3 2 13 7 20" fill="none" stroke="#075985" stroke-width="1.3"/>
+        </g>
+        
+
+  <!-- Bottom Ribbon / Club Label -->
+  <rect x="16" y="82" width="88" height="15" rx="3" fill="#fbbf24" stroke="#fbbf24" stroke-width="1" />
+  <text x="60" y="90" font-family="system-ui, -apple-system, sans-serif" font-size="7.5" font-weight="900" fill="#0c4a6e" text-anchor="middle" dominant-baseline="central" letter-spacing="0.5">KOZÁRMISLENY</text>
+  <!-- Sublabel -->
+  <text x="60" y="103" font-family="system-ui, -apple-system, sans-serif" font-size="5.5" font-weight="800" fill="#fbbf24" text-anchor="middle" letter-spacing="0.8">BARANYA</text>
+</svg>
