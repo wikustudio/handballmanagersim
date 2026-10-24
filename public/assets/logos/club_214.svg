@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="grad-SÃOBERNARDO" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#15803d" />
+      <stop offset="100%" stop-color="#14532d" />
+    </linearGradient>
+    <filter id="shadow-SÃOBERNARDO" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+  <!-- Main Shield -->
+  <path d="M 60 8 C 84 8 106 14 106 42 C 106 78 60 112 60 112 C 60 112 14 78 14 42 C 14 14 36 8 60 8 Z" fill="url(#grad-SÃOBERNARDO)" stroke="#facc15" stroke-width="3" filter="url(#shadow-SÃOBERNARDO)" />
+  <!-- Inner Border Line -->
+  <path d="M 60 15 C 80 15 98 20 98 44 C 98 74 60 102 60 102 C 60 102 22 74 22 44 C 22 20 40 15 60 15 Z" fill="none" stroke="#facc15" stroke-width="1.2" opacity="0.6" />
+  
+  
+        <!-- Aveiro Canal Moliceiro & Ball -->
+        <g transform="translate(60, 48)">
+          <circle cx="0" cy="0" r="16" fill="#ffffff" stroke="#15803d" stroke-width="2.5"/>
+          <path d="M -14 6 Q 0 16 14 6 Q 0 8 -14 6 Z" fill="#15803d"/>
+          <text x="0" y="3" font-family="system-ui, sans-serif" font-weight="900" font-size="10" fill="#15803d" text-anchor="middle">CDSB</text>
+        </g>
+        
+
+  <!-- Bottom Ribbon / Club Label -->
+  <rect x="16" y="82" width="88" height="15" rx="3" fill="#facc15" stroke="#facc15" stroke-width="1" />
+  <text x="60" y="90" font-family="system-ui, -apple-system, sans-serif" font-size="7.5" font-weight="900" fill="#14532d" text-anchor="middle" dominant-baseline="central" letter-spacing="0.5">SÃO BERNARDO</text>
+  <!-- Sublabel -->
+  <text x="60" y="103" font-family="system-ui, -apple-system, sans-serif" font-size="5.5" font-weight="800" fill="#facc15" text-anchor="middle" letter-spacing="0.8">AVEIRO · RIA</text>
+</svg>
