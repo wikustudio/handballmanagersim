@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="grad-441" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#2563ebdd" />
+    </linearGradient>
+    <filter id="shadow-441" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+  </defs>
+  <!-- Main Shield -->
+  <path d="M 60 8 C 84 8 106 14 106 42 C 106 78 60 112 60 112 C 60 112 14 78 14 42 C 14 14 36 8 60 8 Z" fill="url(#grad-441)" stroke="#ffffff" stroke-width="3" filter="url(#shadow-441)" />
+  <!-- Inner Border Line -->
+  <path d="M 60 15 C 80 15 98 20 98 44 C 98 74 60 102 60 102 C 60 102 22 74 22 44 C 22 20 40 15 60 15 Z" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.6" />
+  <!-- Top Arch Banner -->
+  <path d="M 28 28 Q 60 22 92 28 Q 60 36 28 28 Z" fill="#ffffff" opacity="0.25" />
+  <!-- Central Emblem Backdrop -->
+  <circle cx="60" cy="54" r="24" fill="#ffffff" opacity="0.18" stroke="#ffffff" stroke-width="1.5" />
+  <!-- Heraldic Symbol / Motif -->
+  <circle cx="60" cy="54" r="14" fill="none" stroke="#ffffff" stroke-width="2"/><path d="M 50 54 Q 60 44 70 54 M 53 45 Q 60 54 67 45 M 53 63 Q 60 54 67 63" stroke="#ffffff" stroke-width="1.2" fill="none"/>
+  <!-- Bottom Ribbon / Club Label -->
+  <rect x="22" y="82" width="76" height="15" rx="3" fill="#ffffff" />
+  <text x="60" y="90" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="900" fill="#2563eb" text-anchor="middle" dominant-baseline="central" letter-spacing="0.5">MARTIGUES HB</text>
+  <!-- Base Star -->
+  <polygon points="60,101 62,105 66,105 63,107 64,111 60,109 56,111 57,107 54,105 58,105" fill="#ffffff" />
+</svg>
