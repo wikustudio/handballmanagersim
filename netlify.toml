@@ -1,0 +1,13 @@
+[build]
+  command = "npx vite build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PUPPETEER_SKIP_DOWNLOAD = "true"
+
+# SPA client-side routing fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
