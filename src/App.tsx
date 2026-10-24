@@ -785,23 +785,11 @@ export default function App() {
     seoType = 'game';
   }
 
-  // Dynamic Inactive Tab Hook: draws user's attention back when they leave the tab open
+  // Ensure document.title always stays in sync with the active career or onboarding state
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        if (state.club?.name) {
-          document.title = `⚡ Coach! ${state.club.name} Awaits | Handball Manager Sim`;
-        } else {
-          document.title = '⚡ Your Handball Career Awaits! | Handball Manager Sim';
-        }
-      } else {
-        document.title = seoTitle;
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [seoTitle, state.club?.name]);
+    document.title = seoTitle;
+  }, [seoTitle, hasActiveCareer, state.club?.name, state.year]);
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden text-neutral-200 font-sans selection:bg-blue-500/30 pt-12 sm:pt-16 flex flex-col">

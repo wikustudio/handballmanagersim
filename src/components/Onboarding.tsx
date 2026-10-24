@@ -465,7 +465,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
           {/* Subtle Ambient Radial Lighting */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[500px] h-[350px] bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.035),_transparent_70%)] rounded-full blur-2xl pointer-events-none -z-10" />
 
-          {/* Top Update Pill: v 2.1 Game Logic Updates */}
+          {/* Top Update Pill: v 2.2 Sponsors, Supercup & World Updates */}
           <button
             type="button"
             onClick={() => {
@@ -475,10 +475,10 @@ export const Onboarding: React.FC<OnboardingProps> = ({
             className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 hover:border-white/20 text-xs text-zinc-300 transition mx-auto mb-4 cursor-pointer active:scale-95 shadow-sm"
           >
             <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-zinc-200 border border-white/15 font-semibold text-[10px] tracking-tight">
-              v 2.1
+              v 2.2
             </span>
             <span className="text-zinc-300 font-medium text-xs">
-              Game Logic Updates
+              Sponsors, Supercup &amp; World Updates
             </span>
             <i className="fas fa-chevron-right text-[9px] text-zinc-500" />
           </button>

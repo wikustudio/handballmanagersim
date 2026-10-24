@@ -264,9 +264,9 @@ console.log(`  Successfully simulated 12 macro seasons with ${totalInsolvencies}
 console.log('✓ Test 5 Passed: Multi-year pyramid sizes and OVR bounds remained perfectly stable over 12 seasons.\n');
 
 // ----------------------------------------------------------------------------
-// TEST 6: v2.1 Release Badge & Version History Integrity
+// TEST 6: v2.2 Release Badge & Version History Integrity
 // ----------------------------------------------------------------------------
-console.log('Running Test 6: v2.1 Game Logic Updates Release Badge & v2.0/v1.9 History...');
+console.log('Running Test 6: v2.2 Release Badge & v2.1/v2.0/v1.9 History...');
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -274,15 +274,16 @@ import path from 'node:path';
 const onboardingSrc = fs.readFileSync(path.resolve('./src/components/Onboarding.tsx'), 'utf-8');
 const modModalSrc = fs.readFileSync(path.resolve('./src/components/ModSelectionModal.tsx'), 'utf-8');
 
-assert(onboardingSrc.includes('v 2.1'), 'Onboarding.tsx must display v 2.1 badge');
-assert(onboardingSrc.includes('Game Logic Updates'), 'Onboarding.tsx must display Game Logic Updates title');
+assert(onboardingSrc.includes('v 2.2'), 'Onboarding.tsx must display v 2.2 badge');
+assert(onboardingSrc.includes('Sponsors, Supercup &amp; World Updates'), 'Onboarding.tsx must display Sponsors, Supercup & World Updates title');
 
-assert(modModalSrc.includes('v 2.1') && modModalSrc.includes('Game Logic Updates'), 'ModSelectionModal must contain v2.1 Game Logic Updates active release');
+assert(modModalSrc.includes('v 2.2') && modModalSrc.includes('Sponsors, Supercup &amp; World Updates'), 'ModSelectionModal must contain v2.2 active release');
+assert(modModalSrc.includes('v 2.1') && modModalSrc.includes('Game Logic Updates'), 'ModSelectionModal must preserve v2.1 in milestone history');
 assert(modModalSrc.includes('v 2.0') && modModalSrc.includes('Comprehensive Handball Realism World Audit'), 'ModSelectionModal must preserve v2.0 in milestone history');
 assert(modModalSrc.includes('v 1.9') && modModalSrc.includes('Editor, Design, Mods & European Cups'), 'ModSelectionModal must preserve v1.9 Editor, Design, Mods & European Cups in milestone history');
-assert(modModalSrc.includes('isV19Expanded') && modModalSrc.includes('setIsV19Expanded'), 'ModSelectionModal must support collapsible accordion for v1.9 milestone archive');
+assert(modModalSrc.includes('isV21Expanded') && modModalSrc.includes('setIsV21Expanded'), 'ModSelectionModal must support collapsible accordion for v2.1 milestone archive');
 
-console.log('✓ Test 6 Passed: v2.1 Game Logic Updates active release badge and v2.0/v1.9 milestone history verified.\n');
+console.log('✓ Test 6 Passed: v2.2 active release badge and v2.1/v2.0/v1.9 milestone history verified.\n');
 
 console.log('======================================================');
 console.log('ALL HANDBALL REALISM BLINDSPOT AUDIT TESTS PASSED (6/6)');

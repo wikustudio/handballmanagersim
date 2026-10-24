@@ -43,6 +43,7 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
   const [realDataActive, setRealDataActiveState] = useState<boolean>(isRealDataModActive());
   const [customClubs, setCustomClubsState] = useState<Club[] | null>(getCustomDb());
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isV21Expanded, setIsV21Expanded] = useState<boolean>(false);
   const [isV20Expanded, setIsV20Expanded] = useState<boolean>(false);
   const [isV19Expanded, setIsV19Expanded] = useState<boolean>(false);
 
@@ -248,7 +249,7 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
                 }`}
               >
                 <i className="fas fa-sparkles text-[10px]" />
-                <span>v2.1 Changelog</span>
+                <span>v2.2 Changelog</span>
               </button>
               <button
                 type="button"
@@ -286,16 +287,16 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
             {/* TAB 1: CHANGELOG & VERSION HISTORY */}
             {activeTab === 'changelog' && (
               <div className="space-y-4">
-                {/* ACTIVE RELEASE CARD: v2.1 Game Logic Updates */}
+                {/* ACTIVE RELEASE CARD: v2.2 Commercial, Supercup & World Progression Updates */}
                 <div className="relative overflow-hidden rounded-2xl p-5 border border-emerald-500/20 bg-[#10121a]">
                   {/* Release Header */}
                   <div className="flex items-center justify-between gap-3 border-b border-white/[0.04] pb-3 mb-3.5">
                     <div className="flex items-center gap-2.5">
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold text-xs tracking-tight shadow-sm">
-                        v 2.1
+                        v 2.2
                       </span>
                       <h3 className="text-base sm:text-lg font-semibold text-white uppercase tracking-tight">
-                        Game Logic Updates
+                        Sponsors, Supercup &amp; World Updates
                       </h3>
                     </div>
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
@@ -306,61 +307,147 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
 
                   {/* Eyebrow */}
                   <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300/90 mb-3">
-                    DYNAMIC FACILITY MILESTONES, REBUILD PILLARS &amp; DEEP FINANCIAL ENGINE
+                    TIER-SCALED SPONSOR POOLS, DOMESTIC SUPERCUP FINAL &amp; AI INFRASTRUCTURE
                   </div>
 
                   {/* Bullet Highlights Grid */}
                   <div className="space-y-2.5 text-xs text-zinc-300">
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-seedling text-emerald-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-handshake text-emerald-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">5-Tier Youth Academy Capabilities (Lvl 1–5)</strong>
+                        <strong className="text-white block font-semibold">20-Country Tier-Scaled Sponsor Pools (Mod ON &amp; Fictional)</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Dynamic seasonal scouting capacity (1–5 prospects/yr), Lvl 2 Regional Hub (8 slots), Lvl 3 Anti-Poaching Legal Shielding, Lvl 4 Foreign Wonderkid Imports 🌍 (DEN, FRA, ESP, SWE, NOR, CRO, SLO), and Lvl 5 Global Dynasty (100% poaching &amp; Title Defender fatigue immunity).
+                          Diversified pools of 15+ regional sponsors per country across Standard, Megadeal, and Performance tiers with real-world brands when Mod is active and sound-alike fallback brands when Mod is off—scaled strictly by division tier (Tiers 1–5) with exact contract figures.
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-heart-pulse text-purple-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-file-signature text-sky-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">5-Tier Medical Center &amp; Sports Science (Lvl 1–5)</strong>
+                        <strong className="text-white block font-semibold">Persistent Season Sponsor Deals &amp; Winter Break Pitching</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Lvl 2 In-House Rehab (€0 mid-season dilemma rehab &amp; -50% crisis cost), Lvl 3 Sports Science Lab (Dramatic Decay immunity &amp; 100% Star Injury bounce-back), Lvl 4 Cryo Chamber (max 1 annual retirement cap &amp; 50% Veteran Ringer OVR retention), and Lvl 5 Peak Performance (+1.0 Matchday OVR &amp; -50% Generational Turnover shield).
+                          Signed sponsors lock in for the full season, collapsed negotiations display as Empty, and unpitched sponsor offers persist across the Winter Break and into the next campaign with full visibility in the Financial Ledger and Season Wrap-Up.
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-chess-knight text-sky-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-trophy text-amber-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">End-Game Rebuild Pillars &amp; Anti-Metronome Tactics</strong>
+                        <strong className="text-white block font-semibold">Domestic Supercup Curtain-Raiser Final &amp; European Celebrations</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Generational Squad Rebuild (transfer windfall, wage relief &amp; wonderkid injection on a 5-year cooldown), Head Coach &amp; Sporting Director Archetypes, and rolling 4-season tactical staleness tracking that prevents 2-tactic alternating exploits.
+                          Authentic one-off Domestic Supercup Final between the national League Champion and Cup Winner (or League Runner-Up for Double winners), plus side-by-side European &amp; League Title celebration banners in the Season Wrap-Up and Career History.
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-scale-balanced text-amber-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-building-shield text-purple-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">Deep Financial Realism, Luxury Tax &amp; Bank Loans</strong>
+                        <strong className="text-white block font-semibold">Dynamic AI Club Facility Progression (5+ Seasons)</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Progressive Competitive Balance Luxury Tax &amp; Dynasty Repeater Levy, €2.5M Treasury Endowment Cap, Institutional Bank Loans (10/15/25-yr amortization &amp; early payoff rebates), Corporate IPO Shareholder Dividend Trap, and exact 1:1 Ledger synchronization.
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-tv text-rose-400 mt-0.5 shrink-0" />
-                      <div>
-                        <strong className="text-white block font-semibold">Decision Day, Playoff Parity &amp; Reserve Team Integrity</strong>
-                        <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Authoritative synchronization of Decision Day survival, direct relegation, and 3rd-place promotion playoffs across all broadcast modals and league tables, plus Reserve Team (&quot;II&quot;) academy rotation protection and 1,500-seat arena caps.
+                          Top-flight and high-stature clubs across the universe organically upgrade their Youth Academies and Medical Centers to Levels 2–3+ as multi-season careers progress.
                         </span>
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* PREVIOUS MILESTONE ARCHIVE CARD: v2.1 (Collapsible Accordion Row) */}
+                <div className="relative overflow-hidden rounded-2xl border border-white/[0.04] bg-[#10121a] transition-colors duration-200 hover:border-emerald-500/20">
+                  <button
+                    type="button"
+                    onClick={() => setIsV21Expanded((prev) => !prev)}
+                    className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left transition hover:bg-emerald-500/[0.03] cursor-pointer focus:outline-none"
+                    aria-expanded={isV21Expanded}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="px-2 py-0.5 rounded-full bg-black/40 text-zinc-400 border border-white/[0.04] font-semibold text-xs tracking-tight shadow-sm shrink-0">
+                        v 2.1
+                      </span>
+                      <h3 className="text-sm sm:text-base font-semibold text-zinc-200 uppercase tracking-tight truncate">
+                        {'Game Logic Updates'}
+                      </h3>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 hidden xs:inline-block">
+                        MILESTONE ARCHIVE
+                      </span>
+                      <div className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-zinc-400">
+                        <i
+                          className={`fas fa-chevron-down text-[10px] transition-transform duration-200 ${
+                            isV21Expanded ? 'rotate-180 text-white' : ''
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isV21Expanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        className="overflow-hidden border-t border-white/[0.04] bg-black/20"
+                      >
+                        <div className="p-4 sm:p-5 space-y-2.5 text-xs text-zinc-300">
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-seedling text-emerald-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">5-Tier Youth Academy Capabilities (Lvl 1–5)</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Dynamic seasonal scouting capacity (1–5 prospects/yr), Lvl 2 Regional Hub (8 slots), Lvl 3 Anti-Poaching Legal Shielding, Lvl 4 Foreign Wonderkid Imports 🌍 (DEN, FRA, ESP, SWE, NOR, CRO, SLO), and Lvl 5 Global Dynasty (100% poaching &amp; Title Defender fatigue immunity).
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-heart-pulse text-purple-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">5-Tier Medical Center &amp; Sports Science (Lvl 1–5)</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Lvl 2 In-House Rehab (€0 mid-season dilemma rehab &amp; -50% crisis cost), Lvl 3 Sports Science Lab (Dramatic Decay immunity &amp; 100% Star Injury bounce-back), Lvl 4 Cryo Chamber (max 1 annual retirement cap &amp; 50% Veteran Ringer OVR retention), and Lvl 5 Peak Performance (+1.0 Matchday OVR &amp; -50% Generational Turnover shield).
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-chess-knight text-sky-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">End-Game Rebuild Pillars &amp; Anti-Metronome Tactics</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Generational Squad Rebuild (transfer windfall, wage relief &amp; wonderkid injection on a 5-year cooldown), Head Coach &amp; Sporting Director Archetypes, and rolling 4-season tactical staleness tracking that prevents 2-tactic alternating exploits.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-scale-balanced text-amber-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Deep Financial Realism, Luxury Tax &amp; Bank Loans</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Progressive Competitive Balance Luxury Tax &amp; Dynasty Repeater Levy, €2.5M Treasury Endowment Cap, Institutional Bank Loans (10/15/25-yr amortization &amp; early payoff rebates), Corporate IPO Shareholder Dividend Trap, and exact 1:1 Ledger synchronization.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-tv text-rose-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Decision Day, Playoff Parity &amp; Reserve Team Integrity</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Authoritative synchronization of Decision Day survival, direct relegation, and 3rd-place promotion playoffs across all broadcast modals and league tables, plus Reserve Team (&quot;II&quot;) academy rotation protection and 1,500-seat arena caps.
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* PREVIOUS MILESTONE ARCHIVE CARD: v2.0 (Collapsible Accordion Row) */}

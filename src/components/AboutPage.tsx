@@ -133,22 +133,22 @@ export const AboutPage: React.FC<AboutPageProps> = ({ lang = 'en', onStartCareer
               <div>
                 <strong className="text-white block font-bold mb-1">
                   {isDe
-                    ? 'Neu in Version 2.1: Dynamische Vereins-Infrastruktur (Stufe 1–5), Umbruch-Säulen & Tiefen-Finanzmodell'
-                    : 'New in Version 2.1: Dynamic Facility Milestones (Lvl 1–5), Rebuild Pillars & Deep Financial Realism'}
+                    ? 'Neu in Version 2.2: Ligen-skalierte Sponsoren-Pools, Nationales Supercup-Finale & KI-Infrastruktur'
+                    : 'New in Version 2.2: Tier-Scaled Sponsor Pools, Domestic Supercup Final & AI Facility Progression'}
                 </strong>
                 <span>
                   {isDe
-                    ? 'Das v2.1-Update erweitert die Simulation um 5-stufige Meilenstein-Fähigkeiten für Jugendakademie (inkl. Auslands-Scouting & Dynastie-Immunität) und Medizinisches Zentrum (In-House-Reha, Sportwissenschafts-Labor, Kryokammer & +1.0 Matchday-OVR), den Generationen-Umbruch (5-Jahres-Zyklus), Anti-Metronom-Taktikverschleiß, Institutionelle Bankdarlehen (10/15/25 Jahre), Luxus- & Dynastie-Steuern sowie eine 100% synchronisierte Decision-Day- und Playoff-Engine.'
-                    : 'The v2.1 update introduces 5-tier capability milestones for both the Youth Academy (scaled scouting quotas, legal anti-poaching shields, foreign wonderkid imports 🌍, and Level 5 Dynasty Immunity) and the Medical Center (In-House Rehab, Sports Science Lab, Cryo & Biomechanics retirement caps, and +1.0 Matchday Conditioning OVR), alongside Generational Squad Rebuilds, Anti-Metronome tactical staleness tracking, Institutional Bank Loans (10/15/25-yr amortization), Competitive Balance Luxury Taxes, and authoritative Decision Day & Playoff synchronization.'}
+                    ? 'Das v2.2-Update bringt länderspezifische Sponsoren-Pools (15+ Partner pro Land für Standard-, Mega- und Performance-Deals mit Liga-Skalierung von Liga 1 bis 5), persistente Saison-Sponsorenverträge über die Winterpause hinweg, das nationale Supercup-Finale (Meister gegen Pokalsieger), gemeinsame Europapokal- & Meisterfeiern im Saisonabschluss sowie dynamischen Ausbau der Jugendakademie & Medizin-Zentren bei Top-KI-Vereinen.'
+                    : 'The v2.2 update introduces 20-country tier-scaled sponsor pools (15+ corporate partners per nation across Standard, Megadeal, and Performance tiers with Mod ON real brands and Mod OFF sound-alike equivalents), persistent season sponsor slots across the Winter Break, the single-match Domestic Supercup Final (League Champion vs. Cup Winner), joint European & League Title celebrations, and multi-season AI club Youth Academy & Medical Center progression.'}
                 </span>
               </div>
               <div className="pt-2 border-t border-white/[0.06] text-xs text-zinc-400">
                 <strong className="text-zinc-200 font-semibold">
-                  {isDe ? 'v2.0 Fundament:' : 'v2.0 Core Foundation:'}
+                  {isDe ? 'v2.1 & v2.0 Fundament:' : 'v2.1 & v2.0 Core Foundation:'}
                 </strong>{' '}
                 {isDe
-                  ? '18 kalibrierte europäische und internationale Ligapyramiden, striktes 2-1-0-Punktesystem, authentische TV-Broadcaster sowie Verlängerungen und Siebenmeterwerfen.'
-                  : '18 calibrated European and international league pyramids, strict 2-1-0 handball scoring, authentic public broadcasters, and knockout overtime & 7-meter penalty shootouts.'}
+                  ? '5-stufige Meilensteine für Jugendakademie & Medizinisches Zentrum, Generationen-Umbruch, Anti-Metronom-Taktikverschleiß, Bankdarlehen, 18 kalibrierte Ligapyramiden und striktes 2-1-0-Punktesystem.'
+                  : '5-tier Youth Academy & Medical Center milestones, Generational Squad Rebuilds, Anti-Metronome tactical staleness, Institutional Bank Loans, 18 calibrated league pyramids, and strict 2-1-0 handball scoring.'}
               </div>
             </div>
           </div>
