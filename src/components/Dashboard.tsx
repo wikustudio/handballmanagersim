@@ -191,10 +191,18 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     try {
       if (typeof localStorage === 'undefined') return;
       const rawCp = localStorage.getItem(POSTSEASON_CHECKPOINT_KEY);
-      if (!rawCp) return;
+      if (!rawCp) {
+        if (state.postSeasonPending) {
+          useGameStore.getState().updateState({ postSeasonPending: false });
+        }
+        return;
+      }
       const cp = JSON.parse(rawCp);
       if (!cp || cp.careerId !== state.careerId || cp.year !== state.year) {
         localStorage.removeItem(POSTSEASON_CHECKPOINT_KEY);
+        if (state.postSeasonPending) {
+          useGameStore.getState().updateState({ postSeasonPending: false });
+        }
         return;
       }
 
@@ -209,16 +217,53 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         };
       };
 
-      if (Array.isArray(cp.pendingMatches) && cp.pendingMatches.length > 0) setPendingMatches(cp.pendingMatches);
-      if (Array.isArray(cp.queuedCupMatches) && cp.queuedCupMatches.length > 0) setQueuedCupMatches(cp.queuedCupMatches);
-      if (Array.isArray(cp.queuedEuroMatches) && cp.queuedEuroMatches.length > 0) setQueuedEuroMatches(cp.queuedEuroMatches);
-      if (Array.isArray(cp.queuedSuperGlobeMatches) && cp.queuedSuperGlobeMatches.length > 0) setQueuedSuperGlobeMatches(cp.queuedSuperGlobeMatches);
-      if (Array.isArray(cp.pendingCupToasts) && cp.pendingCupToasts.length > 0) setPendingCupToasts(cp.pendingCupToasts);
-      if (cp.activeCelebrationToast) setActiveCelebrationToast(cp.activeCelebrationToast);
-      if (cp.statusChange) setStatusChange(cp.statusChange);
+      const restoredPendingMatches = Array.isArray(cp.pendingMatches) ? cp.pendingMatches : [];
+      const restoredQueuedCup = Array.isArray(cp.queuedCupMatches) ? cp.queuedCupMatches : [];
+      const restoredQueuedEuro = Array.isArray(cp.queuedEuroMatches) ? cp.queuedEuroMatches : [];
+      const restoredQueuedSuperGlobe = Array.isArray(cp.queuedSuperGlobeMatches) ? cp.queuedSuperGlobeMatches : [];
+      const restoredCupToasts = Array.isArray(cp.pendingCupToasts) ? cp.pendingCupToasts : [];
+      const restoredPendingResult = cp.pendingSeasonResult ? reattachHeavyFields(cp.pendingSeasonResult) : null;
+
+      if (restoredPendingResult) setPendingSeasonResult(restoredPendingResult);
       if (cp.stagedSeasonResultData) setStagedSeasonResultData(reattachHeavyFields(cp.stagedSeasonResultData));
-      if (cp.seasonResultData) setSeasonResultData(reattachHeavyFields(cp.seasonResultData));
-      if (cp.pendingSeasonResult) setPendingSeasonResult(reattachHeavyFields(cp.pendingSeasonResult));
+
+      if (cp.seasonResultData) {
+        setSeasonResultData(reattachHeavyFields(cp.seasonResultData));
+      } else if (cp.statusChange) {
+        setStatusChange(cp.statusChange);
+      } else if (cp.activeCelebrationToast) {
+        setActiveCelebrationToast(cp.activeCelebrationToast);
+        if (restoredCupToasts.length > 0) setPendingCupToasts(restoredCupToasts);
+        if (restoredQueuedCup.length > 0) setQueuedCupMatches(restoredQueuedCup);
+        if (restoredQueuedEuro.length > 0) setQueuedEuroMatches(restoredQueuedEuro);
+        if (restoredQueuedSuperGlobe.length > 0) setQueuedSuperGlobeMatches(restoredQueuedSuperGlobe);
+      } else if (restoredPendingMatches.length > 0) {
+        setPendingMatches(restoredPendingMatches);
+        if (restoredCupToasts.length > 0) setPendingCupToasts(restoredCupToasts);
+        if (restoredQueuedCup.length > 0) setQueuedCupMatches(restoredQueuedCup);
+        if (restoredQueuedEuro.length > 0) setQueuedEuroMatches(restoredQueuedEuro);
+        if (restoredQueuedSuperGlobe.length > 0) setQueuedSuperGlobeMatches(restoredQueuedSuperGlobe);
+      } else if (restoredCupToasts.length > 0) {
+        setActiveCelebrationToast(restoredCupToasts[0]);
+        setPendingCupToasts(restoredCupToasts.slice(1));
+        if (restoredQueuedCup.length > 0) setQueuedCupMatches(restoredQueuedCup);
+        if (restoredQueuedEuro.length > 0) setQueuedEuroMatches(restoredQueuedEuro);
+        if (restoredQueuedSuperGlobe.length > 0) setQueuedSuperGlobeMatches(restoredQueuedSuperGlobe);
+      } else if (restoredQueuedCup.length > 0) {
+        setPendingMatches([restoredQueuedCup[0]]);
+        setQueuedCupMatches(restoredQueuedCup.slice(1));
+        if (restoredQueuedEuro.length > 0) setQueuedEuroMatches(restoredQueuedEuro);
+        if (restoredQueuedSuperGlobe.length > 0) setQueuedSuperGlobeMatches(restoredQueuedSuperGlobe);
+      } else if (restoredQueuedEuro.length > 0) {
+        setPendingMatches([restoredQueuedEuro[0]]);
+        setQueuedEuroMatches(restoredQueuedEuro.slice(1));
+        if (restoredQueuedSuperGlobe.length > 0) setQueuedSuperGlobeMatches(restoredQueuedSuperGlobe);
+      } else if (restoredQueuedSuperGlobe.length > 0) {
+        setPendingMatches([restoredQueuedSuperGlobe[0]]);
+        setQueuedSuperGlobeMatches(restoredQueuedSuperGlobe.slice(1));
+      } else if (restoredPendingResult) {
+        setTimeout(() => finishSimulation(restoredPendingResult), 0);
+      }
     } catch {
       // Ignore malformed checkpoint
     }

@@ -200,6 +200,22 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
 
   const isReserve = isReserveClub(seasonData.clubName || state.club.name);
 
+  // Read newly generated trophy data merging both seasonData.trophiesThisYear and latestHistoryEntry.trophiesThisYear
+  const latestHistoryEntry = (state.history && state.history.length > 0)
+    ? state.history[state.history.length - 1]
+    : undefined;
+  const currentSeasonTrophies: TrophiesObj = {
+    ...(seasonData.trophiesThisYear || {}),
+    ...(latestHistoryEntry?.trophiesThisYear || {}),
+  } as TrophiesObj;
+
+  const hasBl = (currentSeasonTrophies.bl || 0) > 0;
+  const hasDfb = (currentSeasonTrophies.dfb || 0) > 0;
+  const hasCl = (currentSeasonTrophies.cl || 0) > 0;
+  const hasEl = (currentSeasonTrophies.el || 0) > 0;
+  const hasEcl = (currentSeasonTrophies.ecl || 0) > 0;
+  const hasCwc = (currentSeasonTrophies.cwc || 0) > 0;
+
   const getBroadcasterVerdict = () => {
     const maxT = getMaxTier(country);
     const isPromoted = Boolean((seasonData.promoted || (seasonData.pos <= 2 && !(seasonData.tier === 2 && isReserve))) && seasonData.tier > 1 && (!seasonData.nextTier || seasonData.nextTier < seasonData.tier));
@@ -549,22 +565,6 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
 
     return base;
   };
-
-  // Read newly generated trophy data merging both seasonData.trophiesThisYear and latestHistoryEntry.trophiesThisYear
-  const latestHistoryEntry = (state.history && state.history.length > 0)
-    ? state.history[state.history.length - 1]
-    : undefined;
-  const currentSeasonTrophies: TrophiesObj = {
-    ...(seasonData.trophiesThisYear || {}),
-    ...(latestHistoryEntry?.trophiesThisYear || {}),
-  } as TrophiesObj;
-
-  const hasBl = (currentSeasonTrophies.bl || 0) > 0;
-  const hasDfb = (currentSeasonTrophies.dfb || 0) > 0;
-  const hasCl = (currentSeasonTrophies.cl || 0) > 0;
-  const hasEl = (currentSeasonTrophies.el || 0) > 0;
-  const hasEcl = (currentSeasonTrophies.ecl || 0) > 0;
-  const hasCwc = (currentSeasonTrophies.cwc || 0) > 0;
 
   // Replicate combo logic from SeasonHistoryTable:
   // If bl + dfb + cl + cwc = 🏆 Quadruple

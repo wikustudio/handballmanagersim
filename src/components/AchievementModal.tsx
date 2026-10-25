@@ -220,7 +220,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_#ef4444]" />
                 </span>
-                <span>{cleanBroadcastBadge(broadcastPkg.networkBadge, isModActive)}</span>
+                <span>LIVE</span>
               </div>
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-rose-500/[0.08] border border-rose-400/30 text-[10px] font-mono font-semibold text-rose-300 tracking-wider uppercase shadow-sm">
                 DECISION DAY · HEARTBREAK
@@ -450,7 +450,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_#ef4444]" />
               </span>
-              <span>{cleanBroadcastBadge(broadcastPkg.networkBadge, isModActive)}</span>
+              <span>LIVE</span>
             </div>
             <span className={`inline-flex items-center gap-1 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full border text-[10px] font-mono font-semibold tracking-wider uppercase shadow-sm ${
               isMagicCup 

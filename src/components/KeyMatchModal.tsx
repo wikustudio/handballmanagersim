@@ -1101,34 +1101,26 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
         {/* OFFICIAL BROADCASTING SUITE HEADER BAR                                    */}
         {/* ========================================================================= */}
         <div className="w-full px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-white/[0.08] bg-black/40 flex items-center justify-between text-xs gap-2 relative z-20">
-          {/* Left: Clean Match Broadcast Feed Indicator & Arena */}
+          {/* Left: Clean LIVE Indicator & Host Arena */}
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-            {/* Live buzzing broadcast badge in rounded glass red box */}
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-xl bg-red-950/40 border border-red-500/35 backdrop-blur-md shadow-[0_0_14px_rgba(239,68,68,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] text-[10px] font-mono font-bold text-red-100 shrink-0">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-red-950/40 border border-red-500/35 backdrop-blur-md shadow-[0_0_14px_rgba(239,68,68,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] text-[10px] font-mono font-bold text-red-100 shrink-0">
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_#ef4444]" />
               </span>
-              <span>{cleanBroadcastBadge(broadcastPackage.networkBadge, isModActive)}</span>
+              <span>LIVE</span>
             </div>
 
             <span className="text-zinc-600 shrink-0">·</span>
 
-            {/* Network Feed Tag */}
-            <span className="text-[10px] sm:text-[11px] font-mono text-zinc-300 truncate">
-              {broadcastPackage.networkTag}
-            </span>
-
-            <span className="text-zinc-600 hidden xs:inline shrink-0">·</span>
-
-            {/* Host Arena Watermark */}
-            <div className="text-[10px] text-zinc-400 font-mono hidden sm:flex items-center gap-1.5 shrink-0">
-              <i className="fas fa-location-dot text-amber-400 text-[10px]" />
-              <span className="truncate max-w-[140px] sm:max-w-[200px]">{hostArena}</span>
+            {/* Host Arena */}
+            <div className="text-[10px] sm:text-[11px] text-zinc-300 font-mono flex items-center gap-1.5 min-w-0">
+              <i className="fas fa-location-dot text-amber-400 text-[10px] shrink-0" />
+              <span className="truncate">{hostArena}</span>
             </div>
           </div>
 
-          {/* Right: Clean authentic borderless vector broadcast logo replacing redundant text badge */}
+          {/* Right: Broadcaster Logo */}
           <div className="flex items-center gap-2 shrink-0">
             <BroadcastLogo packageOrKey={broadcastPackage} size="sm" isModActive={isModActive} />
           </div>
@@ -1675,15 +1667,11 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
         {/* ========================================================================= */}
         {stage === 'match' && (
           <div ref={stageContainerRef} className="p-5 sm:p-8 flex flex-col items-center text-center relative z-10 overflow-y-auto custom-scrollbar flex-1 min-h-0">
-            {/* Broadcast Eyebrow + 2x Speed / Instant Result Controls */}
-            <div className="w-full flex items-center justify-between gap-2 mb-6 max-w-md flex-wrap">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-red-950/40 border border-red-500/35 backdrop-blur-md shadow-[0_0_14px_rgba(239,68,68,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] text-xs font-mono font-bold text-red-100">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_#ef4444]" />
-                </span>
-                <span>{broadcastPackage.networkTag} · LIVE MATCH</span>
-              </div>
+            {/* Competition Stage Label + 2x Speed / Instant Result Controls */}
+            <div className="w-full flex items-center justify-between gap-2 mb-5 max-w-md flex-wrap">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
+                {matchData.cupName || matchData.title || 'MATCH SIMULATION'}
+              </span>
 
               <div className="flex items-center gap-1.5 ml-auto">
                 <button

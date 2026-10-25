@@ -7,12 +7,14 @@ interface Props {
 
 interface State {
   hasError: boolean;
+  errorMsg?: string;
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
   props: Props;
   state: State = {
     hasError: false,
+    errorMsg: '',
   };
 
   constructor(props: Props) {
@@ -20,13 +22,18 @@ export class ErrorBoundary extends React.Component<Props, State> {
     this.props = props;
   }
 
-  static getDerivedStateFromError(): State {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): State {
+    return {
+      hasError: true,
+      errorMsg: (error?.message || 'Unknown error') + (error?.stack ? '\n' + error.stack : ''),
+    };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error in UI:', error, errorInfo);
-    (window as any).RENDER_ERROR_DUMP = (error.message || 'Unknown error') + '\n' + (error.stack || '');
+    const dump = (error.message || 'Unknown error') + '\n' + (error.stack || '');
+    (window as any).RENDER_ERROR_DUMP = dump;
+    this.setState({ errorMsg: dump });
     // Ensure any static loading fallback element is removed from DOM even on error
     const fallback = document.getElementById('app-loading-fallback');
     if (fallback) fallback.remove();
@@ -49,6 +56,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
   };
 
   handleReload = () => {
+    try {
+      localStorage.removeItem('handball-postseason-checkpoint');
+    } catch {
+      // ignore
+    }
     window.location.reload();
   };
 
@@ -57,6 +69,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
       // Also remove fallback element during render if still present
       const fallback = document.getElementById('app-loading-fallback');
       if (fallback) fallback.remove();
+      const errDump = this.state.errorMsg || (window as any).RENDER_ERROR_DUMP;
 
       return (
         <div className="min-h-screen bg-[#090a0f] text-white flex flex-col items-center justify-center p-6 text-center font-sans">
@@ -70,9 +83,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
             <p className="text-xs text-zinc-400 mb-5 leading-relaxed">
               The game encountered a momentary display hiccup. You can reload or start a fresh career.
             </p>
-            {Boolean((window as any).RENDER_ERROR_DUMP) && (
+            {Boolean(errDump) && (
               <pre className="text-[10px] text-rose-300 text-left overflow-auto max-h-36 mb-4 p-2.5 bg-black/60 rounded-xl border border-rose-500/20 font-mono whitespace-pre-wrap break-all">
-                {String((window as any).RENDER_ERROR_DUMP)}
+                {String(errDump)}
               </pre>
             )}
             <div className="flex flex-col gap-2.5">
