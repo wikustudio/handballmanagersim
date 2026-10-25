@@ -666,7 +666,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
           </div>
 
           {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-4 gap-2 sm:gap-3 mt-4 pt-4 border-t border-white/[0.04]">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-4 pt-4 border-t border-white/[0.04]">
             <div className="bg-[#10121a] rounded-xl p-2.5 sm:p-3 border border-white/[0.04] flex flex-col items-center justify-center text-center">
               <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                 <i className="fas fa-star text-amber-400 text-[10px]" /> OVR
@@ -1188,7 +1188,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
 
               {/* Stadium Capacity Utilization Meter */}
               <div className="bg-[#14151e] border border-white/[0.04] rounded-2xl p-4 sm:p-5 space-y-3">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap text-xs">
                   <span className="font-semibold text-white flex items-center gap-2">
                     <i className="fas fa-chart-pie text-emerald-400" />
                     <span>Matchday Capacity Utilization</span>
@@ -1205,7 +1205,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1 font-normal">
+                <div className="flex items-center justify-between gap-2 flex-wrap text-[11px] text-zinc-400 pt-1 font-normal">
                   <span>Home Arena: <strong className="text-zinc-200 font-medium">{homeArena}</strong></span>
                   <span>League Max Cap: <strong className="text-zinc-200 font-medium tabular-nums">{leagueMaxAtt.toLocaleString()}</strong></span>
                 </div>

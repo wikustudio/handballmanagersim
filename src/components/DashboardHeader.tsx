@@ -410,13 +410,13 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       {/* 1. STATUS & WARNING BANNER (Shown on real debt / insolvency warnings)      */}
       {/* ========================================================================= */}
       {bankruptcyRisk && (
-        <div className="w-full bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md rounded-2xl px-4 py-3 flex items-center justify-between text-xs text-zinc-300">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0 text-xs text-zinc-300">
+        <div className="w-full bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-zinc-300">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <span className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0 text-xs text-zinc-300 mt-0.5 sm:mt-0">
               <i className={`fas ${isStructuredDebt ? 'fa-shield-halved' : 'fa-triangle-exclamation'}`} />
             </span>
-            <span className="font-normal truncate">
-              Insolvency Risk (Year {Math.min(3, state.seasonsInDebt || 1)}/3): -€${Math.abs((state.budget || 0) / 1000000).toFixed(2)}M deficit. 3 consecutive years triggers sack.
+            <span className="font-normal leading-snug">
+              Insolvency Risk (Year {Math.min(3, state.seasonsInDebt || 1)}/3): -€{Math.abs((state.budget || 0) / 1000000).toFixed(2)}M deficit. 3 consecutive years triggers sack.
               {isStructuredDebt && (
                 <span className="ml-2 font-medium text-zinc-300 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded text-[10px]">
                   Structured
@@ -426,7 +426,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </div>
           <button
             onClick={onShowLedger}
-            className="text-xs font-medium text-zinc-300 hover:text-white transition ml-2 shrink-0 cursor-pointer underline underline-offset-4"
+            className="text-xs font-medium text-zinc-300 hover:text-white transition sm:ml-2 shrink-0 cursor-pointer underline underline-offset-4 self-end sm:self-auto"
           >
             Audit Treasury →
           </button>
@@ -436,9 +436,9 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       {/* ========================================================================= */}
       {/* 2. TOP BENTO ROW: CLUB IDENTITY (2-COL) + OVR RING + IMPACT               */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 w-full">
-        {/* CARD 1: CLUB IDENTITY & DOSSIER (SPANS 2 COLS ON DESKTOP & TABLET) */}
-        <div className="col-span-1 sm:col-span-2 lg:col-span-2 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 sm:p-5 relative overflow-hidden flex flex-col justify-between transition-all duration-200">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 w-full">
+        {/* CARD 1: CLUB IDENTITY & DOSSIER (SPANS 2 COLS ON ALL VIEWPORTS) */}
+        <div className="col-span-2 lg:col-span-2 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between transition-all duration-200">
           <div className="relative z-10 flex flex-col">
             {/* Top Row: League Navigation Pill Button & Board Expectation */}
             <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
@@ -564,7 +564,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           onClick={() => {
             if (onOpenOvrModal) onOpenOvrModal();
           }}
-          className="col-span-1 sm:col-span-1 lg:col-span-1 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
+          className="col-span-1 sm:col-span-1 lg:col-span-1 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-3.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
           title="Click to open squad rating breakdown"
         >
           {/* Floating Delta Badge for incoming/outgoing rating updates */}
@@ -634,7 +634,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {/* CARD 3: IMPACT BENTO (TOP ROW NEXT TO OVR) */}
         <div
           onClick={onShowImpact || onOpenMoraleModal}
-          className="col-span-1 sm:col-span-1 lg:col-span-1 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
+          className="col-span-1 sm:col-span-1 lg:col-span-1 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-3.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
           title="Show club impact & governance details"
         >
           {/* Top Label */}

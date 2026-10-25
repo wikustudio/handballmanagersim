@@ -392,8 +392,8 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
         </button>
       )}
 
-      {/* Top Header - Compact single-line bar */}
-      <div className="flex items-center justify-between gap-2.5 mb-2 shrink-0 pr-8 sm:pr-9">
+      {/* Top Header - Responsive bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5 shrink-0 pr-8 sm:pr-9">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`w-8 h-8 rounded-xl flex items-center justify-center border p-1.5 shrink-0 ${
             activeTab === 'universe'
@@ -429,10 +429,10 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center bg-[#10121a] p-1 rounded-xl border border-white/[0.04] shrink-0 gap-1">
+        <div className="flex items-center bg-[#10121a] p-1 rounded-xl border border-white/[0.04] shrink-0 gap-1 w-full sm:w-auto">
           <button
             onClick={() => setActiveTab('standings')}
-            className={`px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
+            className={`flex-1 sm:flex-initial justify-center px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'standings'
                 ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm'
                 : 'text-zinc-400 hover:text-white border border-transparent'
@@ -443,7 +443,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('universe')}
-            className={`px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
+            className={`flex-1 sm:flex-initial justify-center px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'universe'
                 ? 'bg-amber-500/[0.05] text-amber-300 border border-amber-500/20 shadow-sm'
                 : 'text-zinc-400 hover:text-white border border-transparent'
@@ -1031,7 +1031,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                           <span>Cinderella</span>
                         </span>
                       )}
-                      <span className={`text-[10px] px-2 py-0.5 rounded-lg font-semibold uppercase tracking-wider border shrink-0 ${
+                      <span className={`text-[10px] px-2 py-0.5 rounded-lg font-semibold uppercase tracking-wider border shrink-0 max-w-[140px] sm:max-w-none truncate ${
                         isIntlCup
                           ? 'bg-amber-500/10 text-amber-300 border-amber-500/20 shadow-sm'
                           : isChampion

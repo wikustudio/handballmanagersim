@@ -968,75 +968,79 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
           <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/30 to-transparent pointer-events-none" />
 
           {/* Redesigned Compact Top Header */}
-          <div className="relative shrink-0 border-b border-white/[0.04] px-4 py-3 sm:px-6 flex items-center justify-between gap-3 bg-transparent">
+          <div className="relative shrink-0 border-b border-white/[0.04] px-3.5 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 bg-transparent">
             {/* Left side: Club crest, "SEASON WRAP-UP - [YEAR] • [LEAGUE TAG]", Club Name, FINISH #[POS] badge */}
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-start sm:items-center gap-3 min-w-0 w-full sm:w-auto">
               <ClubLogo
                 name={seasonData.clubName}
                 color={seasonData.clubColor || state.club.color}
                 logo={seasonData.clubLogo || state.club.logo}
                 fallbackLogo={state.club.fallbackLogo}
-                className="w-10 h-10 object-contain shrink-0 drop-shadow"
-                fallbackClassName="w-10 h-10 text-xs rounded-xl border border-white/10 flex items-center justify-center font-semibold text-white shrink-0"
+                className="w-9 h-9 sm:w-10 sm:h-10 object-contain shrink-0 drop-shadow mt-0.5 sm:mt-0"
+                fallbackClassName="w-9 h-9 sm:w-10 sm:h-10 text-xs rounded-xl border border-white/10 flex items-center justify-center font-semibold text-white shrink-0 mt-0.5 sm:mt-0"
               />
-              <div className="flex flex-col min-w-0">
+              <div className="flex flex-col min-w-0 flex-1">
                 <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 truncate">
                   SEASON WRAP-UP - {seasonData.year} • {league.tag || league.name}
                 </span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-base sm:text-lg font-semibold text-white tracking-tight leading-tight truncate">
+                <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                  <span className="text-base sm:text-lg font-semibold text-white tracking-tight leading-tight truncate max-w-full">
                     {seasonData.clubName}
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-zinc-300 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.04] shrink-0">
                     <span className={`w-1.5 h-1.5 rounded-full ${seasonData.pos === 1 ? 'bg-amber-400' : seasonData.pos <= 3 ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
                     <span>FINISH #{seasonData.pos}</span>
                   </span>
-                  {(hasBl || currentSeasonTrophies.lower) && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 shrink-0">
-                      🏆 {hasBl ? t1League.name : league.name} Champions
-                    </span>
-                  )}
-                  {hasCl && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-300 px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 shrink-0">
-                      ⭐ {cl} Winners
-                    </span>
-                  )}
-                  {hasEl && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 shrink-0">
-                      🏆 {el} Winners
-                    </span>
-                  )}
-                  {hasEcl && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 shrink-0">
-                      🏅 {ecl} Winners
-                    </span>
-                  )}
-                  {hasCwc && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-300 px-2 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/30 shrink-0">
-                      🌐 Super Globe Winners
-                    </span>
-                  )}
-                  {hasDfb && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-200 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.1] shrink-0">
-                      🛡️ {cupInfo.name}
-                    </span>
-                  )}
                 </div>
+                {(hasBl || currentSeasonTrophies.lower || hasCl || hasEl || hasEcl || hasCwc || hasDfb) && (
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                    {(hasBl || currentSeasonTrophies.lower) && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 max-w-full">
+                        <span className="truncate">🏆 {hasBl ? t1League.name : league.name} Champions</span>
+                      </span>
+                    )}
+                    {hasCl && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-300 px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 max-w-full">
+                        <span className="truncate">⭐ {cl} Winners</span>
+                      </span>
+                    )}
+                    {hasEl && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 max-w-full">
+                        <span className="truncate">🏆 {el} Winners</span>
+                      </span>
+                    )}
+                    {hasEcl && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 max-w-full">
+                        <span className="truncate">🏅 {ecl} Winners</span>
+                      </span>
+                    )}
+                    {hasCwc && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-300 px-2 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/30 max-w-full">
+                        <span className="truncate">🌐 Super Globe Winners</span>
+                      </span>
+                    )}
+                    {hasDfb && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-200 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.1] max-w-full">
+                        <span className="truncate">🛡️ {cupInfo.name}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Right side: Three compact data blocks for PTS, W-D-L, and GD */}
-            <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">PTS</span>
-                <span className="text-lg font-semibold text-zinc-200 leading-tight tabular-nums">
+            <div className="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-2 sm:gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.05] shrink-0">
+              <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
+                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">PTS</span>
+                <span className="text-base sm:text-lg font-semibold text-zinc-200 leading-tight tabular-nums mt-0.5 sm:mt-0">
                   <CountUp value={displayPts} duration={850} />
                 </span>
               </div>
-              <div className="h-6 w-[1px] bg-white/[0.06]" />
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">W-D-L</span>
-                <div className="text-lg font-semibold leading-tight tabular-nums flex items-center gap-0.5 text-zinc-200">
+              <div className="hidden sm:block h-6 w-[1px] bg-white/[0.06]" />
+              <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
+                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">W-D-L</span>
+                <div className="text-base sm:text-lg font-semibold leading-tight tabular-nums flex items-center gap-0.5 text-zinc-200 mt-0.5 sm:mt-0">
                   <span>{seasonData.wins}</span>
                   <span className="text-zinc-500 font-normal">-</span>
                   <span>{seasonData.draws}</span>
@@ -1044,10 +1048,10 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                   <span>{seasonData.losses}</span>
                 </div>
               </div>
-              <div className="h-6 w-[1px] bg-white/[0.06]" />
-              <div className="flex flex-col items-end">
-                <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">GD</span>
-                <span className="text-lg font-semibold leading-tight tabular-nums text-zinc-200">
+              <div className="hidden sm:block h-6 w-[1px] bg-white/[0.06]" />
+              <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
+                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">GD</span>
+                <span className="text-base sm:text-lg font-semibold leading-tight tabular-nums text-zinc-200 mt-0.5 sm:mt-0">
                   {goalDiff > 0 ? `+${goalDiff}` : goalDiff}
                 </span>
               </div>
@@ -1160,22 +1164,21 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                     }
 
                     return (
-                      <div className="bg-[#10121a]/90 border border-white/[0.08] backdrop-blur-md rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                      <div className="bg-[#10121a]/90 border border-white/[0.08] backdrop-blur-md rounded-2xl p-3.5 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
                         
                         {/* Left Side: Trophy Icon & Text */}
-                        <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+                        <div className="flex items-start sm:items-center gap-3 sm:gap-5 min-w-0">
                           {/* Trophy Icon Box */}
-                          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-2xl shrink-0">
+                          <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-xl sm:text-2xl shrink-0 mt-0.5 sm:mt-0">
                             {bCl ? '⭐' : '🏆'}
                           </div>
 
                           {/* Text Content */}
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] sm:text-[11px] font-medium uppercase tracking-widest text-amber-300/90 mb-0.5 flex items-center gap-1.5 flex-wrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-amber-300/90 mb-0.5 leading-snug break-words">
                               {bannerSuperTitle}
                             </span>
-                            <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-tight uppercase mb-1 truncate">
+                            <h3 className="text-lg sm:text-2xl font-bold text-white tracking-tight leading-tight uppercase mb-1 break-words">
                               {bannerTitle}
                             </h3>
                             <p className="text-xs sm:text-[13px] text-zinc-400 font-normal leading-relaxed max-w-xl">
@@ -1185,34 +1188,30 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                         </div>
 
                         {/* Right Side: Side-by-Side League & European Trophy Pills + Prize Money */}
-                        <div className="flex flex-col sm:items-end gap-1.5 shrink-0">
+                        <div className="flex flex-col sm:items-end gap-1.5 shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-white/[0.06]">
                           <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
                             {currentHist.pos === 1 && (
-                              <span className="bg-amber-500/10 border border-amber-500/25 text-amber-200 px-3 py-1 rounded-full text-xs font-semibold tracking-wider flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                              <span className="bg-amber-500/10 border border-amber-500/25 text-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
                                 🏆 {currentHist.tier === 1 ? t1League.tag || 'LEAGUE' : '1ST PLACE'}
                               </span>
                             )}
                             {bCl && (
-                              <span className="bg-sky-500/15 border border-sky-500/30 text-sky-200 px-3 py-1 rounded-full text-xs font-semibold tracking-wider flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                              <span className="bg-sky-500/15 border border-sky-500/30 text-sky-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
                                 ⭐ {cl.toUpperCase()}
                               </span>
                             )}
                             {bEl && (
-                              <span className="bg-amber-500/15 border border-amber-500/30 text-amber-200 px-3 py-1 rounded-full text-xs font-semibold tracking-wider flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                              <span className="bg-amber-500/15 border border-amber-500/30 text-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
                                 🏆 {el.toUpperCase()}
                               </span>
                             )}
                             {bEcl && (
-                              <span className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 px-3 py-1 rounded-full text-xs font-semibold tracking-wider flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                              <span className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
                                 🏅 {ecl.toUpperCase()}
                               </span>
                             )}
                             {bCwc && (
-                              <span className="bg-purple-500/15 border border-purple-500/30 text-purple-200 px-3 py-1 rounded-full text-xs font-semibold tracking-wider flex items-center gap-1.5">
+                              <span className="bg-purple-500/15 border border-purple-500/30 text-purple-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
                                 🌐 SUPER GLOBE
                               </span>
                             )}
@@ -1288,16 +1287,16 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
 
                     {/* Integrated Sponsor Performance Deal Banner */}
                     {seasonData.performanceDealResult && (
-                      <div className="mt-1 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white/[0.04] text-zinc-300">
+                      <div className="mt-1 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+                        <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white/[0.04] text-zinc-300 mt-0.5 sm:mt-0">
                             <i className={`fas ${seasonData.performanceDealResult.success ? 'fa-check text-emerald-400' : 'fa-xmark text-rose-400'}`} />
                           </div>
-                          <div className="flex flex-col text-left">
+                          <div className="flex flex-col text-left min-w-0">
                             <span className="text-[11px] font-semibold uppercase tracking-wider text-white">
                               {isDe ? 'Kommerzielle Leistungsklausel' : 'Sponsor Performance Deal'}
                             </span>
-                            <span className="text-[11px] text-zinc-400">
+                            <span className="text-[11px] text-zinc-400 leading-snug">
                               {seasonData.performanceDealResult.success ? (
                                 isDe 
                                   ? `Obere Tabellenhälfte erreicht (Platz ${seasonData.performanceDealResult.pos}). Leistungsprämie ausgezahlt!`
@@ -1311,7 +1310,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                           </div>
                         </div>
                         {seasonData.performanceDealResult.success && (
-                          <span className="text-xs font-semibold text-zinc-200 bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/[0.06] shrink-0 font-mono">
+                          <span className="text-xs font-semibold text-zinc-200 bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/[0.06] shrink-0 font-mono self-start sm:self-auto">
                             +{formatMoney(seasonData.performanceDealResult.payout)}
                           </span>
                         )}
@@ -2456,7 +2455,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                               setSelectedYearForTable(h.year);
                               setActiveTab('table');
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white border border-white/10 text-xs font-semibold shrink-0 cursor-pointer transition flex items-center justify-center gap-1.5 active:scale-95"
+                            className="w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white border border-white/10 text-xs font-semibold shrink-0 cursor-pointer transition flex items-center justify-center gap-1.5 active:scale-95"
                           >
                             <i className="fas fa-table-list text-[10px]" />
                             <span>View Table</span>
@@ -2564,57 +2563,59 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
           })()}
 
           {/* Action Footer */}
-          <div className="shrink-0 p-3 sm:p-4 border-t border-white/[0.06] bg-[#0c0d12] flex items-center gap-2.5 sm:gap-3">
-            <button 
-              onClick={handleDownload} 
-              disabled={isDownloading} 
-              className="h-10 px-3.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-colors border border-white/[0.08] flex items-center justify-center gap-2 text-xs font-semibold shrink-0 disabled:opacity-50 cursor-pointer active:scale-95 shadow-sm" 
-              title="Share season summary card"
-              aria-label="Share season summary"
-            >
-              <i className={`fas ${isDownloading ? 'fa-spinner fa-spin' : 'fa-arrow-up-from-bracket'} text-xs`} />
-              <span>Share Card</span>
-            </button>
-
-            <button
-              onClick={() => {
-                if (activeTab === 'table') {
-                  setActiveTab('summary');
-                } else {
-                  setSelectedYearForTable(seasonData.year);
-                  setActiveTab('table');
-                }
-              }}
-              className={`h-10 px-3.5 rounded-xl transition-colors border flex items-center justify-center gap-2 text-xs font-semibold shrink-0 cursor-pointer active:scale-95 shadow-sm ${
-                activeTab === 'table'
-                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
-                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border-white/[0.08]'
-              }`}
-              title="View League Standings Table"
-            >
-              <i className="fas fa-table-list text-xs text-sky-400" />
-              <span>League Table</span>
-            </button>
-
-            {onShowProfile && (
-              <button
-                onClick={onShowProfile}
-                title="Head Coach Profile & Leaderboard"
-                className="h-10 px-3.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 flex items-center justify-center gap-2 text-xs font-bold shrink-0 cursor-pointer transition active:scale-95 shadow-sm hidden md:flex"
+          <div className="shrink-0 p-2.5 sm:p-4 border-t border-white/[0.06] bg-[#0c0d12] flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-2.5 shrink-0">
+              <button 
+                onClick={handleDownload} 
+                disabled={isDownloading} 
+                className="h-9 sm:h-10 px-3 sm:px-3.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-colors border border-white/[0.08] flex items-center justify-center gap-2 text-xs font-semibold shrink-0 disabled:opacity-50 cursor-pointer active:scale-95 shadow-sm" 
+                title="Share season summary card"
+                aria-label="Share season summary"
               >
-                <i className="fas fa-trophy text-amber-400 text-xs" />
-                <span>Profile & Score</span>
+                <i className={`fas ${isDownloading ? 'fa-spinner fa-spin' : 'fa-arrow-up-from-bracket'} text-xs`} />
+                <span>Share Card</span>
               </button>
-            )}
+
+              <button
+                onClick={() => {
+                  if (activeTab === 'table') {
+                    setActiveTab('summary');
+                  } else {
+                    setSelectedYearForTable(seasonData.year);
+                    setActiveTab('table');
+                  }
+                }}
+                className={`h-9 sm:h-10 px-3 sm:px-3.5 rounded-xl transition-colors border flex items-center justify-center gap-2 text-xs font-semibold shrink-0 cursor-pointer active:scale-95 shadow-sm ${
+                  activeTab === 'table'
+                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border-white/[0.08]'
+                }`}
+                title="View League Standings Table"
+              >
+                <i className="fas fa-table-list text-xs text-sky-400" />
+                <span>League Table</span>
+              </button>
+
+              {onShowProfile && (
+                <button
+                  onClick={onShowProfile}
+                  title="Head Coach Profile & Leaderboard"
+                  className="h-9 sm:h-10 px-3.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 flex items-center justify-center gap-2 text-xs font-bold shrink-0 cursor-pointer transition active:scale-95 shadow-sm hidden md:flex"
+                >
+                  <i className="fas fa-trophy text-amber-400 text-xs" />
+                  <span>Profile & Score</span>
+                </button>
+              )}
+            </div>
 
             <button 
               aria-label="Advance to Next Season" 
               onClick={onClose} 
-              className="group flex-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold h-10 px-4 sm:px-5 rounded-xl transition-all duration-200 active:scale-[0.99] shadow-[0_4px_18px_rgba(37,99,235,0.35)] border border-blue-400/30 cursor-pointer flex items-center justify-between min-w-0 ml-auto"
+              className="group w-full sm:w-auto sm:flex-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold h-10 px-4 sm:px-5 rounded-xl transition-all duration-200 active:scale-[0.99] shadow-[0_4px_18px_rgba(37,99,235,0.35)] border border-blue-400/30 cursor-pointer flex items-center justify-between min-w-0 sm:ml-auto"
             >
               <div className="flex items-center gap-2 truncate mr-2">
                 <span className="text-xs sm:text-[13px] font-bold tracking-tight text-white leading-tight truncate">
-                  Kick Off {seasonData.year + 1} Campaign →
+                  Kick Off {seasonData.year + 1} Campaign
                 </span>
               </div>
               <div className="w-6 h-6 rounded-lg bg-white/20 backdrop-blur-sm text-white flex items-center justify-center transition-transform group-hover:translate-x-0.5 shrink-0">

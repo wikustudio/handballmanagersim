@@ -70,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <>
     <header className="fixed top-0 inset-x-0 z-40 border-b border-white/[0.08] bg-[#090a0f]/90 backdrop-blur-xl">
-      <div className="max-w-5xl mx-auto w-full flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5">
+      <div className="max-w-5xl mx-auto w-full flex items-center justify-between gap-2 px-3 sm:px-4 py-2 sm:py-2.5">
         {/* Left: Brand Logo & Title */}
         <button
           onClick={() => {
@@ -80,17 +80,17 @@ export const Header: React.FC<HeaderProps> = ({
               setShowConfirm(true);
             }
           }}
-          className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-85 transition text-left select-none shrink-0"
+          className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-85 transition text-left select-none min-w-0"
           title="Handball Manager Sim"
         >
           <HandballSimLogo className="w-8 h-8 rounded-xl shrink-0 border border-white/20 p-0.5 bg-zinc-900" />
-          <span className="font-bold tracking-tight text-white font-sans text-sm sm:text-base whitespace-nowrap">
+          <span className="font-bold tracking-tight text-white font-sans text-xs xs:text-sm sm:text-base truncate">
             {tr('Handball Manager Sim', 'Handball Manager Sim')}
           </span>
         </button>
 
         {/* Right side navigation matching clean design */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* Start Over button (visible when game is active on desktop) */}
           {hasActiveGame && (
             <button
@@ -107,7 +107,7 @@ export const Header: React.FC<HeaderProps> = ({
           {onShowLeaderboard && (
             <button
               onClick={onShowLeaderboard}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 hover:border-white/20 text-zinc-200 hover:text-white text-xs font-semibold transition cursor-pointer active:scale-95 shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 hover:border-white/20 text-zinc-200 hover:text-white text-xs font-semibold transition cursor-pointer active:scale-95 shadow-sm"
               title={tr('Global Leaderboard', 'Globale Bestenliste')}
             >
               <i className="fas fa-trophy text-amber-400 text-xs" />
@@ -121,7 +121,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => setShowMenu((prev) => !prev)}
               aria-expanded={showMenu}
               aria-label="More Menu"
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 transition cursor-pointer active:scale-95 shadow-sm ${
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer active:scale-95 shadow-sm ${
                 showMenu
                   ? 'bg-zinc-800 text-white border-sky-400 ring-2 ring-sky-400/30'
                   : 'bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/15 hover:border-white/25 text-zinc-200 hover:text-white'

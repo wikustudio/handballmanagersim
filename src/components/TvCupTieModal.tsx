@@ -46,9 +46,9 @@ export const TvCupTieModal: React.FC<TvCupTieModalProps> = ({
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Live Broadcast Header Badge */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
           <div className="flex items-center gap-2">
-            <span className="relative flex h-3 w-3">
+            <span className="relative flex h-3 w-3 shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500" />
             </span>
@@ -108,7 +108,7 @@ export const TvCupTieModal: React.FC<TvCupTieModalProps> = ({
           </div>
 
           {/* Sold out arena banner */}
-          <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between text-[11px] text-zinc-300">
+          <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between gap-1.5 flex-wrap text-[11px] text-zinc-300">
             <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
               <i className="fas fa-ticket text-xs" />
               <span>{isDe ? 'Ausverkauft in 18 Minuten' : 'Arena Sold Out in 18 Mins'}</span>

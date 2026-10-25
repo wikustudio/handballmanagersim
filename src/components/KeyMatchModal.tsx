@@ -1134,7 +1134,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
             {/* Top Match Card Plaque matching user screenshot */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-white/[0.025] border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               {/* Left Trophy & Match Identity */}
-              <div className="flex items-center gap-4 w-full sm:w-auto">
+              <div className="flex items-center gap-3.5 sm:gap-4 w-full sm:w-auto min-w-0">
                 {isRelegationBattle ? (
                   <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 text-2xl shadow-lg shrink-0">
                     <i className="fas fa-shield-halved animate-pulse" />
@@ -1147,7 +1147,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                   />
                 )}
 
-                <div className="flex flex-col min-w-0">
+                <div className="flex flex-col min-w-0 flex-1">
                   {/* Pills Row */}
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
@@ -1197,7 +1197,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                   </div>
 
                   {/* Cup / Competition Title */}
-                  <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-tight uppercase truncate">
+                  <h2 className="text-base sm:text-2xl font-black text-white tracking-tight leading-tight uppercase break-words">
                     {isRelegationBattle 
                       ? 'RELEGATION DECIDER · SURVIVAL BATTLE' 
                       : isSupercupMatch
@@ -1206,11 +1206,11 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                   </h2>
 
                   {/* Stadium & Capacity Subtitle */}
-                  <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-0.5 truncate">
-                    <i className="fas fa-location-dot text-amber-400 text-[11px]" />
-                    <span className="truncate">{hostArena}</span>
+                  <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-0.5 flex-wrap">
+                    <i className="fas fa-location-dot text-amber-400 text-[11px] shrink-0" />
+                    <span className="truncate max-w-[180px] sm:max-w-none">{hostArena}</span>
                     <span>·</span>
-                    <span className="tabular-nums">
+                    <span className="tabular-nums shrink-0">
                       {hostCapacity.toLocaleString()} capacity
                     </span>
                   </div>
@@ -1533,7 +1533,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
             )}
 
             {/* Director Recommendation & Tactical Choices Header */}
-            <div className="flex items-center justify-between text-xs pt-1">
+            <div className="flex items-center justify-between gap-1 flex-wrap text-xs pt-1">
               <div className="flex items-center gap-2 text-white font-bold tracking-tight">
                 <i className="fas fa-clipboard-list text-sky-400" />
                 <span>Director Recommendation to Head Coach</span>
@@ -1698,17 +1698,17 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
             </div>
 
             {/* Scoreboard HUD */}
-            <div className="flex items-center justify-center gap-6 sm:gap-10 mb-4 bg-gradient-to-b from-white/[0.04] to-transparent bg-[#12131a] p-6 rounded-3xl border border-white/10 w-full max-w-md shadow-2xl">
-              <div className="flex flex-col items-center">
-                <span className="text-xs font-semibold text-zinc-300 truncate max-w-[120px] mb-1">
+            <div className="grid grid-cols-3 items-center gap-2 sm:gap-8 mb-4 bg-gradient-to-b from-white/[0.04] to-transparent bg-[#12131a] p-4 sm:p-6 rounded-3xl border border-white/10 w-full max-w-md shadow-2xl">
+              <div className="flex flex-col items-center min-w-0">
+                <span className="text-xs font-semibold text-zinc-300 truncate max-w-full mb-1">
                   {matchData.playerClubName}
                 </span>
-                <div className="text-5xl sm:text-6xl font-black tabular-nums text-white tracking-tight leading-none drop-shadow-lg">
+                <div className="text-4xl sm:text-6xl font-black tabular-nums text-white tracking-tight leading-none drop-shadow-lg">
                   {score[0]}
                 </div>
               </div>
 
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center shrink-0">
                 <span className="text-xs font-semibold text-amber-400/60 uppercase">VS</span>
                 <span className="text-base font-bold tabular-nums text-amber-400 my-1">{matchTime}'</span>
                 <span className={`text-[10px] uppercase font-bold tracking-wider ${matchTime > 60 ? 'text-purple-400 animate-pulse' : 'text-zinc-400'}`}>
@@ -1716,11 +1716,11 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                 </span>
               </div>
 
-              <div className="flex flex-col items-center">
-                <span className="text-xs font-semibold text-zinc-300 truncate max-w-[120px] mb-1">
+              <div className="flex flex-col items-center min-w-0">
+                <span className="text-xs font-semibold text-zinc-300 truncate max-w-full mb-1">
                   {matchData.opponentName}
                 </span>
-                <div className="text-5xl sm:text-6xl font-black tabular-nums text-white tracking-tight leading-none drop-shadow-lg">
+                <div className="text-4xl sm:text-6xl font-black tabular-nums text-white tracking-tight leading-none drop-shadow-lg">
                   {score[1]}
                 </div>
               </div>
@@ -1757,7 +1757,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                 >
                   <span className="font-mono font-bold text-amber-400 shrink-0">{activeEvent.minute}'</span>
                   <i className={`${activeEvent.icon} text-amber-400 shrink-0 text-xs`} />
-                  <span className="text-[11px] leading-tight flex-1 text-left truncate">{activeEvent.text}</span>
+                  <span className="text-[11px] leading-snug flex-1 text-left break-words">{activeEvent.text}</span>
                 </div>
               );
             })()}

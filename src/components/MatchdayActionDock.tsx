@@ -257,7 +257,7 @@ export const MatchdayActionDock: React.FC<MatchdayActionDockProps> = ({
         <div className={`absolute inset-0 rounded-full bg-gradient-to-r ${theme.glow} pointer-events-none`} />
 
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 justify-start min-w-0">
-          <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 border border-white/20 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-inner">
             <ClubLogo 
               club={resolvedClub}
               name={clubName} 
@@ -269,10 +269,10 @@ export const MatchdayActionDock: React.FC<MatchdayActionDockProps> = ({
               className="w-full h-full object-contain" 
             />
           </div>
-          <div className="flex flex-col shrink-0">
-            <div className="flex items-center gap-1.5">
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0">
               <span className={`w-1.5 h-1.5 rounded-full animate-pulse shrink-0 ${theme.pulseDot}`} />
-              <span className="text-xs sm:text-sm font-bold tracking-tight text-white whitespace-nowrap">
+              <span className="text-xs sm:text-sm font-bold tracking-tight text-white truncate max-w-[92px] xs:max-w-[130px] sm:max-w-none">
                 {titleText}
               </span>
             </div>
@@ -282,7 +282,7 @@ export const MatchdayActionDock: React.FC<MatchdayActionDockProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-2 min-w-0 px-1 sm:px-3 border-x border-white/10 shrink">
+        <div className="flex items-center justify-center gap-2 min-w-0 px-1.5 sm:px-3 border-x border-white/10 shrink">
           <span className={`hidden md:inline-block text-[11px] font-medium truncate max-w-[130px] lg:max-w-[190px] text-center ${activeSupercup ? 'text-amber-200/95' : 'text-sky-200/90'}`}>
             {stakeText}
           </span>
@@ -292,15 +292,15 @@ export const MatchdayActionDock: React.FC<MatchdayActionDockProps> = ({
             </span>
           </div>
           {activeSupercup ? (
-            <span className="text-[10px] sm:text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/35 whitespace-nowrap">
+            <span className="hidden sm:inline-flex text-[10px] sm:text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/35 whitespace-nowrap">
               🏆 SUPERCUP
             </span>
           ) : isRelegationFight ? (
-            <span className="text-[10px] sm:text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 whitespace-nowrap">
+            <span className="hidden sm:inline-flex text-[10px] sm:text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 whitespace-nowrap">
               - Form
             </span>
           ) : (isTitleContender || isPromotionHunt) ? (
-            <span className="text-[10px] sm:text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
+            <span className="hidden sm:inline-flex text-[10px] sm:text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
               + Form
             </span>
           ) : (
