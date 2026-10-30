@@ -246,7 +246,14 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
     () => (state?.history || []).filter(h => !h.clubName || h.clubName === state?.club?.name),
     [state?.history, state?.club?.name]
   );
-  const lastHist = clubHist.length > 0 ? clubHist[clubHist.length - 1] : (state?.history && state.history.length > 0 ? state.history[state.history.length - 1] : undefined);
+  const rawLatestHist = state?.history && state.history.length > 0 ? state.history[state.history.length - 1] : undefined;
+  const lastHist =
+    rawLatestHist &&
+    ((rawLatestHist.clubId !== undefined && state?.club?.id !== undefined && String(rawLatestHist.clubId) === String(state.club.id)) ||
+      !rawLatestHist.clubName ||
+      rawLatestHist.clubName === state?.club?.name)
+      ? rawLatestHist
+      : undefined;
   const currentTacticTenure = useMemo(() => {
     let tenure = 1;
     for (let i = clubHist.length - 1; i >= 0; i--) {

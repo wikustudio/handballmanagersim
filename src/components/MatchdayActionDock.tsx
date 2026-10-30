@@ -99,7 +99,14 @@ export const MatchdayActionDock: React.FC<MatchdayActionDockProps> = ({
   );
   const clubTierRank = clubTierRankIndex >= 0 ? clubTierRankIndex + 1 : Math.round(leagueSize * 0.5);
 
-  const lastHist = state?.history && state.history.length > 0 ? state.history[state.history.length - 1] : undefined;
+  const rawLatestHist = state?.history && state.history.length > 0 ? state.history[state.history.length - 1] : undefined;
+  const lastHist =
+    rawLatestHist &&
+    ((rawLatestHist.clubId !== undefined && clubId !== undefined && String(rawLatestHist.clubId) === String(clubId)) ||
+      !rawLatestHist.clubName ||
+      rawLatestHist.clubName === clubName)
+      ? rawLatestHist
+      : undefined;
   const morale = currentClub?.morale ?? 75;
 
   const relegationDepth = leagueSize >= 18 ? 3 : 2;
