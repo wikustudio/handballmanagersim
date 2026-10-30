@@ -165,6 +165,67 @@ assert.strictEqual(matchesDouble[0].opponent, secondClub.name);
 const matchesAfterPlayed = getQualifiedSupercupMatches({ ...stateDoubleAndCl, supercupPlayedYear: 2025 }, ALL_CLUBS, true);
 assert.strictEqual(matchesAfterPlayed.length, 0);
 console.log('✓ Test 4 Passed: Double + CL winners qualify strictly for the Domestic Supercup and lock after completion.');
+
+// Test 5: Cross-country club switch (VfL Gummersbach -> FC Barcelona) never pairs with old country's cup winner
+console.log('Test 5: Verifying cross-country club switch (Gummersbach -> FC Barcelona) strictly pairs with a Spanish opponent...');
+const gummersbach = ALL_CLUBS.find(c => c.name.includes('Gummersbach') && (c.country || 'GER') === 'GER') || gerTier1[4];
+const flensburg = ALL_CLUBS.find(c => c.name.includes('Flensburg') && (c.country || 'GER') === 'GER') || gerTier1[1];
+const barcelona = ALL_CLUBS.find(c => c.name === 'FC Barcelona' && c.country === 'ESP')!;
+assert.ok(barcelona, 'FC Barcelona should exist in ALL_CLUBS');
+
+const stateSwitchedToBarca = {
+  year: 2025,
+  club: barcelona,
+  history: [
+    {
+      year: 2024,
+      clubId: gummersbach.id,
+      clubName: gummersbach.name,
+      tier: 1,
+      pos: 5,
+      rivalName: flensburg.name,
+      trophiesThisYear: { bl: 0, dfb: 0 },
+      finalTable: [
+        { pos: 1, name: topClub.name },
+        { pos: 2, name: flensburg.name },
+      ],
+      universeMovements: [
+        {
+          id: `${barcelona.id}-2024-champ`,
+          year: 2024,
+          clubId: String(barcelona.id),
+          clubName: barcelona.name,
+          country: 'ESP',
+          type: 'champion',
+          fromTier: 1,
+          toTier: 1,
+        },
+      ],
+      resolvedMatchContext: {
+        cupFinals: {
+          nat_cup: {
+            cupId: 'nat_cup',
+            cupName: 'DHB-Pokal',
+            year: 2024,
+            winnerName: flensburg.name,
+            runnerUpName: gummersbach.name,
+            userWon: false,
+          },
+        },
+      },
+    },
+  ],
+};
+
+const barcaSupercup = getQualifiedSupercupMatches(stateSwitchedToBarca, ALL_CLUBS, true);
+assert.strictEqual(barcaSupercup.length, 1);
+assert.strictEqual(barcaSupercup[0].title, 'Supercopa Ibérica');
+assert.notStrictEqual(barcaSupercup[0].opponent, flensburg.name, 'Supercopa Ibérica must never pit FC Barcelona against SG Flensburg');
+const oppInDb = ALL_CLUBS.find(c => c.name === barcaSupercup[0].opponent);
+assert.ok(oppInDb, `Opponent ${barcaSupercup[0].opponent} should exist in ALL_CLUBS`);
+assert.strictEqual(oppInDb.country, 'ESP', `Supercopa Ibérica opponent (${oppInDb.name}) must be from ESP`);
+console.log(`✓ Test 5 Passed: FC Barcelona in Supercopa Ibérica faces Spanish domestic rival (${barcaSupercup[0].opponent}), never ${flensburg.name}.`);
+
 console.log('========================================================================');
-console.log('ALL SUPERCUP OPENER AUDIT TESTS PASSED SUCCESSFULLY (4/4)');
+console.log('ALL SUPERCUP OPENER AUDIT TESTS PASSED SUCCESSFULLY (5/5)');
 console.log('========================================================================');
