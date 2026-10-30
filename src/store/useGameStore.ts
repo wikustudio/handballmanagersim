@@ -306,6 +306,32 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         const normalizedInitFans = (initEconProfile.tier === 4 && rawInitFans > initCalibratedFans * 2.5)
             ? initCalibratedFans
             : baseClub.fanBase;
+        let initAcademyLevel = baseClub.academyLevel || 1;
+        let initMedicalLevel = baseClub.medicalLevel || 1;
+        const initOvr = baseClub.baseOvr || 50;
+        const initTier = baseClub.tier || 5;
+        const initIsPowerhouse = isEuropeanPowerhouseClub(baseClub) || (initTier === 1 && initOvr >= 84);
+        const initIsTopClub = initIsPowerhouse || (initTier === 1 && initOvr >= 78);
+
+        if (!userIsReserve) {
+            const seed = typeof baseClub.id === 'number' ? baseClub.id : String(baseClub.name || '').length;
+            if (initIsPowerhouse) {
+                initAcademyLevel = Math.max(2, initAcademyLevel);
+                initMedicalLevel = Math.max(2, initMedicalLevel);
+                if (initOvr >= 86 || seed % 3 === 0) {
+                    initAcademyLevel = Math.max(3, initAcademyLevel);
+                    initMedicalLevel = Math.max(3, initMedicalLevel);
+                } else if (seed % 2 === 0) {
+                    initAcademyLevel = Math.max(3, initAcademyLevel);
+                } else {
+                    initMedicalLevel = Math.max(3, initMedicalLevel);
+                }
+            } else if (initIsTopClub) {
+                initAcademyLevel = Math.max(2, initAcademyLevel);
+                initMedicalLevel = Math.max(2, initMedicalLevel);
+            }
+        }
+
         const freshClub: Club = {
             ...baseClub,
             tier: baseClub.tier,
@@ -314,11 +340,25 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             fanBase: normalizedInitFans,
             historicContext: resolvedContext,
             context: resolvedContext,
-            academyLevel: baseClub.academyLevel || 1,
-            medicalLevel: baseClub.medicalLevel || 1,
+            academyLevel: initAcademyLevel,
+            medicalLevel: initMedicalLevel,
             squadSize: baseClub.squadSize || 18,
             morale: 75,
         };
+
+        const initEuroStatus: 'CL' | 'EL' | 'ECL' | null = (() => {
+            if (freshClub.tier !== 1 || userIsReserve) return null;
+            const tier1DomClubs = activeClubs
+                .filter(rc => rc.tier === 1 && normalizeCountry(rc.country || 'GER') === normBaseCountry && !isReserveClub(rc.name))
+                .sort((x, y) => (y.baseOvr || 0) - (x.baseOvr || 0) || (y.rep || 0) - (x.rep || 0) || String(x.id).localeCompare(String(y.id)));
+            const rankIdx = tier1DomClubs.findIndex(
+                rc => String(rc.id) === String(freshClub.id) || rc.name === freshClub.name
+            );
+            if (rankIdx === 0 || rankIdx === 1) return 'CL';
+            if (rankIdx >= 2 && rankIdx <= 4) return 'EL';
+            if (rankIdx === 5 && !['HUN', 'GER', 'ESP', 'POR'].includes(normBaseCountry)) return 'ECL';
+            return null;
+        })();
 
         setActiveCountryCode(freshClub.country || 'GER');
         try {
@@ -338,6 +378,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             tactic: philosophy,
             mode: mode as any,
             club: freshClub,
+            euroStatus: initEuroStatus,
             worldClubs: {},
             history: [],
             ovrHistory: [],
@@ -1384,8 +1425,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             };
         }
 
-        const prevDeals = (n.seasonSponsorDeals && n.seasonSponsorDealsYear === n.year) ? n.seasonSponsorDeals : {};
-        if (prevDeals[type]?.status === 'signed' || prevDeals[type]?.status === 'failed' || (type === 2 && n.activePerformanceDeal)) {
+        const prevDeals = ((n.sponsorsPitchedThisSeason || 0) > 0 && n.seasonSponsorDeals && n.seasonSponsorDealsYear === n.year) ? n.seasonSponsorDeals : {};
+        if ((type !== 0 && (prevDeals[type]?.status === 'signed' || prevDeals[type]?.status === 'failed')) || (type === 2 && n.activePerformanceDeal)) {
             return {
                 notifications: [...(n.notifications || []), {
                     id: Math.random().toString(36).substring(7),
