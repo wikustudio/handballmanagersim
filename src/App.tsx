@@ -18,6 +18,7 @@ import { ConsentBanner } from './components/ConsentBanner';
 import { Trophy, Globe } from 'lucide-react';
 import { getActiveClubs, isRealDataModActive, getCustomDb, mergeClubWithWorldState } from './utils/modManager';
 import { preloadClubAssets } from './utils/assetPreloader';
+import { initCrashReporter } from './utils/crashReporter';
 import { SEO } from './components/SEO';
 
 const serializeTrophiesKey = (t?: any): string => {
@@ -80,6 +81,7 @@ export default function App() {
     const fallback = document.getElementById('app-loading-fallback');
     if (fallback) fallback.remove();
 
+    initCrashReporter();
     syncOfflineScores().catch(() => {}); 
     preloadClubAssets(clubsDb);
     setIsMounted(true);

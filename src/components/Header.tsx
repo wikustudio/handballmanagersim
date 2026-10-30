@@ -7,6 +7,8 @@ import { HandballSimLogo } from './HandballSimLogo';
 import { isRealDataModActive, getCustomDb } from '../utils/modManager';
 import { openConsentBanner } from '../utils/consentManager';
 import { SaveBackupModal } from './SaveBackupModal';
+import { FeedbackModal } from './FeedbackModal';
+import { FeedbackType } from '../utils/crashReporter';
 import { useGameStore } from '../store/useGameStore';
 
 interface HeaderProps {
@@ -32,6 +34,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [showConfirm, setShowConfirm] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSaveBackup, setShowSaveBackup] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackInitialType, setFeedbackInitialType] = useState<FeedbackType | undefined>(undefined);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [isModActive, setIsModActive] = useState<boolean>(() => {
@@ -42,11 +46,18 @@ export const Header: React.FC<HeaderProps> = ({
     const handleModChange = () => {
       setIsModActive(isRealDataModActive() || Boolean(getCustomDb()));
     };
+    const handleOpenFeedback = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      setFeedbackInitialType(detail?.type);
+      setShowFeedback(true);
+    };
     window.addEventListener('mod-state-change', handleModChange);
     window.addEventListener('storage', handleModChange);
+    window.addEventListener('open-feedback-modal', handleOpenFeedback);
     return () => {
       window.removeEventListener('mod-state-change', handleModChange);
       window.removeEventListener('storage', handleModChange);
+      window.removeEventListener('open-feedback-modal', handleOpenFeedback);
     };
   }, []);
 
@@ -90,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Right side navigation matching clean design */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Start Over button (visible when game is active on desktop) */}
           {hasActiveGame && (
             <button
@@ -102,6 +113,19 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="font-medium">{tr('Start Over', 'Neustart')}</span>
             </button>
           )}
+
+          {/* Feedback / Crash Report button */}
+          <button
+            onClick={() => {
+              setFeedbackInitialType(undefined);
+              setShowFeedback(true);
+            }}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 hover:border-sky-400/30 text-zinc-200 hover:text-white text-xs font-semibold transition cursor-pointer active:scale-95 shadow-sm"
+            title={tr('Submit Feedback, Bug Fix, or Crash Report', 'Feedback, Bug oder Absturz melden')}
+          >
+            <i className="fas fa-comment-dots text-sky-400 text-xs" />
+            <span className="hidden xs:inline">{tr('Feedback', 'Feedback')}</span>
+          </button>
 
           {/* Leaderboard button */}
           {onShowLeaderboard && (
@@ -165,7 +189,29 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   </button>
 
-                  {/* Item 2: Database Mod with Active Badge */}
+                  {/* Item 2: Report Bug / Crash / Feature Request */}
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setFeedbackInitialType(undefined);
+                      setShowFeedback(true);
+                    }}
+                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/20 text-sky-400 flex items-center justify-center shrink-0">
+                        <i className="fas fa-bug text-sm" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-zinc-200 group-hover:text-white font-medium text-sm">
+                          {tr('Report Crash / Feature Request', 'Absturz melden / Vorschlag')}
+                        </span>
+                      </div>
+                    </div>
+                    <i className="fas fa-chevron-right text-zinc-500 text-xs group-hover:text-zinc-300" />
+                  </button>
+
+                  {/* Item 3: Database Mod with Active Badge */}
                   {onOpenMods && (
                     <button
                       onClick={() => {
@@ -198,8 +244,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   )}
 
-
-
                   {/* Item 4: Buy Me a Coffee */}
                   <a
                     href="https://buymeacoffee.com/willykuhne"
@@ -217,7 +261,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                     <i className="fas fa-arrow-up-right-from-square text-zinc-500 text-xs group-hover:text-zinc-300 transition-transform" />
                   </a>
-
 
                   <button
                     onClick={() => {
@@ -307,6 +350,14 @@ export const Header: React.FC<HeaderProps> = ({
         onClose={() => setShowSaveBackup(false)}
         state={state}
         lang={lang}
+      />
+
+      {/* Feedback & Crash Report Modal */}
+      <FeedbackModal
+        isOpen={showFeedback}
+        onClose={() => setShowFeedback(false)}
+        lang={lang}
+        initialType={feedbackInitialType}
       />
 
       {/* Confirmation Modal for Reset */}

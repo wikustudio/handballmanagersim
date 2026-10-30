@@ -728,7 +728,7 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
                 <span className="text-xs font-semibold text-zinc-300 px-0.5">
                   {t(lang, 'Winter Preparations', 'Vorbereitungsmaßnahmen')}
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
                    {/* Button 1: Transfer Market */}
                    <button 
                       type="button"
@@ -862,8 +862,9 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
               onClick={() => applyOvrAndProceed(onReturnToDashboard)}
               className="w-full sm:w-auto sm:flex-1 py-3.5 px-4 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 font-semibold text-xs sm:text-sm transition-all duration-200 active:scale-[0.99] cursor-pointer border border-white/[0.08] flex items-center justify-center gap-2"
             >
-              <i className="fas fa-sliders text-xs text-sky-400" />
-              <span>{t(lang, 'Club Dashboard (Pitch Sponsors & 2nd Half Prep)', 'Vereins-Dashboard (Sponsoren & Rückrunden-Vorbereitung)')}</span>
+              <i className="fas fa-sliders text-xs text-sky-400 shrink-0" />
+              <span className="sm:hidden">{t(lang, 'Club Dashboard & 2nd Half Prep', 'Dashboard & Vorbereitung')}</span>
+              <span className="hidden sm:inline">{t(lang, 'Club Dashboard (Pitch Sponsors & 2nd Half Prep)', 'Vereins-Dashboard (Sponsoren & Rückrunden-Vorbereitung)')}</span>
             </button>
           )}
           <button 
