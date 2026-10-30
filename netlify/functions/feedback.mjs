@@ -170,6 +170,9 @@ export const handler = async (event) => {
       crashReport = null,
       recentErrors = [],
       gameStateSnapshot = null,
+      reportId: incomingReportId,
+      submittedAt: incomingSubmittedAt,
+      skipSupabaseInsert = false,
     } = parsedBody;
 
     const cleanTitle = String(title || '').trim().slice(0, 200) || 'Untitled Report';
@@ -183,11 +186,13 @@ export const handler = async (event) => {
       };
     }
 
-    const reportId = `HMS-${Date.now().toString(36).toUpperCase()}-${Math.random()
-      .toString(36)
-      .substring(2, 6)
-      .toUpperCase()}`;
-    const submittedAt = new Date().toISOString();
+    const reportId =
+      incomingReportId ||
+      `HMS-${Date.now().toString(36).toUpperCase()}-${Math.random()
+        .toString(36)
+        .substring(2, 6)
+        .toUpperCase()}`;
+    const submittedAt = incomingSubmittedAt || new Date().toISOString();
 
     const reportRecord = {
       reportId,
@@ -207,7 +212,7 @@ export const handler = async (event) => {
     console.info('[HMS Feedback Report]', JSON.stringify(reportRecord));
 
     const [supabaseSaved, dispatchResult] = await Promise.all([
-      saveFeedbackToSupabase(reportRecord),
+      skipSupabaseInsert ? Promise.resolve(true) : saveFeedbackToSupabase(reportRecord),
       dispatchFeedbackEmail(reportRecord),
     ]);
 
