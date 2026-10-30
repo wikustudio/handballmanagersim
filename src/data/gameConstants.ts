@@ -590,15 +590,32 @@ export const getQualifiedSupercupMatches = (
   let explicitOppName: string | undefined;
 
   if (lastHist) {
+    const lastHistClub = mergedClubs.find(
+      c =>
+        (lastHist.clubId !== undefined && String(c.id) === String(lastHist.clubId)) ||
+        c.name === lastHist.clubName
+    );
     const sameClubAsLastSeason =
       (lastHist.clubId !== undefined && String(lastHist.clubId) === String(state.club.id)) ||
       lastHist.clubName === state.club.name;
+    const sameCountryAsLastSeason =
+      sameClubAsLastSeason ||
+      (lastHistClub ? normalizeCountry(lastHistClub.country || 'GER') === country : false);
+    const canUseLastHistTable = sameCountryAsLastSeason && (lastHist.tier === 1 || lastHist.tier === undefined);
+    const domesticRivalFallback =
+      sameClubAsLastSeason && lastHist.rivalName && lastHist.rivalName !== state.club.name
+        ? lastHist.rivalName
+        : undefined;
 
     const wonLeague = sameClubAsLastSeason
       ? ((lastHist.trophiesThisYear?.bl || 0) > 0 || (lastHist.tier === 1 && lastHist.pos === 1))
       : Boolean(
           lastHist.universeMovements?.some(
-            (m: any) => m.type === 'champion' && m.fromTier === 1 && m.clubName === state.club.name
+            (m: any) =>
+              m.type === 'champion' &&
+              m.fromTier === 1 &&
+              normalizeCountry(m.country || 'GER') === country &&
+              m.clubName === state.club.name
           )
         );
 
@@ -611,9 +628,13 @@ export const getQualifiedSupercupMatches = (
           (m.cupTitle && m.cupTitle.toLowerCase() === cupInfo.name.toLowerCase()))
     )?.clubName;
 
+    const natCupFinalFromContext = sameCountryAsLastSeason
+      ? lastHist.resolvedMatchContext?.cupFinals?.['nat_cup']
+      : undefined;
+
     const wonCup = sameClubAsLastSeason
-      ? ((lastHist.trophiesThisYear?.dfb || 0) > 0 || Boolean(lastHist.resolvedMatchContext?.cupFinals?.['nat_cup']?.userWon))
-      : (lastHist.resolvedMatchContext?.cupFinals?.['nat_cup']?.winnerName === state.club.name || cupWinnerFromMovements === state.club.name);
+      ? ((lastHist.trophiesThisYear?.dfb || 0) > 0 || Boolean(natCupFinalFromContext?.userWon))
+      : (natCupFinalFromContext?.winnerName === state.club.name || cupWinnerFromMovements === state.club.name);
 
     if (wonLeague || wonCup) {
       domesticQualified = true;
@@ -621,32 +642,38 @@ export const getQualifiedSupercupMatches = (
       if (wonLeague && wonCup) {
         userDomesticRole = 'Domestic Double Winner';
         oppDomesticRole = 'League Runner-Up';
-        const runnerUpFromTable = lastHist.finalTable?.find(
-          (row: any) => (row.pos === 2 || row.rank === 2) && row.name !== state.club.name && row.clubName !== state.club.name
-        );
-        explicitOppName = runnerUpFromTable?.name || runnerUpFromTable?.clubName || (lastHist.rivalName !== state.club.name ? lastHist.rivalName : undefined);
+        const runnerUpFromTable = canUseLastHistTable
+          ? lastHist.finalTable?.find(
+              (row: any) => (row.pos === 2 || row.rank === 2) && row.name !== state.club.name && row.clubName !== state.club.name
+            )
+          : undefined;
+        explicitOppName = runnerUpFromTable?.name || runnerUpFromTable?.clubName || domesticRivalFallback;
       } else if (wonLeague) {
         userDomesticRole = 'League Champion';
         oppDomesticRole = `${cupInfo.name} Winner`;
-        const cupWinnerName = lastHist.resolvedMatchContext?.cupFinals?.['nat_cup']?.winnerName || cupWinnerFromMovements;
+        const cupWinnerName = natCupFinalFromContext?.winnerName || cupWinnerFromMovements;
         if (cupWinnerName && cupWinnerName !== state.club.name) {
           explicitOppName = cupWinnerName;
         } else {
-          const runnerUpFromTable = lastHist.finalTable?.find(
-            (row: any) => (row.pos === 2 || row.rank === 2) && row.name !== state.club.name && row.clubName !== state.club.name
-          );
-          explicitOppName = runnerUpFromTable?.name || runnerUpFromTable?.clubName || (lastHist.rivalName !== state.club.name ? lastHist.rivalName : undefined);
+          const runnerUpFromTable = canUseLastHistTable
+            ? lastHist.finalTable?.find(
+                (row: any) => (row.pos === 2 || row.rank === 2) && row.name !== state.club.name && row.clubName !== state.club.name
+              )
+            : undefined;
+          explicitOppName = runnerUpFromTable?.name || runnerUpFromTable?.clubName || domesticRivalFallback;
         }
       } else {
         userDomesticRole = `${cupInfo.name} Winner`;
         oppDomesticRole = 'League Champion';
-        const champFromTable = lastHist.finalTable?.find(
-          (row: any) => (row.pos === 1 || row.rank === 1) && row.name !== state.club.name && row.clubName !== state.club.name
-        );
+        const champFromTable = canUseLastHistTable
+          ? lastHist.finalTable?.find(
+              (row: any) => (row.pos === 1 || row.rank === 1) && row.name !== state.club.name && row.clubName !== state.club.name
+            )
+          : undefined;
         const champFromMovements = lastHist.universeMovements?.find(
           (m: any) => m.type === 'champion' && m.fromTier === 1 && normalizeCountry(m.country || 'GER') === country && m.clubName !== state.club.name
         )?.clubName;
-        explicitOppName = champFromTable?.name || champFromTable?.clubName || champFromMovements || (lastHist.rivalName !== state.club.name ? lastHist.rivalName : undefined);
+        explicitOppName = champFromTable?.name || champFromTable?.clubName || champFromMovements || domesticRivalFallback;
       }
     }
   } else if (state.club.tier === 1) {
@@ -672,7 +699,22 @@ export const getQualifiedSupercupMatches = (
   if (domesticQualified) {
     const domInfo = getDomesticSupercupInfo(country, isModActive);
     if (!oppClub && explicitOppName) {
-      oppClub = mergedClubs.find(c => c.name === explicitOppName && String(c.id) !== String(state.club.id));
+      const matchedInCountry = mergedClubs.find(
+        c =>
+          c.name === explicitOppName &&
+          normalizeCountry(c.country || 'GER') === country &&
+          String(c.id) !== String(state.club.id)
+      );
+      if (matchedInCountry) {
+        oppClub = matchedInCountry;
+      } else {
+        const isForeignClub = mergedClubs.some(
+          c => c.name === explicitOppName && normalizeCountry(c.country || 'GER') !== country
+        );
+        if (isForeignClub) {
+          explicitOppName = undefined;
+        }
+      }
     }
     if (!oppClub) {
       oppClub = otherDomesticTier1[0];
