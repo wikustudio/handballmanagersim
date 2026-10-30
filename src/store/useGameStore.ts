@@ -566,28 +566,62 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         const clubTier = a.tier || 5;
         const isPowerhouse = isEuropeanPowerhouseClub(a) || (clubTier === 1 && clubOvr >= 84);
         const isTopClub = isPowerhouse || (clubTier === 1 && clubOvr >= 78);
+        const isEstablishedTier1 = clubTier === 1 && clubOvr >= 74;
 
-        if (!userIsReserve && seasonsProgressed >= 3 && isTopClub) {
-            if (seasonsProgressed >= 5) {
-                preservedAcademy = Math.max(2, preservedAcademy);
-                preservedMedical = Math.max(2, preservedMedical);
-                const seed = typeof targetId === 'number' ? targetId : String(a.name || '').length;
-                if (isPowerhouse && preservedAcademy < 3 && preservedMedical < 3) {
-                    if (seed % 3 === 0) {
-                        preservedAcademy = 3;
-                        preservedMedical = 3;
+        if (!userIsReserve) {
+            const seed = typeof targetId === 'number' ? targetId : String(a.name || '').length;
+            if (isPowerhouse) {
+                // European powerhouses (e.g., PSG, Barcelona, Kiel, Magdeburg, Berlin, Veszprém) never start at Level 1:
+                // Baseline Level 2-3 from Season 1, progressing to Level 3-4 as the career advances.
+                if (seasonsProgressed >= 6) {
+                    preservedAcademy = Math.max(3, preservedAcademy);
+                    preservedMedical = Math.max(3, preservedMedical);
+                    if (clubOvr >= 87 || seed % 3 === 0) {
+                        preservedAcademy = Math.max(4, preservedAcademy);
+                        preservedMedical = Math.max(4, preservedMedical);
                     } else if (seed % 2 === 0) {
-                        preservedAcademy = 3;
+                        preservedAcademy = Math.max(4, preservedAcademy);
                     } else {
-                        preservedMedical = 3;
+                        preservedMedical = Math.max(4, preservedMedical);
                     }
-                } else if (!isPowerhouse && clubOvr >= 81 && preservedAcademy === 2 && preservedMedical === 2 && seed % 2 === 0) {
-                    preservedAcademy = 3;
+                } else if (seasonsProgressed >= 3) {
+                    preservedAcademy = Math.max(3, preservedAcademy);
+                    preservedMedical = Math.max(3, preservedMedical);
+                } else {
+                    preservedAcademy = Math.max(2, preservedAcademy);
+                    preservedMedical = Math.max(2, preservedMedical);
+                    if (clubOvr >= 86 || seed % 3 === 0) {
+                        preservedAcademy = Math.max(3, preservedAcademy);
+                        preservedMedical = Math.max(3, preservedMedical);
+                    } else if (seed % 2 === 0) {
+                        preservedAcademy = Math.max(3, preservedAcademy);
+                    } else {
+                        preservedMedical = Math.max(3, preservedMedical);
+                    }
                 }
-            } else {
-                // 3-4 seasons into career: top clubs have at least Level 2 facilities
+            } else if (isTopClub) {
+                // Top-flight contenders (78-83 OVR) always have at least Level 2 facilities immediately, scaling to Level 3
                 preservedAcademy = Math.max(2, preservedAcademy);
                 preservedMedical = Math.max(2, preservedMedical);
+                if (seasonsProgressed >= 5) {
+                    preservedAcademy = Math.max(3, preservedAcademy);
+                    preservedMedical = Math.max(3, preservedMedical);
+                } else if (seasonsProgressed >= 2 && clubOvr >= 80) {
+                    if (seed % 2 === 0) {
+                        preservedAcademy = Math.max(3, preservedAcademy);
+                    } else {
+                        preservedMedical = Math.max(3, preservedMedical);
+                    }
+                }
+            } else if (isEstablishedTier1 && seasonsProgressed >= 2) {
+                if (seasonsProgressed >= 4) {
+                    preservedAcademy = Math.max(2, preservedAcademy);
+                    preservedMedical = Math.max(2, preservedMedical);
+                } else if (seed % 2 === 0) {
+                    preservedAcademy = Math.max(2, preservedAcademy);
+                } else {
+                    preservedMedical = Math.max(2, preservedMedical);
+                }
             }
         }
 
