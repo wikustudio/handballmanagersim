@@ -1244,8 +1244,37 @@ export function simulateGlobalLeagues(
     const newWorldClubs: Record<string, Club> = {};
     agedClubs.forEach(c => {
         if (c.id !== userClub.id) {
+            const nextTierForAi = nextTiers.get(c.id) || c.tier;
+            let aiAcademy = c.academyLevel || 1;
+            let aiMedical = c.medicalLevel || 1;
+
+            if (!isReserveClub(c.name) && nextTierForAi === 1) {
+                const aiOvr = c.baseOvr || 70;
+                if (aiOvr >= 84) {
+                    // Elite European powerhouses maintain at least Level 2-3 and invest up to Level 4
+                    aiAcademy = Math.max(2, aiAcademy);
+                    aiMedical = Math.max(2, aiMedical);
+                    if (aiAcademy < 4 && Math.random() < 0.28) aiAcademy += 1;
+                    if (aiMedical < 4 && Math.random() < 0.28) aiMedical += 1;
+                } else if (aiOvr >= 78) {
+                    // Top-flight contenders maintain at least Level 2 and invest up to Level 3
+                    aiAcademy = Math.max(2, aiAcademy);
+                    aiMedical = Math.max(2, aiMedical);
+                    if (aiAcademy < 3 && Math.random() < 0.20) aiAcademy += 1;
+                    if (aiMedical < 3 && Math.random() < 0.20) aiMedical += 1;
+                } else if (aiOvr >= 74) {
+                    if (aiAcademy < 2 && Math.random() < 0.18) aiAcademy = 2;
+                    if (aiMedical < 2 && Math.random() < 0.18) aiMedical = 2;
+                }
+            }
+
             const { historicContext: _hc, context: _ctx, ...compactAiClub } = c;
-            newWorldClubs[c.id] = { ...compactAiClub, tier: nextTiers.get(c.id) || c.tier };
+            newWorldClubs[c.id] = {
+                ...compactAiClub,
+                tier: nextTierForAi,
+                academyLevel: aiAcademy,
+                medicalLevel: aiMedical,
+            };
         } else {
             // User club is strictly preserved as-is from state
             newWorldClubs[c.id] = { ...userClub };
