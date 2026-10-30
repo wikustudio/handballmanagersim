@@ -1,11 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Club, GameState, Language } from '../types';
 import { ClubLogo } from './ClubLogo';
-import { getLeagueInfo, getOvrColor, formatMoney, getStartingBudget, getCountryFlag, normalizeCountry } from '../data/gameConstants';
+import { getLeagueInfo, getOvrColor, formatMoney, getStartingBudget, formatNum } from '../data/gameConstants';
 import { t as tr } from '../data/translations';
-import { mergeClubWithWorldState } from '../utils/modManager';
-import { useModalDismiss } from '../utils/modalUtils';
+import { parseAndNormalizeModBudget } from '../engine/moddingEngine';
 
 interface JobMarketModalProps {
   isOpen?: boolean;
@@ -15,7 +14,7 @@ interface JobMarketModalProps {
   lang: Language;
   onAcceptOffer: (club: Club) => void;
   generateOffers: (state: GameState, currentClubsDb: Club[], count: number) => Club[];
-  onOpenTransfers?: () => void;
+  isModActive?: boolean;
 }
 
 export const JobMarketModal: React.FC<JobMarketModalProps> = ({
@@ -26,337 +25,320 @@ export const JobMarketModal: React.FC<JobMarketModalProps> = ({
   lang,
   onAcceptOffer,
   generateOffers,
-  onOpenTransfers,
+  isModActive,
 }) => {
-  useModalDismiss(!state.isSacked ? onClose : undefined, isOpen);
   const [offers, setOffers] = useState<Club[]>([]);
-  const [filter, setFilter] = useState<'all' | 'tier1' | 'lower'>('all');
-  const generateOffersRef = useRef(generateOffers);
-  generateOffersRef.current = generateOffers;
+  const [selectedRegion, setSelectedRegion] = useState<'all' | 'domestic' | 'international' | 'fallen'>('all');
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const prevIsOpenRef = React.useRef(false);
 
   useEffect(() => {
-    if (isOpen) {
-      // Up to 8 curated proposals across domestic, international, top flight, and fallen giants
-      const generated = generateOffersRef.current(state, clubsDb, 8);
+    if (isOpen && !prevIsOpenRef.current) {
+      // 3 Domestic + 2 Intl (including Fallen Giant Restoration opportunities) = 5
+      const generated = generateOffers(state, clubsDb, 5);
       setOffers(generated);
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ top: 0, behavior: 'instant' });
+      }
     }
-  }, [isOpen, state.year, state.club?.id, state.isSacked]);
-
-  useEffect(() => {
-    if (!clubsDb || clubsDb.length === 0) return;
-    setOffers((prev) => {
-      if (prev.length === 0) return prev;
-      return prev.map((offer) => {
-        const match = clubsDb.find(
-          (c) => String(c.id) === String(offer.id) || (c.name && offer.name && c.name.toLowerCase() === offer.name.toLowerCase())
-        );
-        return match ? mergeClubWithWorldState(match, offer) : offer;
-      });
-    });
-  }, [clubsDb]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, state, clubsDb, generateOffers]);
 
   if (!isOpen) return null;
+  const t = (en: string, de?: string, es?: string) => tr(lang, en, de, es);
 
-  const t = (en: string, _de?: string, _es?: string) => en;
-  const userCountry = normalizeCountry(state.club.country || 'GER');
+  const userCountry = state.club.country || 'GER';
+  const domesticOffers = offers.filter((c) => (c.country || 'GER') === userCountry);
+  const intlOffers = offers.filter((c) => (c.country || 'GER') !== userCountry);
+  const fallenOffers = offers.filter((c) => Boolean(c.isInsolventGiant));
 
-  const displayedOffers = offers.filter((c) => {
-    if (filter === 'tier1') return c.tier === 1;
-    if (filter === 'lower') return c.tier >= 2;
-    return true;
-  });
-
-  const domesticOffers = displayedOffers.filter((c) => normalizeCountry(c.country || 'GER') === userCountry);
-  const intlOffers = displayedOffers.filter((c) => normalizeCountry(c.country || 'GER') !== userCountry);
-
-  const tier1Count = offers.filter(c => c.tier === 1).length;
-  const lowerCount = offers.filter(c => c.tier >= 2).length;
+  const displayedOffers = 
+    selectedRegion === 'domestic'
+      ? domesticOffers
+      : selectedRegion === 'international'
+      ? intlOffers
+      : selectedRegion === 'fallen'
+      ? fallenOffers
+      : offers;
 
   return (
-    <div 
-      onClick={!state.isSacked ? onClose : undefined}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-2xl cursor-pointer overflow-y-auto"
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }} 
+      transition={{ duration: 0.1, ease: 'linear' }}
+      onClick={onClose}
+      className="fixed inset-0 bg-black/75 backdrop-blur-2xl flex flex-col items-center justify-center p-2.5 sm:p-5 z-50 cursor-pointer overflow-y-auto overscroll-contain"
     >
       <motion.div 
-        initial={{ scale: 0.95, y: 15, opacity: 0 }} 
-        animate={{ scale: 1, y: 0, opacity: 1 }} 
-        exit={{ scale: 0.95, y: 10, opacity: 0 }} 
-        transition={{ type: 'spring', damping: 26, stiffness: 340 }}
+        initial={{ scale: 0.98, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        exit={{ scale: 0.98, opacity: 0 }} 
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] border border-white/[0.04] rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative my-auto max-h-[92vh] flex flex-col overflow-hidden cursor-default pointer-events-auto"
+        className="bg-[#12141c]/90 text-white w-full max-w-4xl rounded-[28px] sm:rounded-[32px] shadow-[0_24px_64px_rgba(0,0,0,0.6)] border border-white/[0.08] backdrop-blur-3xl relative cursor-default max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto flex flex-col overflow-hidden text-left shrink-0"
       >
-        {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/25 to-transparent pointer-events-none" />
+        {/* Subtle Ambient Glow */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/[0.04] bg-[#14151e] shrink-0 gap-3">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-white/[0.06] bg-white/[0.02] shrink-0 relative z-10">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-lg shadow-sm shrink-0">
-              <i className="fas fa-envelope-open-text" />
+            <div className="w-11 h-11 bg-white/[0.04] border border-white/[0.08] rounded-2xl flex items-center justify-center text-sky-400 text-base shadow-inner shrink-0">
+              <i className="fa-solid fa-briefcase"></i>
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-tight flex items-center gap-2">
-                <span>{state.isSacked ? t('You Were Fired!', 'Sie wurden entlassen!', '¡Fuiste despedido!') : t('Manager Job Market', 'Trainer-Arbeitsmarkt', 'Mercado de Entrenadores')}</span>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-sky-400/90 mb-0.5">
+                {t('Career Inquiries · Headhunter Desk', 'Karriere-Anfragen · Headhunter-Desk')}
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">
+                {t('Director Job Market', 'Sportdirektor Arbeitsmarkt')}
               </h2>
-              <p className="text-xs text-zinc-400 mt-0.5 font-normal">
-                {state.isSacked 
-                  ? t('Your tenure at the club has ended. Review official offers from interested clubs to resume your career.', 'Ihre Amtszeit ist beendet. Prüfen Sie Angebote anderer Vereine, um Ihre Karriere fortzusetzen.') 
-                  : t('Club executives and headhunters have presented proposals. Elite clubs and lower-tier Fallen Giants seek your leadership.', 'Funktionäre haben Ihnen Angebote unterbreitet. Elite-Klubs und schlafende Riesen hoffen auf Ihre Führung.')}
-              </p>
             </div>
           </div>
-          {!state.isSacked && (
-            <button 
-              aria-label="Close modal"
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer active:scale-95 shrink-0"
-            >
-              <i className="fas fa-xmark text-sm" />
-            </button>
-          )}
+
+          <button 
+            aria-label="Close modal"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer border border-white/[0.08] shrink-0"
+          >
+            <i className="fa-solid fa-xmark text-xs"></i>
+          </button>
         </div>
 
-        {/* Filter Toolbar */}
-        <div className="pt-3 pb-2 shrink-0 flex items-center justify-between flex-wrap gap-2 border-b border-white/[0.04]">
+        {/* Progressive Disclosure Filter Bar */}
+        <div className="px-5 sm:px-6 pt-4 pb-2.5 shrink-0 border-b border-white/[0.04] flex items-center justify-between gap-3 relative z-10">
           <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
             <button
-              onClick={() => setFilter('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                filter === 'all'
-                  ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm'
-                  : 'bg-white/[0.02] text-zinc-400 hover:text-zinc-200 border border-white/[0.04]'
+              type="button"
+              onClick={() => {
+                setSelectedRegion('all');
+                scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                selectedRegion === 'all'
+                  ? 'bg-sky-500/15 text-sky-300 border border-sky-400/30 shadow-sm'
+                  : 'bg-white/[0.03] text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'
               }`}
             >
-              <span>{t('All Proposals', 'Alle Angebote')}</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/10 text-zinc-300 tabular-nums">{offers.length}</span>
+              <span>{t('All Opportunities', 'Alle Angebote')}</span>
+              <span className="text-[10px] tabular-nums font-medium opacity-70">({offers.length})</span>
             </button>
-
             <button
-              onClick={() => setFilter('tier1')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                filter === 'tier1'
-                  ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm'
-                  : 'bg-white/[0.02] text-zinc-400 hover:text-zinc-200 border border-white/[0.04]'
+              type="button"
+              onClick={() => {
+                setSelectedRegion('domestic');
+                scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                selectedRegion === 'domestic'
+                  ? 'bg-sky-500/15 text-sky-300 border border-sky-400/30 shadow-sm'
+                  : 'bg-white/[0.03] text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'
               }`}
             >
-              <i className="fas fa-trophy text-[10px] text-sky-400" />
-              <span>{t('Top-Flight (Tier 1)', 'Erstliga-Elite')}</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/10 text-zinc-300 tabular-nums">{tier1Count}</span>
+              <i className="fa-solid fa-house-chimney text-[10px]"></i>
+              <span>{t('Domestic', 'Inland')}</span>
+              <span className="text-[10px] tabular-nums font-medium opacity-70">({domesticOffers.length})</span>
             </button>
-
             <button
-              onClick={() => setFilter('lower')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 ${
-                filter === 'lower'
-                  ? 'bg-amber-500/[0.05] text-amber-300 border border-amber-500/20 shadow-sm'
-                  : 'bg-white/[0.02] text-zinc-400 hover:text-zinc-200 border border-white/[0.04]'
+              type="button"
+              onClick={() => {
+                setSelectedRegion('international');
+                scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                selectedRegion === 'international'
+                  ? 'bg-sky-500/15 text-sky-300 border border-sky-400/30 shadow-sm'
+                  : 'bg-white/[0.03] text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'
               }`}
             >
-              <i className="fas fa-crown text-[10px] text-amber-400" />
-              <span>{t('Fallen Giants & Rebuilds (Tier 2-4)', 'Gefallene Riesen & Rebuilds')}</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-white/10 text-zinc-300 tabular-nums">{lowerCount}</span>
+              <i className="fa-solid fa-globe text-[10px]"></i>
+              <span>{t('Continental', 'International')}</span>
+              <span className="text-[10px] tabular-nums font-medium opacity-70">({intlOffers.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRegion('fallen');
+                scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                selectedRegion === 'fallen'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30 shadow-sm'
+                  : 'bg-white/[0.03] text-zinc-400 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-fire-flame-curved text-[10px] text-amber-400"></i>
+              <span>{t('Fallen Giants', 'Gefallene Giganten')}</span>
+              <span className="text-[10px] tabular-nums font-medium opacity-70">({fallenOffers.length})</span>
             </button>
           </div>
 
-          <div className="text-[11px] text-zinc-400 font-normal">
-            Reputation: <strong className="text-white font-semibold tabular-nums">{Math.round(state.reputation || 50)}/100</strong>
+          <div className="text-[11px] text-zinc-400 font-normal hidden sm:block">
+            {t('Director Rep:', 'Direktor-Ansehen:')} <span className="font-bold text-sky-300 tabular-nums">{state.reputation || 50}</span>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 pt-3 flex flex-col gap-5">
-          
-          {/* Veteran Ringer Promotion Gamble Lifeline (Tiers 3-6) */}
-          {!state.isSacked && (state.club.tier || 1) >= 3 && onOpenTransfers && (
-            <div className="bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/5 border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
-              <div className="flex items-start sm:items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 text-sm shrink-0">
-                  <i className="fas fa-medal" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm font-bold text-amber-200">
-                      {lang === 'de' ? 'Alternative: Altstar verpflichten (All-In Aufstiegs-Wette)' : 'Alternative: Sign Veteran Ringer (High-Risk Promotion Gamble)'}
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">
-                      T{state.club.tier}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-zinc-300 mt-0.5 leading-snug">
-                    {lang === 'de'
-                      ? 'Statt den Verein zu verlassen: Hole einen 38-jährigen Bundesliga-Star für sofortige +3 bis +5 GES! Aufstieg oder Schuldenkrise.'
-                      : 'Rather than leaving your club, take a massive swing: +3 to +5 OVR immediate boost with 1-season retirement. Promote or face financial crisis!'}
-                  </p>
-                </div>
+        {/* Content Body */}
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:p-6 custom-scrollbar relative z-10">
+          {displayedOffers.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {displayedOffers.map((club) => {
+                const isDomestic = (club.country || 'GER') === userCountry;
+                return (
+                  <OfferCard 
+                    key={club.id} 
+                    club={club} 
+                    lang={lang} 
+                    isDomestic={isDomestic}
+                    onAccept={() => onAcceptOffer(club)} 
+                    t={t} 
+                    isModActive={isModActive} 
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-16 bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6 flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-zinc-500 mb-3">
+                <i className="fa-solid fa-folder-open text-xl"></i>
               </div>
-
-              <button
-                onClick={() => {
-                  onClose();
-                  onOpenTransfers();
-                }}
-                className="py-2 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs tracking-wide shrink-0 transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95"
-              >
-                <i className="fas fa-arrow-right text-[10px]" />
-                <span>{lang === 'de' ? 'Zum Transfermarkt' : 'Open Transfers'}</span>
-              </button>
+              <div className="text-white font-bold text-sm mb-1">
+                {t('No Inquiries in this Category', 'Keine Anfragen in dieser Kategorie')}
+              </div>
+              <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                {t('Switch filters to view other club opportunities or continue with your current mandate.', 'Wähle einen anderen Filter oder führe deine aktuelle Amtszeit fort.')}
+              </p>
             </div>
           )}
+        </div>
 
-          {domesticOffers.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2.5">
-                <i className="fas fa-house-chimney text-emerald-400 text-xs" />
-                <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                  {t('Domestic Offers', 'Inländische Angebote')}
-                </h3>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {domesticOffers.map((club, _idx) => (
-                  <OfferCard key={`dom-${club.id}-${_idx}`} club={club} lang={lang} onAccept={() => onAcceptOffer(club)} t={t} />
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Footer */}
+        <div className="p-4 sm:p-5 border-t border-white/[0.06] bg-white/[0.02] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 relative z-10">
+          <div className="text-xs text-zinc-400 text-center sm:text-left">
+            <span className="text-amber-400/90 font-medium">
+              <i className="fa-solid fa-triangle-exclamation mr-1.5 text-[10px]"></i>
+              {t(
+                'Accepting a proposal immediately terminates your current club contract.',
+                'Die Annahme eines Angebots beendet deine aktuelle Amtszeit sofort.'
+              )}
+            </span>
+          </div>
 
-          {intlOffers.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-2.5">
-                <i className="fas fa-globe-americas text-sky-400 text-xs" />
-                <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-                  {t('International Offers', 'Internationale Angebote')}
-                </h3>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {intlOffers.map((club, _idx) => (
-                  <OfferCard key={`intl-${club.id}-${_idx}`} club={club} lang={lang} onAccept={() => onAcceptOffer(club)} t={t} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {displayedOffers.length === 0 && offers.length > 0 && (
-            <div className="text-center p-8 bg-[#10121a] rounded-2xl border border-white/[0.04] flex flex-col items-center gap-2">
-              <i className="fas fa-filter text-2xl text-zinc-600 mb-1" />
-              <div className="text-white font-semibold text-sm">{t('No offers match current filter.', 'Keine Angebote für diesen Filter gefunden.')}</div>
-              <button 
-                onClick={() => setFilter('all')}
-                className="text-xs text-sky-400 hover:text-sky-300 underline cursor-pointer mt-1"
-              >
-                {t('View all available proposals', 'Alle verfügbaren Angebote anzeigen')}
-              </button>
-            </div>
-          )}
-
-          {!state.isSacked && (
-            <div className="mt-1 border-t border-white/[0.04] pt-3">
-              <button
-                onClick={onClose}
-                className="w-full bg-sky-500/10 hover:bg-sky-500/20 text-sky-200 border border-sky-500/20 p-3 rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] group shadow-sm"
-              >
-                <i className="fas fa-handshake text-sky-300 group-hover:scale-110 transition-transform" />
-                <span className="font-semibold text-sm tracking-tight">{t('Stay at Current Club', 'Beim aktuellen Verein bleiben')}</span>
-              </button>
-            </div>
-          )}
+          <button 
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white font-semibold text-xs transition border border-white/[0.08] cursor-pointer"
+          >
+            {t('Decline & Stay', 'Ablehnen & Verbleiben')}
+          </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };
 
-const OfferCard: React.FC<{ club: Club; lang: Language; onAccept: () => void; t: any }> = ({ club, lang, onAccept, t }) => {
+interface OfferCardProps {
+  club: Club;
+  lang: Language;
+  isDomestic: boolean;
+  onAccept: () => void;
+  t: (en: string, de?: string, es?: string) => string;
+  isModActive?: boolean;
+}
+
+const OfferCard: React.FC<OfferCardProps> = ({ club, lang, isDomestic, onAccept, t, isModActive }) => {
   const league = getLeagueInfo(club.tier, club.country || 'GER');
-  const isFallenGiant = Boolean((club as any).isFallenGiant || (club as any).offerBadge === 'Fallen Giant Rebuild');
-  const isRescueProject = Boolean((club as any).isRescueProject || (club as any).offerBadge === 'Lower-Tier Rescue');
+  const startingBudget = club.offerBudget != null
+    ? parseAndNormalizeModBudget(club.offerBudget, club.tier, club.country || 'GER')
+    : club.currentBudget != null
+    ? parseAndNormalizeModBudget(club.currentBudget, club.tier, club.country || 'GER')
+    : getStartingBudget(club.tier, club.country || 'GER');
 
   return (
-    <button
-      onClick={onAccept}
-      className={`p-4 rounded-2xl border transition active:scale-[0.99] text-left flex flex-col group cursor-pointer shadow-sm relative overflow-hidden ${
-        isFallenGiant
-          ? 'bg-amber-500/[0.04] border-amber-500/20 hover:border-amber-500/40 hover:bg-amber-500/[0.07]'
-          : isRescueProject
-          ? 'bg-purple-500/[0.04] border-purple-500/20 hover:border-purple-500/40 hover:bg-purple-500/[0.07]'
-          : 'bg-[#14151e] border-white/[0.04] hover:border-white/[0.08] hover:bg-white/[0.02]'
-      }`}
-    >
-      {/* Top Banner Tag */}
-      <div className="flex items-center justify-between gap-2 mb-2.5">
-        {isFallenGiant ? (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-            <span>FALLEN GIANT REBUILD</span>
-          </span>
-        ) : isRescueProject ? (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/20 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-            <span>LOWER-TIER RESCUE</span>
-          </span>
-        ) : club.tier === 1 ? (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider bg-sky-500/10 text-sky-300 border border-sky-500/20 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-            <span>TOP-FLIGHT ELITE</span>
-          </span>
-        ) : (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider bg-white/[0.03] text-zinc-400 border border-white/[0.04]">
-            Tier {club.tier} Project
-          </span>
+    <div className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-sky-400/30 rounded-2xl sm:rounded-3xl p-5 transition-all duration-200 flex flex-col justify-between shadow-sm relative group">
+      <div>
+        {/* Header row with club logo & metadata */}
+        <div className="flex items-start gap-3.5 mb-3.5">
+          <div className="w-12 h-12 bg-white/[0.04] border border-white/[0.08] rounded-2xl flex items-center justify-center p-2 shrink-0 shadow-sm">
+            <ClubLogo 
+              name={club.name} 
+              id={club.id} 
+              color={club.color} 
+              logo={club.logo} 
+              fallbackLogo={club.fallbackLogo} 
+              isModActive={isModActive} 
+              className="w-full h-full object-contain drop-shadow" 
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] uppercase font-semibold text-zinc-400 tracking-wider mb-0.5">
+              <span className="shrink-0">{isDomestic ? t('Domestic', 'Inland') : t('International', 'Ausland')}</span>
+              <span className="text-zinc-600">·</span>
+              <span className="text-sky-400/90 break-words">{league?.name}</span>
+              {club.isInsolventGiant && (
+                <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/30 text-amber-300 text-[9px] font-bold tracking-wider inline-flex items-center gap-1">
+                  <i className="fa-solid fa-fire-flame-curved text-[9px] text-amber-400"></i>
+                  <span>{t('Fallen Giant · Recovery Mandate', 'Gefallener Gigant · Sanierungsmandat')}</span>
+                </span>
+              )}
+            </div>
+            <h3 className="text-base sm:text-lg font-bold text-white break-words tracking-tight group-hover:text-sky-300 transition-colors">
+              {club.name}
+            </h3>
+          </div>
+        </div>
+
+        {/* Narrative / Context if present */}
+        {club.narrative && (
+          <div className={`mb-3.5 text-xs text-zinc-200 italic leading-relaxed p-3 rounded-xl border-l-2 ${
+            club.isInsolventGiant
+              ? 'bg-amber-500/[0.06] border-amber-400/70 text-amber-100/90'
+              : 'bg-white/[0.02] border-sky-400/50 text-zinc-300'
+          }`}>
+            "{club.narrative}"
+          </div>
         )}
 
-        <span className="text-[10px] font-mono font-medium text-zinc-400 bg-black/40 px-2 py-0.5 rounded border border-white/[0.04] tabular-nums">
-          Tier {club.tier}
-        </span>
+        {/* Bento stats row */}
+        <div className="grid grid-cols-2 gap-2.5 my-2">
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+            <div className="text-[9px] uppercase font-semibold text-zinc-400 tracking-wider">
+              {t('Squad OVR', 'Kader-Stärke')}
+            </div>
+            <div className={`text-base font-bold tabular-nums mt-0.5 ${getOvrColor(club.baseOvr)}`}>
+              {club.baseOvr} <span className="text-[10px] text-zinc-500 font-normal">OVR</span>
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+            <div className="text-[9px] uppercase font-semibold text-zinc-400 tracking-wider">
+              {t('Transfer Budget', 'Transferbudget')}
+            </div>
+            <div className={`text-base font-bold tabular-nums mt-0.5 ${startingBudget < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+              {formatMoney(startingBudget)}
+            </div>
+          </div>
+        </div>
+
+        {club.stadium && (
+          <div className="text-[11px] text-zinc-400 mt-1 flex items-center justify-between px-1">
+            <span>{t('Venue Capacity:', 'Stadionkapazität:')}</span>
+            <span className="font-semibold text-white tabular-nums">{formatNum(club.stadium)} seats</span>
+          </div>
+        )}
       </div>
 
-      <div className="flex items-center gap-3 mb-3">
-        <ClubLogo name={club.name} color={club.color} logo={club.logo} fallbackLogo={club.fallbackLogo} className="w-11 h-11 rounded-2xl drop-shadow-md border border-white/[0.06] shrink-0" />
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-white truncate group-hover:text-sky-300 transition-colors flex items-center gap-1.5">
-            <span className="truncate">{club.name}</span>
-            <span className="text-xs shrink-0" title={club.country}>{getCountryFlag(club.country)}</span>
-          </div>
-          <div className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5 truncate mt-0.5">
-            {league?.logo && (
-              <img
-                src={league.logo}
-                alt={`${league?.name || 'League'} logo`}
-                referrerPolicy="no-referrer"
-                onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                className="h-3.5 w-3.5 object-contain shrink-0 opacity-80"
-              />
-            )}
-            <span className="truncate">{league?.name}</span>
-          </div>
-        </div>
+      {/* Contract Action Button */}
+      <div className="mt-4 pt-3 border-t border-white/[0.05]">
+        <button
+          onClick={onAccept}
+          className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold tracking-wide transition cursor-pointer flex items-center justify-center gap-2 bg-sky-500 hover:bg-sky-400 active:scale-[0.98] text-white shadow-sm"
+        >
+          <i className="fa-solid fa-file-signature text-xs"></i>
+          <span>{t('Sign Management Contract', 'Vertrag unterschreiben')}</span>
+        </button>
       </div>
-      
-      {(club.historicContext || club.context || club.narrative) && (
-        <div className={`text-[11px] italic leading-relaxed mb-3.5 border-l-2 pl-2 line-clamp-2 font-normal ${
-          isFallenGiant 
-            ? 'text-amber-200/90 border-amber-400/60' 
-            : isRescueProject 
-            ? 'text-purple-200/90 border-purple-400/60' 
-            : 'text-zinc-400 border-sky-400/50'
-        }`}>
-          "{club.narrative || club.historicContext || club.context}"
-        </div>
-      )}
-      
-      <div className="grid grid-cols-2 gap-2 mt-auto pt-3 border-t border-white/[0.04] w-full">
-        <div className="flex flex-col">
-          <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-medium">{t('Squad OVR', 'Kader GES')}</span>
-          <span className={`text-xs font-semibold tabular-nums ${getOvrColor(club.baseOvr, getLeagueInfo(club.tier, club.country).avgOvr)}`}>
-            {club.baseOvr} OVR
-          </span>
-        </div>
-        <div className="flex flex-col text-right">
-          <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-medium">{t('Starting Budget', 'Startbudget')}</span>
-          <span className="text-xs font-semibold text-emerald-400 tabular-nums">
-            {formatMoney(getStartingBudget(club.tier, club.country || 'GER'))}
-          </span>
-        </div>
-      </div>
-    </button>
+    </div>
   );
 };

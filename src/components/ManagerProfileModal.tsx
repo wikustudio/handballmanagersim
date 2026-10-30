@@ -1,514 +1,503 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { GameState } from '../types';
-import { t } from '../data/translations';
-import { ClubLogo } from './ClubLogo';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { LeaderboardView } from './LeaderboardView';
-import { calculateLiveScore, getReconciledTrophies } from '../utils/leaderboard';
-import { CountUp } from './CountUp';
-import { getContinentalCupNames } from '../utils/regionHelpers';
-import { getLeagueInfo, getDomesticCupInfo } from '../data/gameConstants';
-import { getActiveClubs } from '../utils/modManager';
-import { ALL_CLUBS } from '../data/clubsData';
-import { useModalDismiss } from '../utils/modalUtils';
+import { calculateClubReputation, getManagerStandingTier, getManagerStandingShortTitle } from '../data/gameConstants';
 
 interface ManagerProfileModalProps {
   state: GameState;
-  lang: 'en' | 'de' | 'es';
+  lang?: string;
   onClose: () => void;
-  onOpenImpact?: () => void;
-  initialTab?: 'card' | 'leaderboard' | 'progression' | 'clubs';
 }
 
-export const ManagerProfileModal: React.FC<ManagerProfileModalProps> = ({ state, lang, onClose, onOpenImpact, initialTab = 'card' }) => {
-  useModalDismiss(onClose);
-  const isDe = false; // Strictly English as requested by user
-  const tr = (en: string, de?: string, _ignoredEs?: string) => t(lang, en, de);
-  
-  const [activeTab, setActiveTab] = useState<'card' | 'leaderboard' | 'progression' | 'clubs'>(initialTab);
-  const seasons = state.history?.length || 0;
-  const wins = state.totals?.wins || 0;
-  const trophies = getReconciledTrophies(state);
-  const winRate = state.totals?.matches > 0 ? Math.round((wins / state.totals.matches) * 100) : 0;
-  const repScore = Math.min(100, Math.max(0, Math.round(state.reputation || 50)));
-  const impactScore = Math.min(100, Math.max(0, Math.round(state.clubImpactScore || 50)));
-  const liveScore = calculateLiveScore(state);
+export const ManagerProfileModal: React.FC<ManagerProfileModalProps> = ({
+  state,
+  lang = 'en',
+  onClose,
+}) => {
+  const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
 
-  // Prepare progression data (dynamically scales for custom 6+ tier databases)
-  const progressionData = (state.history || []).map(h => ({
-    year: h.year,
-    tier: h.tier || 1,
-    label: `Tier ${h.tier || 1}`,
-    club: h.clubName
-  }));
-  const maxProgressionTier = Math.max(5, ...progressionData.map(d => d.tier || 1));
-  const progressionTicks = Array.from({ length: maxProgressionTier }, (_, i) => i + 1);
-  const activeModClubs = getActiveClubs();
+  const rep = state.reputation ?? 50;
+  const isDe = lang === 'de';
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
+  const repTier = getManagerStandingTier(rep, state.club.tier, isDe);
+  const totalTrophies = state.totals?.trophies ?? (state.trophies?.length || 0);
+  const seasonsManaged = state.history?.length || 0;
+  const worldCupWins = state.worldCupTrophies || state.internationalTrophies || 0;
+
+  // Commercial leverage calculation
+  const sponsorBonusPct = Math.round((rep / 100) * 35);
+
+  // Build historical reputation timeline
+  const timelineData = useMemo(() => {
+    const history = state.history || [];
+    const currentRep = state.reputation ?? 50;
+    const currentYear = state.year || 2026;
+
+    if (history.length === 0) {
+      return [
+        {
+          year: currentYear,
+          clubName: state.club.name || 'Club',
+          leagueTag: `T${state.club.tier || 1}`,
+          rep: currentRep,
+          tier: state.club.tier || 1,
+          pos: undefined,
+          trophiesCount: (state.trophies?.length || 0),
+          isCurrent: true,
+        }
+      ];
     }
+
+    // Baseline reputation estimate for first recorded season
+    const startClubRep = calculateClubReputation(history[0].ovr || 65, history[0].tier || 1);
+    let runningRep = Math.max(25, Math.min(80, startClubRep));
+
+    const standardTrophyWeights: Record<string, number> = {
+      wc: 15,
+      cl: 12,
+      cwc: 8,
+      bl: 6,
+      el: 5,
+      dfb: 4,
+      lower: 4,
+      ecl: 3,
+      efl: 3,
+      reg: 2,
+    };
+
+    const points = history.map((h, idx) => {
+      // Delta based on domestic finish
+      let delta = 0;
+      if (h.pos === 1) delta += 7;
+      else if (h.pos <= 3) delta += 4;
+      else if (h.pos >= 15) delta -= 4;
+
+      if (h.trophiesThisYear && typeof h.trophiesThisYear === 'object') {
+        for (const [k, rawVal] of Object.entries(h.trophiesThisYear)) {
+          const count = Number(rawVal) || 0;
+          if (count <= 0) continue;
+          const weight = standardTrophyWeights[k] ?? 3; // Custom/modded competition fallback
+          delta += weight * count;
+        }
+      }
+
+      runningRep = Math.max(15, Math.min(100, runningRep + delta));
+
+      const trCount = h.trophiesThisYear
+        ? Object.values(h.trophiesThisYear).reduce<number>((acc, val) => acc + (Number(val) || 0), 0)
+        : 0;
+
+      const safeTier = Math.max(1, Number(h.tier) || state.club.tier || 1);
+      const safeTag = h.leagueTag || `T${safeTier}`;
+
+      return {
+        year: h.year || currentYear,
+        clubName: h.clubName || state.club.name || 'Club',
+        leagueTag: safeTag,
+        rep: idx === history.length - 1 ? currentRep : runningRep,
+        tier: safeTier,
+        pos: h.pos,
+        trophiesCount: trCount,
+        isCurrent: idx === history.length - 1,
+      };
+    });
+
+    if (points.length > 0) {
+      points[points.length - 1].rep = currentRep;
+      points[points.length - 1].isCurrent = true;
+    }
+
+    return points;
+  }, [state.history, state.reputation, state.year, state.club, state.trophies]);
+
+  const activePoint = selectedPointIndex !== null && timelineData[selectedPointIndex]
+    ? timelineData[selectedPointIndex]
+    : timelineData[timelineData.length - 1];
+
+  // SVG Chart Dimensions
+  const svgWidth = 560;
+  const svgHeight = 170;
+  const padLeft = 40;
+  const padRight = 30;
+  const padTop = 20;
+  const padBottom = 30;
+  const plotWidth = svgWidth - padLeft - padRight;
+  const plotHeight = svgHeight - padTop - padBottom;
+
+  const getCoordinates = (index: number, score: number) => {
+    const x = timelineData.length === 1
+      ? padLeft + plotWidth / 2
+      : padLeft + (index / (timelineData.length - 1)) * plotWidth;
+    const y = padTop + (1 - Math.max(0, Math.min(100, score)) / 100) * plotHeight;
+    return { x, y };
   };
 
+  const linePath = useMemo(() => {
+    if (timelineData.length === 0) return '';
+    if (timelineData.length === 1) {
+      const { x, y } = getCoordinates(0, timelineData[0].rep);
+      return `M ${x - 30} ${y} L ${x + 30} ${y}`;
+    }
+
+    return timelineData.reduce((path, pt, idx) => {
+      const { x, y } = getCoordinates(idx, pt.rep);
+      if (idx === 0) return `M ${x} ${y}`;
+
+      const prev = getCoordinates(idx - 1, timelineData[idx - 1].rep);
+      const cpX1 = prev.x + (x - prev.x) * 0.45;
+      const cpX2 = prev.x + (x - prev.x) * 0.55;
+      return `${path} C ${cpX1} ${prev.y}, ${cpX2} ${y}, ${x} ${y}`;
+    }, '');
+  }, [timelineData]);
+
+  const areaPath = useMemo(() => {
+    if (timelineData.length < 2) return '';
+    const first = getCoordinates(0, timelineData[0].rep);
+    const last = getCoordinates(timelineData.length - 1, timelineData[timelineData.length - 1].rep);
+    const bottomY = padTop + plotHeight;
+    return `${linePath} L ${last.x} ${bottomY} L ${first.x} ${bottomY} Z`;
+  }, [linePath, timelineData]);
+
   return (
-    <div 
-      className="fixed inset-0 bg-black/85 flex items-center justify-center p-3 sm:p-5 z-[10050] backdrop-blur-xl animate-in fade-in duration-200 overflow-y-auto cursor-pointer"
-      onClick={handleBackdropClick}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.1, ease: 'linear' }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-2.5 sm:p-5 backdrop-blur-2xl bg-black/80 overflow-y-auto overscroll-contain"
     >
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.96, y: 14 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 14 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] w-full max-w-4xl rounded-2xl flex flex-col max-h-[92vh] shadow-[0_25px_70px_rgba(0,0,0,0.9)] border border-white/[0.04] relative overflow-hidden my-auto cursor-default"
+      {/* Backdrop */}
+      <div className="absolute inset-0" onClick={onClose}></div>
+
+      {/* Modal Dialog */}
+      <motion.div
+        initial={{ scale: 0.98, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.98, opacity: 0 }}
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+        className="bg-[#12141c]/95 backdrop-blur-3xl w-full max-w-2xl rounded-[28px] sm:rounded-[32px] border border-white/[0.08] shadow-[0_24px_70px_rgba(0,0,0,0.85)] overflow-hidden relative z-10 flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shrink-0"
       >
-        {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-400/25 to-transparent pointer-events-none" />
-
-        {/* Modal Header */}
-        <div className="flex justify-between items-center p-5 sm:p-6 border-b border-white/[0.04] bg-[#14151e] shrink-0">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-tight">
-                {state.managerName || 'Manager Profile'}
-              </h2>
-              <span className="bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[10px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Profile
-              </span>
+        {/* Header */}
+        <div className="p-5 sm:p-6 border-b border-white/[0.06] bg-white/[0.02] flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-400/30 flex items-center justify-center text-amber-400 text-lg shadow-inner">
+              <i className="fas fa-medal"></i>
             </div>
-            <p className="text-zinc-400 font-normal text-xs mt-0.5">
-              {Number.isInteger(seasons) ? seasons : seasons.toFixed(1)} seasons managed · {wins} wins · {trophies} trophies · <span className="text-amber-400 font-semibold tabular-nums">{liveScore.toLocaleString()} pts</span>
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
+                  Manager Reputation & Standing
+                </h2>
+              </div>
+              <p className="text-xs text-zinc-400 font-medium">
+                Global Director Prestige, Career Trajectory & Commercial Clout
+              </p>
+            </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button 
-              aria-label="Close modal" 
-              onClick={onClose} 
-              className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.04] flex items-center justify-center transition text-zinc-400 hover:text-white cursor-pointer active:scale-95"
-            >
-              <i className="fas fa-xmark text-sm" />
-            </button>
-          </div>
+          <button
+            aria-label="Close modal"
+            onClick={onClose}
+            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+          >
+            <i className="fas fa-times text-sm"></i>
+          </button>
         </div>
 
-        {/* Modern Segmented Navigation Tabs */}
-        <div className="px-3 sm:px-6 pt-3 pb-2 shrink-0">
-          <div className="bg-[#10121a] p-1 rounded-xl border border-white/[0.04] grid grid-cols-4 gap-1 w-full max-w-xl">
-            <button 
-              onClick={() => setActiveTab('card')}
-              className={`py-2 px-1 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate ${
-                activeTab === 'card' 
-                  ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm' 
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-              }`}
-            >
-              <i className="fas fa-id-card text-[11px] shrink-0" />
-              <span className="truncate">Manager Card</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('leaderboard')}
-              className={`py-2 px-1 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate ${
-                activeTab === 'leaderboard' 
-                  ? 'bg-amber-500/[0.05] text-amber-300 border border-amber-500/20 shadow-sm' 
-                  : 'text-zinc-400 hover:text-amber-300 border border-transparent'
-              }`}
-            >
-              <i className="fas fa-trophy text-[11px] text-amber-400 shrink-0" />
-              <span className="truncate">Leaderboard</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('progression')}
-              className={`py-2 px-1 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate ${
-                activeTab === 'progression' 
-                  ? 'bg-emerald-500/[0.05] text-emerald-300 border border-emerald-500/20 shadow-sm' 
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-              }`}
-            >
-              <i className="fas fa-chart-line text-[11px] shrink-0" />
-              <span className="truncate">Progression</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab('clubs')}
-              className={`py-2 px-1 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer truncate ${
-                activeTab === 'clubs' 
-                  ? 'bg-purple-500/[0.05] text-purple-300 border border-purple-500/20 shadow-sm' 
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-              }`}
-            >
-              <i className="fas fa-shield-halved text-[11px] shrink-0" />
-              <span className="truncate">Clubs</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 sm:p-6 relative">
-          <AnimatePresence mode="wait">
-            {activeTab === 'card' && (
-              <motion.div 
-                key="card" 
-                initial={{ opacity: 0, y: 8 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -8 }} 
-                transition={{ duration: 0.15 }} 
-                className="w-full flex justify-center py-2"
-              >
-                <div className="bg-[#10121a] w-full max-w-md rounded-2xl border border-white/[0.04] p-6 flex flex-col items-center relative overflow-hidden shadow-2xl">
-                  {/* Spotlight */}
-                  <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-sky-500/10 via-transparent to-transparent pointer-events-none" />
-
-                  {/* Header Tag */}
-                  <div className="text-[10px] font-mono font-medium tracking-widest text-sky-400 uppercase mb-3 flex items-center gap-1.5 relative z-10">
-                    <i className="fas fa-certificate" />
-                    <span>{isDe ? 'OFFIZIELLES TRAINERPROFIL' : 'OFFICIAL MANAGER LICENSE'}</span>
+        {/* Scrollable Content */}
+        <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 custom-scrollbar flex-1 min-h-0">
+          {/* Hero Reputation Score Card */}
+          <div className="bg-white/[0.03] rounded-2xl p-5 sm:p-6 border border-white/[0.06] relative overflow-hidden shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-yellow-400/20 to-amber-500/10 border border-amber-400/30 flex flex-col items-center justify-center shrink-0 shadow-inner">
+                  <span className="text-2xl sm:text-3xl font-black text-white tracking-tighter leading-none">{rep}</span>
+                  <span className="text-[10px] font-bold text-amber-300 uppercase tracking-widest mt-0.5">/ 100</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-xs font-black uppercase px-2.5 py-0.5 rounded-full border ${repTier.badge}`}>
+                      {repTier.title}
+                    </span>
                   </div>
-
-                  {/* Manager Name */}
-                  <h3 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight uppercase mb-4 text-center relative z-10">
-                    {state.managerName}
+                  <h3 className="text-base sm:text-lg font-black text-white">
+                    {state.managerName || 'Sporting Director'}
                   </h3>
+                  <div className="text-xs text-zinc-400 font-medium">
+                    Current Club: <span className="text-white font-bold">{state.club.name}</span> · Tier {state.club.tier}
+                  </div>
+                </div>
+              </div>
 
-                  {/* Club Logo & Name */}
-                  <div className="relative z-10 flex flex-col items-center mb-5">
-                    <ClubLogo 
-                      name={state.club.name} 
-                      color={state.club.color} 
-                      logo={state.club.logo} 
-                      fallbackLogo={state.club.fallbackLogo} 
-                      className="w-16 h-16 rounded-2xl shadow-xl border border-white/10 mb-2" 
+              <div className="text-left sm:text-right shrink-0">
+                <div className="text-[10px] uppercase font-black text-zinc-500 tracking-wider">
+                  Career Experience
+                </div>
+                <div className="text-sm font-bold text-white mt-0.5 tabular-nums">
+                  {seasonsManaged} Seasons Completed
+                </div>
+                <div className="text-[11px] text-amber-400 font-bold mt-0.5">
+                  🏆 {totalTrophies} Honours Won
+                </div>
+              </div>
+            </div>
+
+            {/* Qualitative Verdict */}
+            <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-start gap-2.5">
+              <i className={`fas ${repTier.icon} ${repTier.color} text-sm mt-0.5 shrink-0`}></i>
+              <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+                {repTier.desc}
+              </p>
+            </div>
+          </div>
+
+          {/* SECTION 2: Career Reputation Progression Chart */}
+          <div className="bg-white/[0.03] rounded-2xl p-5 border border-white/[0.06] shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 mb-3.5">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-0.5 flex items-center gap-1.5">
+                  <i className="fas fa-chart-line text-amber-400"></i>
+                  <span>Career Trajectory</span>
+                </div>
+                <h3 className="text-sm sm:text-base font-black text-white">
+                  Reputation & Standing Progression
+                </h3>
+              </div>
+            </div>
+
+            {/* Active Node Detail Callout */}
+            {activePoint && (
+              <div className="bg-black/40 rounded-xl p-3 border border-white/5 mb-3 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center justify-center tabular-nums font-black text-xs shrink-0">
+                    '{String(activePoint.year).slice(-2)}
+                  </div>
+                  <div>
+                    <div className="font-black text-white flex items-center gap-1.5">
+                      <span>{activePoint.clubName}</span>
+                      {activePoint.isCurrent && (
+                        <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                          Current
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-zinc-400 font-medium">
+                      Season {activePoint.year} {activePoint.leagueTag ? `(${activePoint.leagueTag})` : ''} • {activePoint.pos ? `Finish: #${activePoint.pos}` : 'In Progress'}
+                      {activePoint.trophiesCount ? ` • 🏆 ${activePoint.trophiesCount} ${activePoint.trophiesCount === 1 ? 'Trophy' : 'Trophies'}` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <div className="text-base font-black text-amber-400 tabular-nums">
+                    {activePoint.rep} <span className="text-xs text-zinc-500 font-normal">/100</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-bold uppercase">
+                    {getManagerStandingShortTitle(activePoint.rep, activePoint.tier || state.club.tier, isDe)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Chart Area - Interactive Line Chart */}
+            <div className="w-full overflow-x-auto custom-scrollbar">
+              <div className="min-w-[440px] relative">
+                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-44 overflow-visible">
+                  <defs>
+                    <linearGradient id="repAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.35" />
+                      <stop offset="60%" stopColor="#f59e0b" stopOpacity="0.08" />
+                      <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
+                    </linearGradient>
+                    <linearGradient id="repLineGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#f59e0b" />
+                      <stop offset="50%" stopColor="#fbbf24" />
+                      <stop offset="100%" stopColor="#f59e0b" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Benchmark Grid Lines */}
+                  {/* 100% */}
+                  <line x1={padLeft} y1={padTop} x2={svgWidth - padRight} y2={padTop} stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                  <text x={padLeft - 8} y={padTop + 4} fill="#71717a" fontSize="9" textAnchor="end" className="tabular-nums font-medium">100</text>
+
+                  {/* 85% (Global Elite threshold) */}
+                  <line x1={padLeft} y1={padTop + (1 - 0.85) * plotHeight} x2={svgWidth - padRight} y2={padTop + (1 - 0.85) * plotHeight} stroke="rgba(245,158,11,0.2)" strokeDasharray="2 4" />
+                  <text x={padLeft - 8} y={padTop + (1 - 0.85) * plotHeight + 3} fill="#d97706" fontSize="8" textAnchor="end" className="tabular-nums font-semibold">85</text>
+
+                  {/* 70% (Continental threshold) */}
+                  <line x1={padLeft} y1={padTop + (1 - 0.70) * plotHeight} x2={svgWidth - padRight} y2={padTop + (1 - 0.70) * plotHeight} stroke="rgba(56,189,248,0.2)" strokeDasharray="2 4" />
+                  <text x={padLeft - 8} y={padTop + (1 - 0.70) * plotHeight + 3} fill="#0284c7" fontSize="8" textAnchor="end" className="tabular-nums font-semibold">70</text>
+
+                  {/* 50% (Established threshold) */}
+                  <line x1={padLeft} y1={padTop + (1 - 0.50) * plotHeight} x2={svgWidth - padRight} y2={padTop + (1 - 0.50) * plotHeight} stroke="rgba(16,185,129,0.15)" strokeDasharray="2 4" />
+                  <text x={padLeft - 8} y={padTop + (1 - 0.50) * plotHeight + 3} fill="#059669" fontSize="8" textAnchor="end" className="tabular-nums font-semibold">50</text>
+
+                  {/* Bottom Axis Baseline */}
+                  <line x1={padLeft} y1={padTop + plotHeight} x2={svgWidth - padRight} y2={padTop + plotHeight} stroke="rgba(255,255,255,0.15)" />
+                  <text x={padLeft - 8} y={padTop + plotHeight + 3} fill="#71717a" fontSize="9" textAnchor="end" className="tabular-nums font-medium">0</text>
+
+                  {/* Gradient Area Fill */}
+                  {areaPath && <path d={areaPath} fill="url(#repAreaGrad)" />}
+
+                  {/* Main Line Stroke */}
+                  {linePath && (
+                    <path
+                      d={linePath}
+                      fill="none"
+                      stroke="url(#repLineGrad)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]"
                     />
-                    <div className="text-sm font-semibold text-white text-center">{state.club.name}</div>
-                  </div>
+                  )}
 
-                  {/* Rep & Impact Cards */}
-                  <div className="grid grid-cols-2 gap-2.5 w-full mb-3.5 relative z-10">
-                    <div 
-                      onClick={onOpenImpact} 
-                      className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.04] rounded-xl p-3 flex flex-col items-center text-center cursor-pointer transition"
-                    >
-                      <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
-                        {isDe ? 'Trainer-Rep' : 'Coach Rep'}
-                      </span>
-                      <span className="text-lg font-semibold text-sky-400 tabular-nums">{repScore}/100</span>
-                    </div>
-
-                    <div 
-                      onClick={onOpenImpact} 
-                      className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.04] rounded-xl p-3 flex flex-col items-center text-center cursor-pointer transition"
-                    >
-                      <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
-                        {isDe ? 'Club Impact' : 'Club Impact'}
-                      </span>
-                      <span className="text-lg font-semibold text-emerald-400 tabular-nums">{impactScore}/100</span>
-                    </div>
-                  </div>
-
-                  {/* Live Career Highscore Banner */}
-                  <div 
-                    onClick={() => setActiveTab('leaderboard')}
-                    className="w-full bg-amber-500/[0.04] border border-amber-500/20 hover:border-amber-400/35 rounded-xl p-3 mb-5 flex items-center justify-between cursor-pointer transition group relative z-10 shadow-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-400/20 text-amber-400 flex items-center justify-center text-sm font-semibold shrink-0">
-                        <i className="fas fa-trophy" />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-[10px] text-amber-300 font-medium uppercase tracking-wider">
-                          {isDe ? 'Karriere-Gesamtpunktzahl' : 'Live Career Score'}
-                        </div>
-                        <div className="text-lg font-semibold text-amber-400 tabular-nums">
-                          <CountUp value={liveScore} formatValue={(v) => v.toLocaleString()} duration={900} />
-                          <span className="text-xs font-medium text-amber-400/70 ml-1">pts</span>
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-xs font-medium text-amber-300/80 group-hover:text-amber-200 flex items-center gap-1.5 shrink-0">
-                      <span>{isDe ? 'Rangliste ansehen' : 'View Leaderboard'}</span>
-                      <i className="fas fa-chevron-right text-[10px]" />
-                    </span>
-                  </div>
-
-                  {/* Career Stats Grid */}
-                  <div className="grid grid-cols-3 gap-2 w-full pt-4 border-t border-white/[0.06] text-center relative z-10">
-                    <div>
-                      <div className="text-[10px] text-zinc-400 uppercase font-medium">{isDe ? 'Saisons' : 'Seasons'}</div>
-                      <div className="text-xl font-semibold text-white tabular-nums mt-0.5">{Number.isInteger(seasons) ? seasons : seasons.toFixed(1)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-400 uppercase font-medium">{isDe ? 'Siege' : 'Wins'}</div>
-                      <div className="text-xl font-semibold text-white tabular-nums mt-0.5">{wins}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-zinc-400 uppercase font-medium">{isDe ? 'Quote' : 'Win %'}</div>
-                      <div className="text-xl font-semibold text-emerald-400 tabular-nums mt-0.5">{winRate}%</div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'leaderboard' && (
-              <motion.div 
-                key="leaderboard" 
-                initial={{ opacity: 0, y: 8 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -8 }} 
-                transition={{ duration: 0.15 }} 
-                className="w-full"
-              >
-                <LeaderboardView 
-                  state={state} 
-                  lang={lang} 
-                />
-              </motion.div>
-            )}
-
-            {activeTab === 'progression' && (
-              <motion.div 
-                key="progression" 
-                initial={{ opacity: 0, y: 8 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -8 }} 
-                transition={{ duration: 0.15 }} 
-                className="w-full"
-              >
-                <div className="bg-[#10121a] rounded-2xl border border-white/[0.04] p-5 sm:p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                      <i className="fas fa-chart-line text-sky-400" />
-                      <span>League Tier Progression Over Time</span>
-                    </h4>
-                    <span className="text-xs text-zinc-400 tabular-nums">
-                      {seasons} years
-                    </span>
-                  </div>
-
-                  <div className="w-full h-[280px]">
-                    {progressionData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={progressionData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                          <XAxis dataKey="year" stroke="rgba(255,255,255,0.2)" tick={{ fill: '#a1a1aa', fontSize: 11 }} tickMargin={10} axisLine={false} />
-                          <YAxis 
-                            reversed={true} 
-                            domain={[1, maxProgressionTier]} 
-                            stroke="rgba(255,255,255,0.2)" 
-                            tick={{ fill: '#a1a1aa', fontSize: 11, fontWeight: 'bold' }} 
-                            axisLine={false}
-                            tickFormatter={(val) => `Tier ${val}`}
-                            width={55}
-                            ticks={progressionTicks}
-                          />
-                          <Tooltip 
-                            contentStyle={{ backgroundColor: '#0d0e14', borderColor: 'rgba(255,255,255,0.12)', borderRadius: '12px', padding: '10px' }}
-                            itemStyle={{ color: '#38bdf8', fontWeight: 'bold' }}
-                            labelStyle={{ color: '#a1a1aa', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}
-                            formatter={(value: number, name: string, props: any) => [props.payload.club, props.payload.label]}
-                            labelFormatter={(label) => `Season ${label}`}
-                          />
-                          <Line type="monotone" dataKey="tier" stroke="#38bdf8" strokeWidth={2.5} dot={{ r: 4, fill: '#38bdf8', stroke: '#0d0e14', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#38bdf8', stroke: '#ffffff', strokeWidth: 2 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs">
-                        {isDe ? 'Noch keine Saisondaten vorhanden.' : 'No seasonal progression data available yet.'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'clubs' && (
-              <motion.div 
-                key="clubs" 
-                initial={{ opacity: 0, y: 8 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, y: -8 }} 
-                transition={{ duration: 0.15 }} 
-                className="w-full"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  {Array.from(new Set([
-                    ...(state.history || []).map(h => h.clubName),
-                    state.club.name
-                  ])).filter(Boolean).map((clubName, cIdx) => {
-                    const isCurrentClub = state.club.name === clubName;
-                    const clubSeasons = (state.history || []).filter(h => h.clubName === clubName);
-                    const clubWins = clubSeasons.reduce((acc, h) => acc + (h.wins || 0), 0);
-                    const clubDraws = clubSeasons.reduce((acc, h) => acc + (h.draws || 0), 0);
-                    const clubLosses = clubSeasons.reduce((acc, h) => acc + (h.losses || 0), 0);
-                    const clubMatches = clubWins + clubDraws + clubLosses;
-                    const clubWinRate = clubMatches > 0 ? Math.round((clubWins / clubMatches) * 100) : 0;
-                    const clubPoints = (clubWins * 2) + clubDraws;
-                    const latestSeason = clubSeasons.length > 0 ? clubSeasons[clubSeasons.length - 1] : null;
-
-                    const normClubName = String(clubName || '').trim().toLowerCase();
-                    const dbMatchClub = activeModClubs.find(c => c.name && c.name.trim().toLowerCase() === normClubName)
-                      || ALL_CLUBS.find(c => c.name && c.name.trim().toLowerCase() === normClubName)
-                      || (Object.values(state.worldClubs || {}).find((c: any) => c?.name && c.name.trim().toLowerCase() === normClubName) as any);
-
-                    const clubCountry = latestSeason?.country || dbMatchClub?.country || (isCurrentClub ? (state.club.country || 'GER') : 'GER');
-                    const cupNames = getContinentalCupNames(clubCountry);
-                    const domCupInfo = getDomesticCupInfo(clubCountry, 1);
-                    const leagueInfo = getLeagueInfo(1, clubCountry);
-
-                    const clubYears = new Set(clubSeasons.map(h => h.year));
-                    const clubTrophies = clubSeasons.reduce((acc, h) => {
-                      if (h.trophiesThisYear) {
-                        const isLower = Boolean(h.promoted || (h.tier && h.tier > 1));
-                        const isChamp = h.pos === undefined || h.pos === 1;
-                        acc.cwc = (acc.cwc || 0) + (h.trophiesThisYear.cwc || 0);
-                        acc.cl = (acc.cl || 0) + (h.trophiesThisYear.cl || 0);
-                        acc.el = (acc.el || 0) + (h.trophiesThisYear.el || 0);
-                        acc.ecl = (acc.ecl || 0) + (h.trophiesThisYear.ecl || 0);
-                        acc.bl = (acc.bl || 0) + ((!isLower && isChamp && h.trophiesThisYear.bl) ? (h.trophiesThisYear.bl || 1) : 0);
-                        acc.lower = (acc.lower || 0) + (isChamp ? (h.trophiesThisYear.lower || 0) + (isLower ? (h.trophiesThisYear.bl || 0) : 0) : 0);
-                        acc.dfb = (acc.dfb || 0) + (h.trophiesThisYear.dfb || 0);
-                        acc.reg = (acc.reg || 0) + (h.trophiesThisYear.reg || 0);
-                      }
-                      return acc;
-                    }, {} as any);
-
-                    // Reconcile any custom/modded cup titles won in state.cupRunResults during this club's tenure
-                    const countedDfbYears = new Set(clubSeasons.filter(h => h.trophiesThisYear?.dfb).map(h => h.year));
-                    (state.cupRunResults || []).forEach(r => {
-                      if (r.won && clubYears.has(r.year) && !['cwc', 'reg_cup', 'cl', 'el', 'ecl', 'euro_cup'].includes(r.id)) {
-                        const rName = (r.nameEn || '').toLowerCase();
-                        if (!rName.includes('regional') && !rName.includes('amateur') && !countedDfbYears.has(r.year)) {
-                          countedDfbYears.add(r.year);
-                          clubTrophies.dfb = (clubTrophies.dfb || 0) + 1;
-                        }
-                      }
-                    });
-
-                    const trophyList = [
-                      { key: 'cwc', name: 'IHF Super Globe', count: clubTrophies.cwc || 0, icon: 'fa-globe', color: 'text-amber-400', border: 'border-amber-500/25 bg-amber-500/5' },
-                      { key: 'cl', name: cupNames.cl, count: clubTrophies.cl || 0, icon: 'fa-trophy', color: 'text-amber-300', border: 'border-amber-400/25 bg-amber-400/5' },
-                      { key: 'el', name: cupNames.el, count: clubTrophies.el || 0, icon: 'fa-trophy', color: 'text-orange-400', border: 'border-orange-500/25 bg-orange-500/5' },
-                      { key: 'ecl', name: cupNames.ecl, count: clubTrophies.ecl || 0, icon: 'fa-trophy', color: 'text-emerald-400', border: 'border-emerald-500/25 bg-emerald-500/5' },
-                      { key: 'bl', name: `${leagueInfo.name} Champions`, count: clubTrophies.bl || 0, icon: 'fa-medal', color: 'text-amber-300', border: 'border-amber-400/25 bg-amber-400/5' },
-                      { key: 'lower', name: isDe ? 'Liga-Meister (Aufstieg)' : 'Division Champions', count: clubTrophies.lower || 0, icon: 'fa-award', color: 'text-sky-300', border: 'border-sky-500/25 bg-sky-500/5' },
-                      { key: 'dfb', name: domCupInfo.name, count: clubTrophies.dfb || 0, icon: 'fa-shield-halved', color: 'text-amber-400', border: 'border-amber-500/25 bg-amber-500/5' },
-                      { key: 'reg', name: isDe ? 'Regionalpokal' : 'Regional Cup', count: clubTrophies.reg || 0, icon: 'fa-shield-cat', color: 'text-amber-500', border: 'border-amber-600/25 bg-amber-600/5' },
-                    ].filter(t => t.count > 0);
-
-                    const totalTrophies = trophyList.reduce((sum, item) => sum + item.count, 0);
+                  {/* Nodes / Dots */}
+                  {timelineData.map((pt, idx) => {
+                    const { x, y } = getCoordinates(idx, pt.rep);
+                    const isSelected = selectedPointIndex === idx || (selectedPointIndex === null && idx === timelineData.length - 1);
 
                     return (
-                      <div key={`club-${clubName}-${cIdx}`} className="bg-[#10121a] border border-white/[0.04] rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-sm">
-                        <div>
-                          {/* Club Header */}
-                          <div className="flex items-center justify-between gap-3 mb-3.5">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <ClubLogo 
-                                name={clubName} 
-                                color={latestSeason?.color || dbMatchClub?.color || (isCurrentClub ? state.club.color : undefined)} 
-                                logo={latestSeason?.logo || dbMatchClub?.logo || (isCurrentClub ? state.club.logo : undefined)} 
-                                fallbackLogo={dbMatchClub?.fallbackLogo || (clubName as string).substring(0, 2).toUpperCase()} 
-                                className="w-11 h-11 rounded-xl shrink-0" 
-                              />
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-semibold text-white text-base truncate">{clubName}</span>
-                                  {isCurrentClub && (
-                                    <span className="text-[9px] font-medium bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.2 rounded shrink-0 uppercase tracking-wider">
-                                      {isDe ? 'Aktuell' : 'Current'}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[11px] text-zinc-400 font-normal">
-                                  {clubSeasons.length} {clubSeasons.length === 1 ? (isDe ? 'Saison' : 'season') : (isDe ? 'Saisons' : 'seasons')}
-                                  {clubMatches > 0 && ` · ${clubPoints} ${isDe ? 'Pkt' : 'pts'}`}
-                                </div>
-                              </div>
-                            </div>
+                      <g
+                        key={pt.year}
+                        className="cursor-pointer group"
+                        onClick={() => setSelectedPointIndex(idx)}
+                      >
+                        {/* Invisible hover target */}
+                        <circle cx={x} cy={y} r="14" fill="transparent" />
 
-                            {/* Total Silverware Badge */}
-                            <div className={`px-2.5 py-1 rounded-xl text-xs font-medium flex items-center gap-1.5 shrink-0 border ${
-                              totalTrophies > 0 
-                                ? 'bg-amber-500/10 text-amber-300 border-amber-500/20 shadow-sm' 
-                                : 'bg-white/[0.04] text-zinc-400 border-white/[0.06]'
-                            }`}>
-                              <span>🏆</span>
-                              <span>{totalTrophies} {totalTrophies === 1 ? (isDe ? 'Titel' : 'Trophy') : (isDe ? 'Titel' : 'Trophies')}</span>
-                            </div>
-                          </div>
+                        {/* Steady Halo Accent ring if selected or current (Replaced harsh animate-ping pulsating dot) */}
+                        {isSelected && (
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r="9"
+                            fill="none"
+                            stroke="#f59e0b"
+                            strokeWidth="1.5"
+                            opacity="0.5"
+                          />
+                        )}
 
-                          {/* Quick Stats Grid */}
-                          <div className="grid grid-cols-4 gap-1.5 bg-black/35 rounded-xl p-2.5 border border-white/5 text-center mb-3">
-                            <div>
-                              <div className="text-[9px] text-zinc-400 font-medium uppercase">{isDe ? 'Siege' : 'Wins'}</div>
-                              <div className="text-xs sm:text-sm font-semibold text-emerald-400 tabular-nums">{clubWins}</div>
-                            </div>
-                            <div>
-                              <div className="text-[9px] text-zinc-400 font-medium uppercase">{isDe ? 'Remis' : 'Draws'}</div>
-                              <div className="text-xs sm:text-sm font-semibold text-zinc-300 tabular-nums">{clubDraws}</div>
-                            </div>
-                            <div>
-                              <div className="text-[9px] text-zinc-400 font-medium uppercase">{isDe ? 'Niederl.' : 'Losses'}</div>
-                              <div className="text-xs sm:text-sm font-semibold text-rose-400 tabular-nums">{clubLosses}</div>
-                            </div>
-                            <div>
-                              <div className="text-[9px] text-zinc-400 font-medium uppercase">{isDe ? 'Quote' : 'Win %'}</div>
-                              <div className="text-xs sm:text-sm font-semibold text-sky-400 tabular-nums">{clubWinRate}%</div>
-                            </div>
-                          </div>
-                        </div>
+                        {/* Outer circle */}
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r={isSelected ? '6' : '4.5'}
+                          fill={pt.rep >= 85 ? '#f59e0b' : pt.rep >= 70 ? '#38bdf8' : pt.rep >= 50 ? '#10b981' : '#a1a1aa'}
+                          stroke="#000000"
+                          strokeWidth="2"
+                          className="transition-all duration-200"
+                        />
 
-                        {/* Enhanced Trophy Cabinet with Quantities */}
-                        <div className="pt-2 border-t border-white/[0.06]">
-                          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-2 flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 text-amber-400/90 font-medium">
-                              <i className="fas fa-trophy text-[9px]" />
-                              <span>{isDe ? 'Trophäenschrank' : 'Trophy Cabinet'}</span>
-                            </span>
-                            <span className="text-[10px] font-normal text-zinc-400">
-                              {totalTrophies} {isDe ? 'Gewonnen' : 'Won'}
-                            </span>
-                          </div>
-
-                          {totalTrophies > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {trophyList.map((item) => (
-                                <div 
-                                  key={item.key} 
-                                  className={`flex items-center justify-between px-3 py-2 rounded-xl border ${item.border} shadow-sm`}
-                                >
-                                  <div className="flex items-center gap-2 min-w-0 pr-2">
-                                    <div className="w-6 h-6 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center shrink-0">
-                                      <i className={`fas ${item.icon} ${item.color} text-xs`} />
-                                    </div>
-                                    <span className="text-xs font-semibold text-zinc-200 truncate" title={item.name}>
-                                      {item.name}
-                                    </span>
-                                  </div>
-                                  <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 font-semibold text-[11px] px-2 py-0.5 rounded-full tabular-nums shrink-0">
-                                    x{item.count}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl py-3 px-4 text-center flex items-center justify-center gap-2 text-zinc-500 text-xs italic">
-                              <i className="fas fa-trophy opacity-25 text-xs" />
-                              <span>{isDe ? 'Noch keine Vereinstitel errungen' : 'No silverware won with this club yet'}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                        {/* Year label underneath */}
+                        <text
+                          x={x}
+                          y={padTop + plotHeight + 16}
+                          fill={isSelected ? '#f59e0b' : '#a1a1aa'}
+                          fontSize="10"
+                          className="tabular-nums font-semibold"
+                          fontWeight={isSelected ? 'bold' : 'normal'}
+                          textAnchor="middle"
+                        >
+                          '{String(pt.year).slice(-2)}
+                        </text>
+                      </g>
                     );
                   })}
-                </div>
-              </motion.div>
+                </svg>
+              </div>
+            </div>
+
+            {/* Threshold Legend */}
+            <div className="flex items-center justify-between text-[10px] text-zinc-400 mt-3 pt-2.5 border-t border-white/[0.06] flex-wrap gap-2">
+              <span className="font-bold text-zinc-500 uppercase tracking-widest">{isDe ? 'Branchen-Stufen:' : 'Industry Thresholds:'}</span>
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1 text-amber-400 font-bold" title="Tier 1 exclusive">
+                  <span className="w-2 h-2 rounded-full bg-amber-400"></span> 85+ {isDe ? 'Weltklasse (Liga 1)' : 'Global Elite (Tier 1)'}
+                </span>
+                <span className="flex items-center gap-1 text-sky-400 font-bold" title="Tier 1 exclusive">
+                  <span className="w-2 h-2 rounded-full bg-sky-400"></span> 70+ {isDe ? 'Kontinental (Liga 1)' : 'Continental (Tier 1)'}
+                </span>
+                <span className="flex items-center gap-1 text-emerald-400 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span> 50+ {isDe ? 'Etabliert' : 'Established'}
+                </span>
+              </div>
+            </div>
+
+            {state.club.tier > 1 && (
+              <div className="mt-2.5 bg-sky-500/10 border border-sky-400/20 rounded-xl px-3 py-2 flex items-center gap-2 text-[11px] text-sky-300">
+                <i className="fa-solid fa-circle-info text-sky-400 shrink-0"></i>
+                <span>
+                  {isDe
+                    ? `Aktuelle Liga: Liga ${state.club.tier}. Weltklasse- und Kontinental-Status sind ausschließlich in der 1. Liga (Tier 1) erreichbar.`
+                    : `Current Division: Tier ${state.club.tier}. Continental and Global Elite standing are strictly exclusive to top-flight Tier 1.`}
+                </span>
+              </div>
             )}
-          </AnimatePresence>
+          </div>
+
+          {/* Industry Stature Strip */}
+          <div className="bg-white/[0.03] rounded-2xl p-3 sm:p-4 border border-white/[0.06] shadow-sm">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2.5">
+              {isDe ? 'Reputations-Faktoren' : 'Reputation Breakdown'}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-2.5 text-center">
+                <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                  🏆 {isDe ? 'Titel' : 'Silverware'}
+                </div>
+                <div className="text-xs sm:text-sm font-bold text-amber-400 truncate tabular-nums">
+                  {totalTrophies} {isDe ? 'Titel' : 'Trophies'}
+                </div>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-2.5 text-center">
+                <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                  📊 {isDe ? 'Liga' : 'Division'}
+                </div>
+                <div className="text-xs sm:text-sm font-bold text-sky-400 truncate tabular-nums">
+                  Tier {state.club.tier} · {state.club.baseOvr} OVR
+                </div>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-2.5 text-center">
+                <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                  🌍 {isDe ? 'WM' : 'World Cup'}
+                </div>
+                <div className="text-xs sm:text-sm font-bold text-emerald-400 truncate">
+                  {worldCupWins > 0
+                    ? `${worldCupWins}x Champion`
+                    : (state.worldCupCampaigns?.length || 0) > 0
+                    ? (isDe ? 'Teilnehmer' : 'Contender')
+                    : (isDe ? 'Keine' : 'Uncapped')}
+                </div>
+              </div>
+
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-2.5 text-center">
+                <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                  🤝 {isDe ? 'Sponsoring' : 'Commercial'}
+                </div>
+                <div className="text-xs sm:text-sm font-bold text-purple-400 truncate tabular-nums">
+                  +{sponsorBonusPct}% {isDe ? 'Bonus' : 'Sponsor Value'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 sm:p-5 border-t border-white/[0.06] bg-white/[0.02] flex justify-end shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.08] text-white font-semibold text-xs tracking-wider transition cursor-pointer active:scale-95"
+          >
+            Close
+          </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };

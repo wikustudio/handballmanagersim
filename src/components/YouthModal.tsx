@@ -1,29 +1,27 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { GameState, Language, getAcademySlotLimit, calculateCohortRating } from '../types';
-import { useGameStore } from '../store/useGameStore';
-import { 
-  formatMoney, 
-  getLeagueScaledVal, 
-  getRequiredAcademyLevelForYouthPull, 
-  getMaxYouthPullsPerSeason 
-} from '../data/gameConstants';
-import { generateYouthProspect } from '../engine/engine';
+import { GameState, Language, Club } from '../types';
+import { formatMoney, sanitizePlayerName, getAcademyCallUpCap, getAcademyScoutCap, getLeagueScaledVal } from '../data/gameConstants';
+import { t as tr } from '../data/translations';
 import { YouthChampionshipModal } from './YouthChampionshipModal';
-import { useModalDismiss } from '../utils/modalUtils';
+import { getIncubatorCapacity, calculateTrainingCompensationK, getSeniorIntegrationOdds } from '../engine/incubatorEngine';
 
 interface YouthModalProps {
-  onGachaReveal?: (data: any) => void;
   protectionCost?: number;
   creditLimit?: number;
   state: GameState;
   lang: Language;
   actionCost: number;
   financials: { wages: number; estRevenue: number; net: number };
-  onRecruitYouth: (customCost?: number, customProspect?: any) => { success: boolean; message?: string; prospect?: any } | void;
+  onRecruitYouth: () => void;
   onProtectYouth?: (id: string) => void;
+  onGraduateYouth?: (id: string, action: 'promote' | 'loan' | 'compensation') => void;
   canAfford: boolean;
   onClose: () => void;
+  onOpenChampionship?: () => void;
+  clubsDb?: Club[];
+  isModActive?: boolean;
+  onTournamentVictory?: (prizeMoney: number, cohortBoost: number) => void;
 }
 
 export const YouthModal: React.FC<YouthModalProps> = ({
@@ -32,1044 +30,671 @@ export const YouthModal: React.FC<YouthModalProps> = ({
   actionCost,
   onRecruitYouth,
   onProtectYouth,
+  onGraduateYouth,
   onClose,
+  onOpenChampionship,
   canAfford,
   protectionCost = 25000,
   creditLimit = 0,
   financials,
-  onGachaReveal,
+  clubsDb,
+  isModActive,
+  onTournamentVictory,
 }) => {
-  useModalDismiss(onClose);
-  const t = (en: string, _de?: string, _ignoredEs?: string) => en;
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'championship'>('pipeline');
+  const isDe = lang === 'de';
+  const t = (en: string, de?: string, _ignoredEs?: string) => tr(lang, en, de);
   const [protectConfirmId, setProtectConfirmId] = useState<string | null>(null);
-  const [showChampionship, setShowChampionship] = useState(false);
-  const [isScouting, setIsScouting] = useState(false);
-  const isScoutingRef = useRef(false);
-
-  useEffect(() => {
-    return () => {
-      isScoutingRef.current = false;
-    };
-  }, []);
-  
-  // Instant Notice for action feedback
-  const [scoutNotice, setScoutNotice] = useState<{
-    type: 'success' | 'rejection';
-    title: string;
-    message: string;
-  } | null>(null);
+  const [showTournamentSubModal, setShowTournamentSubModal] = useState(false);
   
   const pipeline = state.youthPipeline || [];
-  const academyLvl = state.club.academyLevel || 1;
-  const maxSlots = getAcademySlotLimit(academyLvl);
-  const activeProspects = pipeline.filter(p => !p.isLoanedOut).length;
-  const isAcademyFull = activeProspects >= maxSlots;
-  const isSquadFull = (state.club.squadSize || 18) >= 22;
-  const hasPlayedTournamentThisSeason = state.youthChampionshipSimulatedYear === state.year;
+  const maxCapacity = getIncubatorCapacity(state.club.academyLevel || 1);
+  const squadSize = state.club.squadSize || 24;
+  const isSquadFull = squadSize >= 50;
+  const isCombinedFull = squadSize + pipeline.length >= 50;
+  const isFull = pipeline.length >= maxCapacity || isCombinedFull;
+
+  const LEVEL_1_THRESHOLD = 1;
+  const hasLevel1Cohort = pipeline.length >= LEVEL_1_THRESHOLD;
+  const isTournamentPlayed = state.youthChampionshipPlayedYear === state.year;
+  const isPreSeason = (state.seasonPhase || 'start') === 'start';
+  const academyLvl = Math.max(1, Math.min(5, state.club.academyLevel || 1));
   const tier = state.club.tier || 1;
-  const cleanCountry = (state.club.country || 'GER').trim().toUpperCase();
-  const isExportPowerhouse = ['ARG', 'BRA', 'COL', 'URU', 'CHI', 'ECU'].includes(cleanCountry);
-  const trialistsRecruitedThisSeason = pipeline.filter(p => p.isTrialist && (p.enrolledYear === state.year || !p.enrolledYear)).length;
-  const isTrialistLimitReached = trialistsRecruitedThisSeason >= 1 || (state.schoolTrialistsThisSeason || 0) >= 1;
-  // Scale scouting limit directly 1:1 with the academy level
-  const maxScoutingThisSeason = academyLvl;
-  const scoutsUsedThisSeason = state.youthScoutsThisSeason || 0;
-  const isScoutingLimitReached = scoutsUsedThisSeason >= maxScoutingThisSeason;
+  const facilityBonus = (academyLvl - 1) * 6;
+  const callUpCap = getAcademyCallUpCap(academyLvl);
+  const callUpsUsed = state.academyCallUpsThisSeason || 0;
+  const isCallUpCapped = callUpsUsed >= callUpCap;
+  const scoutCap = getAcademyScoutCap(academyLvl);
+  const scoutsUsed = state.youthScoutedThisSeason || 0;
+  const isScoutCapped = scoutsUsed >= scoutCap;
 
-  // Coach and Director synergies
-  const coachArchetype = state.headCoachArchetype || state.tactic || '';
-  const hasYouthCoach = coachArchetype === 'Youth Developer' || 
-                        coachArchetype === 'Scout' || 
-                        coachArchetype === 'Continental Legend' ||
-                        (state.managerSkills || []).includes('talentscout');
-  const isScoutDirector = state.directorArchetype === 'Scout / Youth Developer';
-
-  // Small acquisition fee scaled to league tier and national economy
-  const smallAcquisitionFee = Math.round(
-    getLeagueScaledVal(state.club.tier || 1, 15000, state.club.country || 'GER')
-  );
-
-  const u19Rating = calculateCohortRating(
-    state.club.baseOvr || 70,
-    state.club.academyLevel || state.club.youthAcademy || 1,
-    pipeline
-  );
-
-  const handleSimulateChampionship = () => {
-    if (activeProspects < 6) return;
-    setShowChampionship(true);
-  };
-
-  // Direct Scouting Action: Discover 15-17yo talent using facility quality rolls & archetype perks
-  const handleScoutNewTalent = () => {
-    if (isAcademyFull || isScouting || isScoutingRef.current) return;
-    isScoutingRef.current = true;
-    setIsScouting(true);
-    setScoutNotice(null);
-
-    const options = {
-      headCoachArchetype: state.headCoachArchetype || state.tactic,
-      directorArchetype: state.directorArchetype,
-      managerSkills: state.managerSkills,
-      clubVision: state.clubVision,
-    };
-    const prospect = generateYouthProspect(academyLvl, state.club.country || 'GER', state.club.tier || 1, options);
-    const result = onRecruitYouth(smallAcquisitionFee, prospect) as { success: boolean; message?: string; prospect?: any } | undefined;
-
-    if (result && result.success === false) {
-      setScoutNotice({
-        type: 'rejection',
-        title: t('Recruitment Failed', 'Aufnahme fehlgeschlagen'),
-        message: result.message || t('Cannot recruit prospect at this time.', 'Talent kann derzeit nicht aufgenommen werden.'),
-      });
-      setTimeout(() => {
-        isScoutingRef.current = false;
-        setIsScouting(false);
-      }, 400);
-      return;
-    }
-
-    const tierName = prospect.type === 'generational'
-      ? t('Generational Wonderkid', 'Ausnahmetalent')
-      : prospect.type === 'top_prospect'
-      ? t('Top Prospect', 'Top-Talent')
-      : t('Local Prospect', 'Regionales Talent');
-
-    if (prospect.boost < 3 && prospect.type !== 'generational') {
-      setScoutNotice({
-        type: 'success',
-        title: t('Talent Enrolled', 'Talent aufgenommen'),
-        message: t(
-          `${prospect.name} (${prospect.position}, ${prospect.age} yrs, +${prospect.boost} OVR potential) enrolled into the academy for -${formatMoney(smallAcquisitionFee)}. (${activeProspects + 1}/${maxSlots} slots occupied)`,
-          `${prospect.name} (${prospect.position}, ${prospect.age} J., +${prospect.boost} GES-Potenzial) aufgenommen für -${formatMoney(smallAcquisitionFee)}. (${activeProspects + 1}/${maxSlots} belegt)`
-        ),
-      });
-    }
-
-    setTimeout(() => {
-      isScoutingRef.current = false;
-      setIsScouting(false);
-    }, 400);
-  };
-
-  // Free School Trialist: 0 € fee, recruited directly (max 1 per season, 15yo, timer >= 2)
-  const handleScoutSchoolTrialist = () => {
-    if (isAcademyFull || isScouting || isScoutingRef.current) return;
-    if (isTrialistLimitReached) {
-      setScoutNotice({
-        type: 'rejection',
-        title: t('Trialist Quota Reached', 'Kontingent erschöpft'),
-        message: t('Only 1 free school trialist permitted per season.', 'Nur 1 freies Schultalent pro Saison erlaubt.'),
-      });
-      return;
-    }
-    isScoutingRef.current = true;
-    setIsScouting(true);
-    setScoutNotice(null);
-
-    const options = {
-      headCoachArchetype: state.headCoachArchetype || state.tactic,
-      directorArchetype: state.directorArchetype,
-      managerSkills: state.managerSkills,
-      clubVision: state.clubVision,
-    };
-    const prospect = generateYouthProspect(academyLvl, state.club.country || 'GER', state.club.tier || 1, options);
-    prospect.type = 'local';
-    prospect.tierType = 'local';
-    prospect.boost = 1;
-    prospect.age = 15;
-    prospect.timer = Math.max(2, prospect.timer || 2);
-    prospect.isTrialist = true;
-    prospect.enrolledYear = state.year;
-
-    const result = onRecruitYouth(0, prospect) as { success: boolean; message?: string; prospect?: any } | undefined;
-
-    if (result && result.success === false) {
-      setScoutNotice({
-        type: 'rejection',
-        title: t('Recruitment Failed', 'Aufnahme fehlgeschlagen'),
-        message: result.message || t('Cannot recruit trialist at this time.', 'Probetraining derzeit nicht möglich.'),
-      });
-      setTimeout(() => {
-        isScoutingRef.current = false;
-        setIsScouting(false);
-      }, 400);
-      return;
-    }
-
-    setScoutNotice({
-      type: 'success',
-      title: t('School Trialist Enrolled', 'Schultalent aufgenommen'),
-      message: t(
-        `${prospect.name} (${prospect.position}, ${prospect.age} yrs, +${prospect.boost} OVR) enrolled for free (0 €). (${activeProspects + 1}/${maxSlots} slots occupied)`,
-        `${prospect.name} (${prospect.position}, ${prospect.age} J., +${prospect.boost} GES) kostenlos aufgenommen. (${activeProspects + 1}/${maxSlots} belegt)`
-      ),
-    });
-
-    setTimeout(() => {
-      isScoutingRef.current = false;
-      setIsScouting(false);
-    }, 400);
-  };
-
-  // Foreign Imports: Level 4 Milestone (Continental Setup)
-  const handleScoutForeignImport = () => {
-    if (isAcademyFull || isScouting || isScoutingRef.current) return;
-    if (academyLvl < 4) return;
-    if (isScoutingLimitReached) return;
-    isScoutingRef.current = true;
-    setIsScouting(true);
-    setScoutNotice(null);
-
-    const options = {
-      headCoachArchetype: state.headCoachArchetype || state.tactic,
-      directorArchetype: state.directorArchetype,
-      managerSkills: state.managerSkills,
-      clubVision: state.clubVision,
-      isForeignImport: true,
-    };
-    const prospect = generateYouthProspect(academyLvl, state.club.country || 'GER', state.club.tier || 1, options);
-    const result = onRecruitYouth(smallAcquisitionFee, prospect) as { success: boolean; message?: string; prospect?: any } | undefined;
-
-    if (result && result.success === false) {
-      setScoutNotice({
-        type: 'rejection',
-        title: t('Recruitment Failed', 'Aufnahme fehlgeschlagen'),
-        message: result.message || t('Cannot recruit prospect at this time.', 'Talent kann derzeit nicht aufgenommen werden.'),
-      });
-      setTimeout(() => {
-        isScoutingRef.current = false;
-        setIsScouting(false);
-      }, 400);
-      return;
-    }
-
-    setScoutNotice({
-      type: 'success',
-      title: t('Continental Wonderkid Enrolled!', 'Internationales Talent aufgenommen!'),
-      message: t(
-        `🌍 ${prospect.name} (${prospect.nationality || 'DEN'}, ${prospect.position}, ${prospect.age} yrs, +${prospect.boost} OVR potential) enrolled via Continental Scouting network!`,
-        `🌍 ${prospect.name} (${prospect.nationality || 'DEN'}, ${prospect.position}, ${prospect.age} J., +${prospect.boost} GES-Potenzial) über kontinentales Scouting aufgenommen!`
-      ),
-    });
-
-    setTimeout(() => {
-      isScoutingRef.current = false;
-      setIsScouting(false);
-    }, 400);
-  };
-
-  // Helper to calculate realistic training compensation
-  const getProspectSaleFee = (p: any) => {
-    const boostVal = p.boost || 1;
-    if (isExportPowerhouse) {
-      if (p.type === 'generational' || boostVal >= 3) {
-        return 1800000 + (boostVal >= 3 ? 400000 : 0);
-      } else if (p.type === 'top_prospect' || boostVal >= 2) {
-        return 600000 + boostVal * 150000;
-      } else {
-        return 150000 + boostVal * 50000;
-      }
-    } else {
-      const tier1BaseFee: Record<number, number> = {
-        1: 75000,
-        2: 220000,
-        3: 650000
-      };
-      const rawBase = tier1BaseFee[Math.min(3, Math.max(1, boostVal))] || 75000;
-      let fee = Math.round(getLeagueScaledVal(tier, rawBase, cleanCountry));
-      if (p.type === 'generational') fee = Math.round(fee * 1.25);
-      else if (p.type === 'top_prospect') fee = Math.round(fee * 1.15);
-      return fee;
-    }
-  };
-  
-  if (showChampionship) {
-      return (
-          <YouthChampionshipModal 
-              state={state} 
-              onClose={() => setShowChampionship(false)} 
-              onComplete={(wonTitle) => {
-                  const store = useGameStore.getState();
-                  const currentNotifications = store.notifications || [];
-                  if (wonTitle) {
-                      const prevOvr = store.club.baseOvr || 60;
-                      const nextOvr = Math.min(store.maxOvrCap || 100, prevOvr + 1);
-                      const actualGain = Math.max(0, nextOvr - prevOvr);
-                      const nextMorale = Math.min(100, (store.club.morale ?? 100) + 15);
-                      const newHistory = actualGain > 0
-                          ? [{ id: Math.random().toString(36).substring(7), season: store.year, change: actualGain, reason: 'Youth Champions', reasonDe: 'Jugendmeister' }, ...(store.ovrHistory || [])].slice(0, 30)
-                          : (store.ovrHistory || []);
-                      const updatedClub = {
-                          ...store.club,
-                          morale: nextMorale,
-                          baseOvr: nextOvr
-                      };
-                      store.updateState({ 
-                          youthTitlesWon: (store.youthTitlesWon || 0) + 1,
-                          youthChampionshipSimulatedYear: store.year,
-                          lastOvr: typeof store.lastOvr === 'number' ? store.lastOvr : prevOvr,
-                          startOfSeasonOvr: typeof store.startOfSeasonOvr === 'number' ? store.startOfSeasonOvr : prevOvr,
-                          ovrHistory: newHistory,
-                          eventOvrGainThisSeason: (store.eventOvrGainThisSeason || 0) + actualGain,
-                          club: updatedClub,
-                          worldClubs: {
-                              ...(store.worldClubs || {}),
-                              [store.club.id]: {
-                                  ...(store.worldClubs?.[store.club.id] || store.club),
-                                  morale: nextMorale,
-                                  baseOvr: nextOvr
-                              },
-                              [String(store.club.id)]: {
-                                  ...(store.worldClubs?.[String(store.club.id)] || store.club),
-                                  morale: nextMorale,
-                                  baseOvr: nextOvr
-                              }
-                          },
-                          notifications: [{
-                              id: Math.random().toString(),
-                              type: 'celebration',
-                              title: '🏆 U19 Youth Champions!',
-                              message: 'Youth Champions! The U19 golden generation gives your senior squad a permanent +1 OVR and +15 Morale boost.',
-                              read: false
-                          }, ...currentNotifications]
-                      });
-                  } else {
-                      store.updateState({ 
-                          youthChampionshipSimulatedYear: store.year,
-                          notifications: [{
-                              id: Math.random().toString(),
-                              type: 'info',
-                              title: 'U19 Championship',
-                              message: 'Your U19 team was eliminated from the championship.',
-                              read: false
-                          }, ...currentNotifications]
-                      });
-                  }
-              }} 
-          />
-      );
-  }
+  // Realistic Tier Vulnerability: Giants aggressively poach from lower tiers
+  const tierPoachVulnerability = Math.max(0, (tier - 1) * 8);
+  const baseKeep = 45 + ((academyLvl || 1) * 11);
+  const protectionKeepChance = Math.max(25, Math.min(95, baseKeep - tierPoachVulnerability));
 
   return (
-    <div 
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }} 
+      transition={{ duration: 0.1, ease: 'linear' }}
       onClick={onClose}
-      className="fixed inset-0 bg-black/80 flex items-center justify-center p-3 sm:p-5 z-[100] backdrop-blur-2xl cursor-pointer"
+      className="fixed inset-0 bg-black/75 backdrop-blur-2xl z-50 flex flex-col items-center justify-center p-2.5 sm:p-4 cursor-pointer overflow-y-auto overscroll-contain"
     >
       <motion.div 
-        initial={{ scale: 0.95, y: 15, opacity: 0 }} 
-        animate={{ scale: 1, y: 0, opacity: 1 }} 
-        exit={{ scale: 0.95, y: 10, opacity: 0 }} 
-        transition={{ type: 'spring', damping: 26, stiffness: 340 }}
+        initial={{ scale: 0.98, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        exit={{ scale: 0.98, opacity: 0 }} 
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] w-full max-w-lg rounded-2xl border border-white/[0.04] flex flex-col max-h-[90vh] overflow-hidden cursor-default pointer-events-auto relative shadow-[0_25px_70px_rgba(0,0,0,0.85)]"
+        className="bg-[#12141c]/90 backdrop-blur-3xl border border-white/[0.08] w-full max-w-lg rounded-[28px] sm:rounded-[32px] shadow-[0_24px_64px_rgba(0,0,0,0.6)] flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shrink-0 overflow-hidden cursor-default relative text-left"
       >
-        {/* Top Ambient Highlight */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent pointer-events-none" />
+        {/* Subtle Ambient Sky-Blue Accent */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Modal Header */}
-        <div className="p-5 pb-4 border-b border-white/[0.04] flex justify-between items-center shrink-0">
+        {/* Header */}
+        <div className="p-5 sm:p-6 border-b border-white/[0.06] bg-white/[0.02] flex justify-between items-center shrink-0 relative z-10">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-base border border-emerald-500/20 shrink-0">
-              <i className="fas fa-seedling" />
+            <div className="w-11 h-11 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-emerald-400 text-base shadow-inner shrink-0">
+              <i className="fas fa-seedling"></i>
             </div>
-            <div className="flex flex-col">
-              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-tight">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400/90 mb-0.5">
+                {t('Talent Pipeline', 'Talentschmiede')}
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">
                 {t('Youth Academy', 'Jugendakademie')}
               </h2>
-              <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
-                <span className="font-medium text-zinc-300 tabular-nums">Level {academyLvl}</span>
-                <span className="text-zinc-600">·</span>
-                <span className="tabular-nums font-normal text-zinc-400">
-                  {activeProspects} / {maxSlots} {t('Capacity Slots', 'Plätze belegt')}
-                </span>
-                {(state.youthDevQueue || 0) > 0 && (
-                  <>
-                    <span className="text-zinc-600">·</span>
-                    <span className="inline-flex items-center gap-1 text-emerald-300 font-medium bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] tabular-nums">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                      <span>+{state.youthDevQueue} OVR {t('Banked', 'Reifend')}</span>
-                    </span>
-                  </>
-                )}
-                {state.clubVision === 'Youth Academy Focus' && (
-                  <>
-                    <span className="text-zinc-600">·</span>
-                    <span className="inline-flex items-center gap-1 text-sky-300 font-medium bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded text-[10px]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-                      <span>{t('Academy Vision', 'Akademie-Vision')} (+12)</span>
-                    </span>
-                  </>
-                )}
-              </div>
             </div>
           </div>
-          <button 
-            aria-label="Close modal" 
-            onClick={onClose} 
-            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition active:scale-95 cursor-pointer"
-          >
-            <i className="fas fa-xmark text-sm" />
-          </button>
-        </div>
-
-        {/* Scrollable Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar flex flex-col gap-3.5 flex-1 min-h-0">
-          
-          {/* Tab Selector */}
-          <div className="flex p-1 bg-white/[0.02] rounded-xl border border-white/[0.04] shrink-0 gap-1 mb-0.5">
-            <button
-              onClick={() => setActiveTab('pipeline')}
-              className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 cursor-pointer ${
-                activeTab === 'pipeline'
-                  ? 'bg-emerald-500/[0.08] text-emerald-300 border border-emerald-500/20 shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <span className="text-xs font-extrabold tracking-tight tabular-nums text-emerald-400">{pipeline.length}/{maxCapacity}</span>
+              <span className="text-[11px] text-zinc-400 font-normal ml-1">{t('Prospects', 'Talente')}</span>
+            </div>
+            <button 
+              aria-label="Close modal" 
+              onClick={onClose} 
+              className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center transition border border-white/[0.08] cursor-pointer shrink-0"
             >
-              <i className="fas fa-graduation-cap text-xs" />
-              <span>{t('Talent Pipeline', 'Talent-Förderung')}</span>
-              <span className="text-[10px] tabular-nums font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-300">
-                {activeProspects}/{maxSlots}
-              </span>
-            </button>
-            <button
-              onClick={() => setActiveTab('championship')}
-              className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition flex items-center justify-center gap-2 cursor-pointer ${
-                activeTab === 'championship'
-                  ? 'bg-amber-500/[0.08] text-amber-300 border border-amber-500/20 shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <i className="fas fa-trophy text-xs" />
-              <span>{t('U19 Championship', 'U19-Meisterschaft')}</span>
-              <span className="text-[10px] tabular-nums font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-300">
-                {activeProspects}/6
-              </span>
-              {!hasPlayedTournamentThisSeason && activeProspects >= 6 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-              )}
+              <i className="fas fa-xmark text-xs"></i>
             </button>
           </div>
+        </div>
 
-          {/* Tab 1: Academy Pipeline */}
-          {activeTab === 'pipeline' && (
-            <>
-              {/* Sleek Academy Status Bar */}
-              <div className="bg-[#181924] border border-white/[0.04] rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs shrink-0">
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <span className="text-zinc-300 font-medium">Lvl {academyLvl}</span>
-                  <span className="text-zinc-600">·</span>
-                  <span className="text-zinc-400 font-mono text-[11px] tabular-nums">{maxSlots} Slots Max</span>
-                  {hasYouthCoach && (
-                    <>
-                      <span className="text-zinc-600">·</span>
-                      <span className="text-zinc-400 text-[11px] font-normal">+15 Coach Quality</span>
-                    </>
-                  )}
-                  {isScoutDirector && (
-                    <>
-                      <span className="text-zinc-600">·</span>
-                      <span className="text-zinc-400 text-[11px] font-normal">-35% Upgrades</span>
-                    </>
-                  )}
-                </div>
-                <span className="text-[11px] font-mono text-zinc-500 tabular-nums">
-                  {pipeline.length} Enrolled
+        {/* Content Body */}
+        <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain custom-scrollbar flex-1 min-h-0 space-y-4 relative z-10">
+          {/* Compact Academy Milestone & Capacity Bar */}
+          <div className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-2xl p-3.5 flex flex-col gap-2 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-zinc-200 flex items-center gap-2 font-semibold">
+                <i className="fas fa-seedling text-emerald-400 text-xs"></i>
+                {t(
+                  `Academy Level ${academyLvl}/5 Milestones`,
+                  `Akademie Stufe ${academyLvl}/5 Meilensteine`
+                )}
+              </span>
+              <div className="flex items-center gap-2 text-[11px] tracking-tight tabular-nums">
+                <span className="text-sky-300 font-bold">
+                  {t(`Scouts ${scoutsUsed}/${scoutCap}`, `Scouts ${scoutsUsed}/${scoutCap}`)}
+                </span>
+                <span className="text-zinc-600" aria-hidden="true">·</span>
+                <span className="text-emerald-300 font-bold">
+                  {t(`Call-ups ${callUpsUsed}/${callUpCap}`, `Berufung ${callUpsUsed}/${callUpCap}`)}
                 </span>
               </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-2 border-t border-white/[0.05] text-[10px] tracking-tight tabular-nums">
+              <span className={academyLvl >= 2 ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}>
+                L2 {t('Poach Shield', 'Abwerbe-Schutz')}
+              </span>
+              <span className="text-zinc-600" aria-hidden="true">·</span>
+              <span className={academyLvl >= 3 ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}>
+                L3 +1 OVR {t('Graduation', 'Reife-Bonus')}
+              </span>
+              <span className="text-zinc-600" aria-hidden="true">·</span>
+              <span className={academyLvl >= 4 ? 'text-amber-400 font-semibold' : 'text-zinc-500'}>
+                L4 15% {t('Wonderkid', 'Wunderkind')}
+              </span>
+              <span className="text-zinc-600" aria-hidden="true">·</span>
+              <span className={academyLvl >= 5 ? 'text-sky-400 font-semibold' : 'text-zinc-500'}>
+                L5 {formatMoney(getLeagueScaledVal(state.club.tier || 1, 1500, state.club.country || 'GER'), state.club.country)} {t('Dividend/yr', 'Dividende/J')}
+              </span>
+            </div>
+          </div>
 
-              {/* Dynamic Facility Milestones Bento (Unlocking Capabilities) */}
-              <div className="bg-[#12131d] border border-emerald-500/20 rounded-xl p-3 flex flex-col gap-2 shrink-0">
-                <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
-                  <span className="flex items-center gap-1.5">
-                    <i className="fas fa-cubes text-[10px]" />
-                    <span>{t('Academy Facility Milestones & Capabilities', 'Akademie-Meilensteine & Freigeschaltete Features')}</span>
-                  </span>
-                  <span className="text-zinc-400 font-mono">Lvl {academyLvl}/5</span>
+          {tier >= 3 && academyLvl >= 2 && academyLvl < 5 && (
+            <div className="bg-amber-500/[0.06] border border-amber-500/20 rounded-xl px-3 py-2 flex items-center gap-2 text-[11px] text-amber-200/90 leading-tight">
+              <i className="fa-solid fa-triangle-exclamation text-amber-400 text-xs shrink-0"></i>
+              <span>
+                {t(
+                  `Tier ${tier} Poaching Risk: Use L2 Poach Shield on 3+ OVR prospects (${protectionKeepChance}% keep rate vs Tier 1 giants; 100% automatic at L5)`,
+                  `Tier ${tier} Abwerberisiko: Nutze L2 Abwerbe-Schutz für 3+ GES Talente (${protectionKeepChance}% Verbleibequote vs. Erstligisten; 100% automatisch ab L5)`
+                )}
+              </span>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {pipeline.length === 0 ? (
+              <div className="text-center p-8 border border-white/[0.06] rounded-2xl bg-white/[0.02]">
+                <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-zinc-500 text-xl mx-auto mb-3">
+                  <i className="fas fa-user-graduate"></i>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
-                  {/* Lvl 2 */}
-                  <div className={`p-2 rounded-lg border flex flex-col gap-0.5 ${academyLvl >= 2 ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' : 'bg-black/20 border-white/[0.04] text-zinc-500'}`}>
-                    <div className="flex items-center justify-between font-bold">
-                      <span>Lvl 2 · Regional</span>
-                      {academyLvl >= 2 ? <i className="fas fa-check text-[9px] text-emerald-400" /> : <i className="fas fa-lock text-[9px]" />}
-                    </div>
-                    <span className="leading-tight text-[9px] opacity-90">{t('2 Youths / Season', '2 Talente pro Saison')}</span>
-                  </div>
-
-                  {/* Lvl 3 */}
-                  <div className={`p-2 rounded-lg border flex flex-col gap-0.5 ${academyLvl >= 3 ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300' : 'bg-black/20 border-white/[0.04] text-zinc-500'}`}>
-                    <div className="flex items-center justify-between font-bold">
-                      <span>Lvl 3 · NLZ</span>
-                      {academyLvl >= 3 ? <i className="fas fa-check text-[9px] text-emerald-400" /> : <i className="fas fa-lock text-[9px]" />}
-                    </div>
-                    <span className="leading-tight text-[9px] opacity-90">{t('Anti-Poaching Shield', 'Abwerbungsschutz')}</span>
-                  </div>
-
-                  {/* Lvl 4 */}
-                  <div className={`p-2 rounded-lg border flex flex-col gap-0.5 ${academyLvl >= 4 ? 'bg-purple-500/15 border-purple-500/30 text-purple-300' : 'bg-black/20 border-white/[0.04] text-zinc-500'}`}>
-                    <div className="flex items-center justify-between font-bold">
-                      <span>Lvl 4 · Continental</span>
-                      {academyLvl >= 4 ? <i className="fas fa-check text-[9px] text-purple-400" /> : <i className="fas fa-lock text-[9px]" />}
-                    </div>
-                    <span className="leading-tight text-[9px] opacity-90">{t('Foreign Imports 🌍', 'Internationale Talente')}</span>
-                  </div>
-
-                  {/* Lvl 5 */}
-                  <div className={`p-2 rounded-lg border flex flex-col gap-0.5 ${academyLvl >= 5 ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' : 'bg-black/20 border-white/[0.04] text-zinc-500'}`}>
-                    <div className="flex items-center justify-between font-bold">
-                      <span>Lvl 5 · Dynasty</span>
-                      {academyLvl >= 5 ? <i className="fas fa-crown text-[9px] text-amber-400" /> : <i className="fas fa-lock text-[9px]" />}
-                    </div>
-                    <span className="leading-tight text-[9px] opacity-90">{t('Target Immunity 🛡️', 'Titel-Steuer Immunität')}</span>
-                  </div>
-                </div>
+                <div className="text-white font-semibold text-sm">{t('Academy Empty', 'Akademie leer')}</div>
+                <div className="text-zinc-400 text-xs mt-1 font-normal">{t('No players currently enrolled in development.', 'Derzeit keine Nachwuchsspieler in der Entwicklung.')}</div>
               </div>
-
-              {/* Banked Youth Development Banner */}
-              {(state.youthDevQueue || 0) > 0 && (
-                <div className="bg-[#181924] border border-white/[0.04] rounded-xl px-3.5 py-2.5 flex items-center justify-between text-xs text-zinc-300 shrink-0">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-sm">
-                      ⏳
-                    </span>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-medium text-white tracking-tight flex items-center gap-1.5">
-                        <span>{t('Banked Rookie Development', 'Reifende Nachwuchs-Entwicklung')}</span>
-                        <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-1.5 py-0.2 rounded font-mono font-medium tabular-nums">
-                          +{state.youthDevQueue} OVR
-                        </span>
-                      </span>
-                      <span className="text-[11px] font-normal text-zinc-400 leading-tight">
-                        {t(
-                          `Integrated rookie potential is banked and will mature into the senior squad (+${state.youthDevQueue} OVR) during season simulation.`,
-                          `Integriertes Nachwuchspotenzial ist angespart und reift bei der Saisonsimulation (+${state.youthDevQueue} GES) in den Profikader.`
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg shrink-0 ml-2 hidden sm:inline">
-                    {t('Active Queue', 'Warteschlange aktiv')}
-                  </span>
-                </div>
-              )}
-
-              {/* Action Notification */}
-              {scoutNotice && (
-                <div className={`p-3 rounded-xl border shrink-0 flex items-start gap-2.5 transition-all text-xs ${
-                  scoutNotice.type === 'success'
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
-                    : 'bg-amber-500/10 border-amber-500/20 text-amber-200'
-                }`}>
-                  <i className={`fas mt-0.5 ${scoutNotice.type === 'success' ? 'fa-circle-check text-emerald-400' : 'fa-circle-exclamation text-amber-400'}`} />
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <span className="font-semibold text-white">{scoutNotice.title}</span>
-                    <p className="text-[11px] mt-0.5 opacity-90 leading-tight">{scoutNotice.message}</p>
-                  </div>
-                  <button onClick={() => setScoutNotice(null)} className="text-zinc-400 hover:text-white p-0.5 cursor-pointer">
-                    <i className="fas fa-xmark text-xs" />
-                  </button>
-                </div>
-              )}
-
-              {/* Prospects List */}
-              <div className="flex flex-col gap-2 shrink-0">
-                {pipeline.length === 0 ? (
-                  <div className="text-center py-7 px-4 border border-white/[0.04] rounded-2xl bg-[#181924] flex flex-col items-center gap-2 shrink-0">
-                    <div className="w-10 h-10 rounded-2xl bg-white/[0.04] text-zinc-500 flex items-center justify-center text-lg mb-0.5">
-                      <i className="fas fa-user-graduate" />
-                    </div>
-                    <div className="text-white font-semibold text-xs">{t('No Prospects in Academy', 'Keine Talente in der Akademie')}</div>
-                    <div className="text-zinc-500 text-[11px] max-w-xs">{t('Scout talent below to enroll prospects into your incubator.', 'Scoute unten neue Talente, um sie in der Akademie auszubilden.')}</div>
-                  </div>
-                ) : (
-                  pipeline.map((p, idx) => {
-                    const isGenerational = p.type === 'generational';
-                    const isTop = p.type === 'top_prospect';
-                    const isMature = (p.timer || 0) <= 0 && !p.isLoanedOut;
-                    const fee = getProspectSaleFee(p);
-                    const rawBoost = p.boost || 1;
-                    const instantGain = rawBoost;
-                    const queuedGain = 0;
-                    const baseDefenseChance = p.protectionDefenseChance || Math.min(99, 45 + 10 * academyLvl);
-                    const isStar = (p.boost || 1) >= 3;
-                    const defenseChance = tier > 1
-                      ? Math.max(15, Math.round(baseDefenseChance - (tier - 1) * 9 - (isStar ? 12 : 4)))
-                      : baseDefenseChance;
-                    
-                    return (
-                      <div
-                        key={`${p.id}-${idx}`}
-                        className={`bg-[#181924] border rounded-2xl p-3.5 flex flex-col gap-2.5 transition shrink-0 ${
-                          isMature 
-                            ? 'border-emerald-500/20' 
-                            : p.isLoanedOut 
-                            ? 'border-white/[0.04]' 
-                            : 'border-white/[0.04] hover:border-emerald-500/20'
-                        }`}
-                      >
-                        {/* Prospect Header */}
-                        <div className="flex justify-between items-start">
-                          <div className="flex flex-col min-w-0 pr-2">
-                            <div className="text-white font-semibold text-xs sm:text-[13px] flex items-center gap-2">
-                              <span className="truncate max-w-[170px] sm:max-w-[210px]">{p.name || `Talent #${idx + 1}`}</span>
-                              {p.position && (
-                                <span className="text-[10px] text-zinc-400 font-normal">
-                                  · {p.position}
-                                </span>
-                              )}
-                              {p.nationality && (
-                                <span className="text-[10px] text-zinc-500 font-mono">
-                                  ({p.nationality})
-                                </span>
-                              )}
-                            </div>
-                            
-                            {/* Meta & Tier */}
-                            <div className="text-[11px] text-zinc-400 mt-0.5 flex items-center gap-1.5 font-normal flex-wrap">
-                              {isGenerational ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                                  <span>{t('Generational Wonderkid', 'Ausnahmetalent')}</span>
-                                </span>
-                              ) : isTop ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                                  <span>{t('Top Prospect', 'Top-Talent')}</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-                                  <span>{t('Local Prospect', 'Regionales Talent')}</span>
-                                </span>
-                              )}
-                              {p.isForeignImport && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-300 bg-purple-500/15 border border-purple-500/30 px-1.5 py-0.5 rounded">
-                                  <span>🌍 {p.nationality || 'DEN'}</span>
-                                </span>
-                              )}
-                              <span className="text-zinc-600">·</span>
-                              <span className="tabular-nums text-zinc-400">{p.age} {t('yrs', 'J.')}</span>
-                              {p.playstyle && (
-                                <>
-                                  <span className="text-zinc-600">·</span>
-                                  <span className="text-zinc-500 italic text-[10px]">{p.playstyle}</span>
-                                </>
-                              )}
-                            </div>
+            ) : (
+              pipeline.map((p, idx) => {
+                const isGenerational = p.type === 'generational';
+                const isTop = p.type === 'top_prospect';
+                const isReady = (p.status === 'ready' || (typeof p.timer === 'number' && p.timer <= 0)) && p.status !== 'loaned';
+                const isLoaned = p.status === 'loaned';
+                const hasNlzBonus = isReady && academyLvl >= 3;
+                const hasFeederBonus = Boolean(state.prestigeUpgrades?.feederClubPurchased && !(p as any).feederBonusApplied);
+                const rawGraduateBoost = p.boost + (hasNlzBonus ? 1 : 0) + (hasFeederBonus ? 1 : 0);
+                let effectiveGraduateBoost = rawGraduateBoost;
+                const rawEarlyBoost = Math.max(1, (p.boost + (hasFeederBonus ? 1 : 0)) - 1);
+                let effectiveEarlyBoost = rawEarlyBoost;
+                let coachYouthTrait: 'boost' | 'penalty' | null = null;
+                if (state.currentCoach) {
+                  const cStr = state.currentCoach.strength;
+                  const cWeak = state.currentCoach.weakness;
+                  const cArch = (state.currentCoach as any).archetype;
+                  if (cWeak === 'Youth Apathy' || cArch === 'iron_disciplinarian' || cArch === 'pragmatic_grinder') {
+                    effectiveGraduateBoost = Math.max(1, Math.floor(effectiveGraduateBoost / 2));
+                    effectiveEarlyBoost = Math.max(1, Math.floor(effectiveEarlyBoost / 2));
+                    coachYouthTrait = 'penalty';
+                  } else if (cStr === 'Youth Whisperer' || cStr === 'Youth Focus' || cArch === 'youth_visionary') {
+                    effectiveGraduateBoost += 1;
+                    effectiveEarlyBoost += 1;
+                    coachYouthTrait = 'boost';
+                  }
+                }
+                const rawCompFee = calculateTrainingCompensationK(p, state.club.tier || 1, state.club.country || 'GER');
+                const compFee = state.clubIdentity === 'wonderkid' ? Math.round(rawCompFee * 1.35) : rawCompFee;
+                const integrationOdds = getSeniorIntegrationOdds(p, state.club.baseOvr, {
+                  coachStrength: state.currentCoach?.strength,
+                  coachWeakness: state.currentCoach?.weakness,
+                  coachArchetype: (state.currentCoach as any)?.archetype,
+                  hasTalentscout: (state.managerSkills || []).includes('talentscout'),
+                  clubTier: state.club.tier || 1,
+                  clubCountry: state.club.country || 'GER',
+                });
+                const clickChancePct = Math.round(integrationOdds.clickChance * 100);
+                
+                return (
+                  <div
+                    key={p.id || idx}
+                    className={`backdrop-blur-md border rounded-2xl p-4 flex flex-col gap-2.5 transition-all ${
+                      isReady 
+                        ? 'bg-emerald-500/[0.04] border-emerald-500/25 shadow-[0_0_16px_rgba(16,185,129,0.08)]' 
+                        : isLoaned
+                        ? 'bg-sky-500/[0.03] border-sky-500/20'
+                        : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-white font-semibold text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                            <span className="truncate max-w-full">{sanitizePlayerName(p.name) || `Talent #${idx + 1}`}</span>
+                            {p.position && (
+                              <span className="text-zinc-400 font-mono text-[11px] shrink-0">
+                                · {p.position}
+                              </span>
+                            )}
+                            {p.nationality && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.05] text-zinc-300 border border-white/[0.08] shrink-0">
+                                {p.nationality}
+                              </span>
+                            )}
                           </div>
-                          
-                          {/* Right Side: Boost & Status */}
-                          <div className="flex flex-col items-end tabular-nums shrink-0">
-                            <span className="font-medium text-xs sm:text-sm text-zinc-200">
-                              +{p.boost || 1} {t('OVR Potential', 'GES-Potenzial')}
+                          <div className="text-xs text-zinc-400 mt-1 flex items-center gap-1.5 font-normal flex-wrap">
+                            <span className={isGenerational ? 'text-amber-300 font-semibold' : isTop ? 'text-emerald-300 font-semibold' : 'text-sky-300'}>
+                              {isGenerational ? t('Generational', 'Ausnahmetalent') : isTop ? t('Top Prospect', 'Top-Talent') : t('Local Prospect', 'Lokales Talent')}
                             </span>
-                            <div className="mt-0.5">
-                              {p.isLoanedOut ? (
-                                <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.04] border border-white/[0.04] px-1.5 py-0.5 rounded">
-                                  {t('On Loan', 'Ausgeliehen')}
-                                </span>
-                              ) : isMature ? (
-                                <div className="flex flex-col items-end gap-1">
-                                  <span className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                                    <span>{t('Graduate Ready', 'Graduierung bereit')}</span>
-                                  </span>
-                                  {queuedGain > 0 && (
-                                    <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                                      <span>⏳ {t(`Matures Next Season (+${queuedGain} OVR)`, `Reift nächste Saison (+${queuedGain} GES)`)}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-[10px] text-zinc-500 font-normal">
-                                  ⏳ {p.timer === 1 ? t('Matures next season', 'Reift nächste Saison') : t(`In ${p.timer} seasons`, `In ${p.timer} Saisons`)}
-                                </span>
-                              )}
-                            </div>
+                            <span className="text-zinc-600">·</span>
+                            <span className=" whitespace-nowrap">{p.age || 17} {t('yrs', 'Jahre')}</span>
+                            {p.playstyle && (
+                              <>
+                                <span className="text-zinc-600">·</span>
+                                <span className="text-zinc-300 text-[11px]">{p.playstyle}</span>
+                              </>
+                            )}
+                            {isReady && (
+                              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold rounded-full whitespace-nowrap">
+                                {t('Ready to Graduate', 'Absolvent')}
+                              </span>
+                            )}
+                            {isLoaned && (
+                              <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 text-[10px] font-bold rounded-full whitespace-nowrap">
+                                {t('On Loan Farm', 'Leihe')}
+                              </span>
+                            )}
                           </div>
                         </div>
 
-                        {/* On Loan Status Banner */}
-                        {p.isLoanedOut && (
-                          <div className="bg-[#14151e] border border-white/[0.04] rounded-xl px-3 py-2 flex items-center justify-between text-xs text-zinc-300">
-                            <span className="text-[11px] text-zinc-400">
-                              {t('Developing off-site on affiliate loan · Returns next season with +1 OVR bonus', 'Sammelt Spielpraxis beim Partnerklub · Kehrt nächste Saison mit +1 GES-Bonus zurück')}
-                            </span>
-                            <span className="text-[10px] font-mono font-medium text-zinc-300 tabular-nums">
-                              S{p.loanReturnSeason || (state.year + 1)}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Developing Prospect Protection Toggle */}
-                        {!isMature && !p.isLoanedOut && (
-                          <div className="flex items-center justify-between pt-1 border-t border-white/[0.04] text-[11px]">
-                            {p.isProtected ? (
-                              <div className="flex items-center gap-1.5 text-zinc-300 font-medium text-[10px] flex-wrap">
-                                <i className="fas fa-shield-halved text-emerald-400 text-xs" />
-                                <span>{t(`Protected (${defenseChance}% Shield)`, `Geschützt (${defenseChance}% Schutz)`)}</span>
-                                {tier > 1 && defenseChance < baseDefenseChance && (
-                                  <span className="text-[9px] text-zinc-500 font-normal tabular-nums">
-                                    {t(`(T${tier} pressure: -${baseDefenseChance - defenseChance}%)`, `(L${tier}-Druck: -${baseDefenseChance - defenseChance}%)`)}
-                                  </span>
-                                )}
-                              </div>
-                            ) : academyLvl < 3 ? (
-                              <span className="text-[10px] text-zinc-500 font-normal">
-                                {t('Anti-poaching shield unlocks at Level 3', 'Abwerbungsschutz ab Stufe 3')}
+                        <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                          <span className="text-emerald-400 font-bold font-mono text-sm sm:text-base whitespace-nowrap">
+                            +{effectiveGraduateBoost} {t('OVR', 'GES')}
+                          </span>
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
+                            {hasNlzBonus && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold whitespace-nowrap">
+                                +{t('1 NLZ Bonus', '1 NLZ-Bonus')}
                               </span>
-                            ) : protectConfirmId === p.id ? (
-                              <div className="flex items-center gap-1.5 ml-auto">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setProtectConfirmId(null);
-                                  }}
-                                  className="px-2 py-0.5 text-[10px] text-zinc-400 hover:text-white cursor-pointer"
-                                >
-                                  {t('Cancel', 'Abbrechen')}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onProtectYouth?.(p.id);
-                                    setProtectConfirmId(null);
-                                  }}
-                                  disabled={state.budget < -creditLimit + protectionCost}
-                                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium text-[10px] cursor-pointer tabular-nums"
-                                >
-                                  {t('Shield', 'Schützen')} (-{formatMoney(protectionCost)})
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setProtectConfirmId(p.id);
-                                }}
-                                className="text-zinc-400 hover:text-white text-[10px] font-medium flex items-center gap-1 transition ml-auto cursor-pointer"
-                              >
-                                <i className="fas fa-shield-halved text-[10px]" />
-                                <span>{t('Protect from poachers', 'Vor Abwerbung schützen')}</span>
-                              </button>
+                            )}
+                            {hasFeederBonus && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold whitespace-nowrap">
+                                +{t('1 Feeder', '1 Farmteam')}
+                              </span>
+                            )}
+                            {coachYouthTrait === 'boost' && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 font-semibold whitespace-nowrap" title="Head Coach Youth Development Bonus">
+                                +1 Coach
+                              </span>
+                            )}
+                            {coachYouthTrait === 'penalty' && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 font-semibold whitespace-nowrap" title="Head Coach Youth Apathy / Disciplinarian Bottleneck">
+                                -50% Coach
+                              </span>
                             )}
                           </div>
-                        )}
+                        </div>
+                      </div>
 
-                        {/* Graduation Trilemma */}
-                        {isMature && (
-                          <div className="flex flex-col gap-1.5 pt-2 border-t border-white/[0.04]">
-                            <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 flex items-center justify-between mb-0.5">
-                              <span>{t('Graduation Choice', 'Graduierungs-Auswahl')}</span>
-                              <span className="text-[9px] text-zinc-500 font-normal">Choose 1 of 3 pathways</span>
-                            </div>
+                      <div className="text-[10px] text-zinc-400 font-mono flex items-center justify-between gap-2 flex-wrap pt-1.5 border-t border-white/[0.05]">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`px-1.5 py-0.5 rounded border font-semibold whitespace-nowrap ${
+                              clickChancePct >= 60
+                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+                                : clickChancePct >= 40
+                                ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+                                : 'bg-rose-500/10 text-rose-300 border-rose-500/25'
+                            }`}
+                            title="Probability that this youth player clicks immediately with your Senior First Team tactics & dressing room upon promotion. Farm Loans (+14%/loan) and Youth-focused coaches increase this rate."
+                          >
+                            {clickChancePct}% Senior Click
+                          </span>
+                          {(p.loansServed || 0) > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 font-semibold whitespace-nowrap">
+                              Loan-Tested ({p.loansServed}/2)
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-zinc-400 whitespace-nowrap ml-auto">
+                          {isReady 
+                            ? t('Matured', 'Ausgebildet') 
+                            : isLoaned 
+                            ? t('Developing off-site', 'Extern in Leihe') 
+                            : p.timer === 1 
+                            ? t('Next season', 'Nächste Saison') 
+                            : t(`In ${p.timer} seasons`, `In ${p.timer} Saisons`)}
+                        </span>
+                      </div>
+                    </div>
 
-                            {/* Option 1: Sign to Senior Squad (Promotion) */}
-                            {!isSquadFull ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const res = useGameStore.getState().pullYouthPlayer(p.id);
-                                  if (res.success) {
-                                    setScoutNotice({
-                                      type: 'success',
-                                      title: t('Promoted to Senior Squad', 'In Profikader befördert'),
-                                      message: res.message
-                                    });
-                                  } else {
-                                    setScoutNotice({
-                                      type: 'rejection',
-                                      title: t('Promotion Blocked', 'Beförderung nicht möglich'),
-                                      message: res.message
-                                    });
-                                  }
-                                }}
-                                className="w-full bg-[#14151e] hover:bg-emerald-500/[0.05] text-zinc-200 border border-white/[0.04] hover:border-emerald-500/20 py-2 px-3 rounded-xl text-xs font-medium transition cursor-pointer flex items-center justify-between"
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <i className="fas fa-arrow-up-from-bracket text-emerald-400 text-xs" />
-                                  <span>{t('1. Sign to Senior Squad', '1. In Profikader übernehmen')}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5 font-mono text-[11px] font-normal tabular-nums">
-                                  {instantGain !== 0 && (
-                                    <span className="text-zinc-300">
-                                      {instantGain > 0 ? `+${instantGain}` : instantGain} {t('Instant', 'Sofort')}
-                                    </span>
-                                  )}
-                                  {queuedGain > 0 && (
-                                    <span className="text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px]">
-                                      ⏳ {t(`+${queuedGain} OVR Matures Next Season`, `+${queuedGain} GES Reift nächste Saison`)}
-                                    </span>
-                                  )}
-                                  {instantGain === 0 && queuedGain === 0 && (
-                                    <span className="text-zinc-500">+0 Team OVR</span>
-                                  )}
-                                </div>
-                              </button>
-                            ) : (
-                              <div className="w-full bg-[#14151e] border border-white/[0.04] text-zinc-500 py-1 px-3 rounded-xl text-[10px]">
-                                Senior roster full (22/22 players).
+                    {/* Graduation Choices for Ready or Loaned Prospects */}
+                    {(isReady || isLoaned) && onGraduateYouth && (
+                      <div className="pt-2.5 mt-1 border-t border-emerald-500/20 flex flex-col gap-2">
+                        <div className="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <i className="fa-solid fa-graduation-cap"></i>
+                            <span>{t('Graduation Decisions', 'Abschluss-Entscheidung')}</span>
+                          </span>
+                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full border ${
+                            isCallUpCapped
+                              ? 'bg-rose-500/10 text-rose-300 border-rose-500/25'
+                              : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+                          }`}>
+                            {callUpsUsed}/{callUpCap} {t('Senior Call-ups', 'Kaderübernahmen')}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            disabled={isLoaned || isCallUpCapped || isSquadFull}
+                            onClick={() => onGraduateYouth(p.id, 'promote')}
+                            className={`p-2 rounded-xl text-left transition flex flex-col justify-between ${
+                              isLoaned || isCallUpCapped || isSquadFull
+                                ? 'bg-zinc-800/40 border border-white/[0.05] text-zinc-500 cursor-not-allowed opacity-60'
+                                : 'bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 hover:text-white cursor-pointer'
+                            }`}
+                            title={
+                              isLoaned
+                                ? t('Locked while prospect is out on farm loan this season', 'Gesperrt während der laufenden Saisonleihe')
+                                : isSquadFull
+                                ? t('Senior squad is at maximum capacity (50/50 players)', 'Profikader hat das Limit erreicht (50/50 Spieler)')
+                                : isCallUpCapped
+                                ? `Seasonal call-up cap reached (${callUpsUsed}/${callUpCap}). Upgrade Youth Academy for higher capacity.`
+                                : undefined
+                            }
+                          >
+                            <span className="text-[11px] font-bold flex items-center gap-1">
+                              <i className={`fa-solid ${isLoaned ? 'fa-lock' : 'fa-user-plus'} text-[10px]`}></i>
+                              {isLoaned ? t('Sign to Squad', 'Kaderübernahme') : isSquadFull ? t('Squad Full', 'Kader voll') : isCallUpCapped ? t('Cap Reached', 'Limit erreicht') : t('Sign to Squad', 'Kaderübernahme')}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-300 mt-1">
+                              {isLoaned ? t('Locked (On Loan)', 'Gesperrt (Leihe)') : isSquadFull ? '50/50 max' : isCallUpCapped ? `${callUpsUsed}/${callUpCap} used` : `+${effectiveGraduateBoost} ${t('OVR to First Team', 'GES für Profikader')}`}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isLoaned || (p.loansServed || 0) >= 2 || (p.age || 18) >= 20}
+                            onClick={() => onGraduateYouth(p.id, 'loan')}
+                            className={`p-2 rounded-xl text-left transition flex flex-col justify-between ${
+                              isLoaned || (p.loansServed || 0) >= 2 || (p.age || 18) >= 20
+                                ? 'bg-zinc-800/40 border border-white/[0.05] text-zinc-500 cursor-not-allowed opacity-60'
+                                : 'bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 hover:text-white cursor-pointer'
+                            }`}
+                            title={
+                              isLoaned
+                                ? t('Already on farm loan for this season', 'Bereits für diese Saison verliehen')
+                                : (p.loansServed || 0) >= 2
+                                ? t('Max 2 farm loans reached for this prospect', 'Maximal 2 Leihen für dieses Talent erreicht')
+                                : (p.age || 18) >= 20
+                                ? t('Prospect too old for farm loan (max age 19)', 'Talent zu alt für Partnerleihe (max. 19 Jahre)')
+                                : undefined
+                            }
+                          >
+                            <span className="text-[11px] font-bold flex items-center gap-1">
+                              <i className={`fa-solid ${isLoaned ? 'fa-lock' : 'fa-handshake'} text-[10px]`}></i>
+                              {(p.loansServed || 0) >= 2 ? t('Loan Cap (2/2)', 'Leih-Limit (2/2)') : t('Farm Loan', 'Partnerleihe')}
+                            </span>
+                            <span className="text-[9px] text-sky-200/80 mt-1">
+                              {isLoaned
+                                ? t('On Loan This Season', 'Diese Saison verliehen')
+                                : (p.loansServed || 0) >= 2 
+                                ? t('Must promote or release', 'Übernahme oder Ablöse')
+                                : `+1 OVR & +14% Click (${p.loansServed || 0}/2)`}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isLoaned}
+                            onClick={() => onGraduateYouth(p.id, 'compensation')}
+                            className={`p-2 rounded-xl text-left transition flex flex-col justify-between ${
+                              isLoaned
+                                ? 'bg-zinc-800/40 border border-white/[0.05] text-zinc-500 cursor-not-allowed opacity-60'
+                                : 'bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-white cursor-pointer'
+                            }`}
+                            title={
+                              isLoaned
+                                ? t('Locked while prospect is out on farm loan this season', 'Gesperrt während der laufenden Saisonleihe')
+                                : undefined
+                            }
+                          >
+                            <span className="text-[11px] font-bold flex items-center gap-1">
+                              <i className={`fa-solid ${isLoaned ? 'fa-lock' : 'fa-sack-dollar'} text-[10px]`}></i>
+                              {t('Release Fee', 'Entschädigung')}
+                            </span>
+                            <span className="text-[9px] text-amber-200/90 font-mono mt-1">
+                              {isLoaned ? t('Locked (On Loan)', 'Gesperrt (Leihe)') : `+${formatMoney(compFee)} Cash`}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!isReady && !isLoaned && (
+                      <div className="pt-2 border-t border-white/[0.05] flex flex-col gap-2">
+                        {!p.isProtected && p.boost >= 3 && academyLvl < 5 && onProtectYouth && (
+                          <>
+                            {academyLvl < 2 ? (
+                              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-300 px-3 py-1.5 rounded-xl text-[10px] font-semibold uppercase tracking-wide text-center flex items-center justify-center gap-1.5">
+                                <i className="fas fa-lock text-[9px]"></i>
+                                <span>{t('Requires Academy Lvl 2 (Poach Shield) to Protect', 'Akademie Lvl 2 (Abwerbe-Schutz) benötigt zum Schützen')}</span>
                               </div>
-                            )}
-
-                            {/* Option 2: Farm Loan (Affiliate Loan) */}
-                            {!p.loanBonusEarned && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const res = useGameStore.getState().loanYouthProspect(p.id);
-                                  if (res.success) {
-                                    setScoutNotice({
-                                      type: 'success',
-                                      title: t('Farm Loan Finalized', 'Farm-Leihe vereinbart'),
-                                      message: res.message
-                                    });
-                                  } else {
-                                    setScoutNotice({
-                                      type: 'rejection',
-                                      title: t('Loan Not Available', 'Leihe nicht möglich'),
-                                      message: res.message
-                                    });
-                                  }
-                                }}
-                                className="w-full bg-[#14151e] hover:bg-sky-500/[0.05] text-zinc-200 border border-white/[0.04] hover:border-sky-500/20 py-2 px-3 rounded-xl text-xs font-medium transition cursor-pointer flex items-center justify-between"
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <i className="fas fa-handshake-angle text-sky-400 text-xs" />
-                                  <span>{t('2. Farm Loan (1 Season)', '2. Farm-Leihe (1 Saison)')}</span>
+                            ) : protectConfirmId === p.id ? (
+                              <div className="bg-sky-500/10 border border-sky-400/20 rounded-xl p-3">
+                                <div className="text-sky-200 text-xs font-normal mb-2 text-center">
+                                  {t('Protecting this player gives you a', 'Dieses Talent zu schützen gibt dir eine')} 
+                                  <strong className="text-emerald-400 mx-1 font-bold">{protectionKeepChance}%</strong> 
+                                  {t('chance of fending off poachers.', 'Erfolgschance gegen abwerbende Spitzenklubs.')}
+                                  {tier >= 3 && (
+                                    <span className="block text-[10px] text-amber-300 mt-1">
+                                      {t(`(Tier ${tier} penalty applied: -${tierPoachVulnerability}% protection resistance vs Tier 1 giants)`, `(Liga-${tier}-Abzug: -${tierPoachVulnerability}% Schutz gegen Erstligisten)`)}
+                                    </span>
+                                  )}
                                 </div>
-                                <span className="font-mono text-zinc-400 font-normal text-[10px] tabular-nums">
-                                  +1 OVR on Return
-                                </span>
-                              </button>
-                            )}
-
-                            {/* Option 3: Release for Training Compensation (Cash Windfall) */}
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setProtectConfirmId(null);
+                                    }}
+                                    className="flex-1 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] py-2 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                  >
+                                    {t('Cancel', 'Abbrechen')}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onProtectYouth(p.id);
+                                      setProtectConfirmId(null);
+                                    }}
+                                    disabled={state.budget - protectionCost < -creditLimit}
+                                    className="flex-1 bg-sky-500 hover:bg-sky-400 text-white py-2 rounded-xl text-xs font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                                  >
+                                    {t('Confirm', 'Bestätigen')} (-{formatMoney(protectionCost)})
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </>
+                        )}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          {!p.isProtected && p.boost >= 3 && academyLvl >= 2 && academyLvl < 5 && onProtectYouth && protectConfirmId !== p.id ? (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const res = useGameStore.getState().sellYouthProspect(p.id);
-                                if (res.success) {
-                                  setScoutNotice({
-                                    type: 'success',
-                                    title: t('Training Compensation Realized', 'Ablöse erhalten'),
-                                    message: res.message
-                                  });
-                                } else {
-                                  setScoutNotice({
-                                    type: 'rejection',
-                                    title: t('Transfer Blocked', 'Transfer nicht möglich'),
-                                    message: res.message
-                                  });
-                                }
+                                setProtectConfirmId(p.id);
                               }}
-                              className="w-full bg-[#14151e] hover:bg-emerald-500/[0.05] text-zinc-200 border border-white/[0.04] hover:border-emerald-500/20 py-2 px-3 rounded-xl text-xs font-medium transition cursor-pointer flex items-center justify-between"
+                              className="bg-white/[0.03] hover:bg-white/[0.06] text-sky-300 hover:text-white border border-white/[0.08] px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer"
                             >
-                              <div className="flex items-center gap-1.5">
-                                <i className="fas fa-sack-dollar text-emerald-400 text-xs" />
-                                <span>{t('3. Release for Compensation', '3. Gegen Ablöse freigeben')}</span>
-                              </div>
-                              <span className="font-mono text-emerald-400 font-medium text-[11px] tabular-nums">
-                                +{formatMoney(fee)}
+                              <i className="fas fa-shield-halved text-[10px] text-sky-400"></i>
+                              <span>{t('Protect Prospect', 'Talent Schützen')}</span>
+                            </button>
+                          ) : <div />}
+
+                          {onGraduateYouth && (
+                            <button
+                              type="button"
+                              disabled={isCallUpCapped || isSquadFull}
+                              onClick={() => onGraduateYouth(p.id, 'promote')}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 border ${
+                                isCallUpCapped || isSquadFull
+                                  ? 'bg-zinc-800/40 border-white/[0.05] text-zinc-500 cursor-not-allowed opacity-60'
+                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-white border-emerald-500/25 cursor-pointer'
+                              }`}
+                              title={
+                                isSquadFull
+                                  ? t('Senior squad is at maximum capacity (50/50 players)', 'Profikader voll (50/50 Spieler)')
+                                  : isCallUpCapped
+                                  ? `Seasonal call-up cap reached (${callUpsUsed}/${callUpCap})`
+                                  : t(`Promote early to First Team (-1 OVR & -15% Senior Click penalty; ${clickChancePct}% Click Rate)`, `Vorzeitig in den Profikader berufen (-1 GES & -15% Integrations-Abzug; ${clickChancePct}% Klick-Rate)`)
+                              }
+                            >
+                              <i className="fa-solid fa-arrow-up-from-bracket text-[10px]"></i>
+                              <span>
+                                {isSquadFull
+                                  ? t('Squad Full', 'Kader voll')
+                                  : isCallUpCapped
+                                  ? `${t('Call-Up Cap', 'Berufungs-Limit')} (${callUpsUsed}/${callUpCap})`
+                                  : `${t('Call Up Early', 'Früh berufen')} (+${effectiveEarlyBoost} ${t('Net OVR', 'Netto-GES')} · ${clickChancePct}% Click)`}
                               </span>
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Tab 2: National Championship */}
-          {activeTab === 'championship' && (
-            <div className="flex flex-col gap-3.5 shrink-0">
-              {/* U19 Honors */}
-              {(state.youthTitlesWon || 0) > 0 && (
-                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2 rounded-xl w-full shrink-0">
-                  <div className="flex items-center gap-2">
-                    <i className="fas fa-trophy text-amber-400 text-xs" />
-                    <span className="text-xs font-medium text-white">{t('U19 Honors', 'U19-Erfolge')}</span>
+                    )}
+                    {!isReady && !isLoaned && p.boost >= 3 && academyLvl >= 5 && (
+                      <div className="self-start mt-0.5 text-emerald-400 flex items-center gap-1.5 text-xs font-medium">
+                        <i className="fas fa-shield-halved text-[10px]"></i>
+                        <span>{t('La Masia Complex: 100% Automatic Poach Immunity', 'La-Masia-Komplex: 100% Automatischer Abwerbe-Schutz')}</span>
+                      </div>
+                    )}
+                    {p.isProtected && academyLvl < 5 && (
+                      <div className="self-start mt-0.5 text-sky-400 flex items-center gap-1.5 text-xs font-medium">
+                        <i className="fas fa-shield-halved text-[10px]"></i>
+                        <span>{t('Protected from poachers', 'Vor Abwerbung geschützt')} ({protectionKeepChance}% {t('resistance', 'Erfolgswahrscheinlichkeit')})</span>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-xs text-emerald-400 font-medium tabular-nums">
-                    {state.youthTitlesWon} {t('Titles Won', 'Titel gewonnen')}
-                  </span>
-                </div>
-              )}
-
-              {/* U19 Championship Card */}
-              <div className="bg-[#181924] border border-white/[0.04] hover:border-amber-500/20 backdrop-blur-md rounded-2xl p-4 sm:p-5 flex flex-col gap-3 relative shrink-0">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-base shrink-0">
-                      <i className="fas fa-trophy" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-white tracking-tight flex items-center gap-2">
-                        <span>{t('National U19 Championship', 'Nationale U19-Meisterschaft')}</span>
-                        <span className="text-[10px] font-medium uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full tabular-nums">
-                          {state.year}
-                        </span>
-                      </div>
-                      <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5 font-normal">
-                        <span>{t('Cohort Rating:', 'Kaderstärke:')} <strong className="text-zinc-200 font-medium tabular-nums">{u19Rating} OVR</strong></span>
-                        <span className="text-zinc-600">·</span>
-                        <span className="text-zinc-500">{t('Annual Tournament', 'Jährlich')}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-xs text-zinc-400 leading-relaxed font-normal">
-                  {t(
-                    'Compete through a knockout bracket against rival academies for silverware, prize money, and cohort progression. Higher Academy facility levels grant direct OVR competitive advantages in every round.',
-                    'Kämpfe im K.o.-Turnier gegen rivalisierende Akademien um Trophäen, Preisgeld und Entwicklungsschübe. Höhere Akademie-Stufen gewähren direkte Stärkevorteile in jeder Runde.'
-                  )}
-                </p>
-
-                {/* Championship Trigger Button or Cohort Requirement */}
-                {!hasPlayedTournamentThisSeason ? (
-                  activeProspects >= 6 ? (
-                    <button
-                      onClick={handleSimulateChampionship}
-                      className="w-full py-2.5 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white font-medium text-xs sm:text-sm border border-white/[0.06] flex items-center justify-center gap-2 transition active:scale-[0.99] cursor-pointer"
-                    >
-                      <i className="fas fa-play text-xs text-amber-400" />
-                      <span>{t('Enter National U19 Championship', 'U19-Meisterschaft spielen')}</span>
-                    </button>
-                  ) : (
-                    <div className="w-full py-2.5 px-4 rounded-xl bg-[#14151e] border border-white/[0.04] flex flex-col items-center gap-1 text-center">
-                      <div className="flex items-center gap-2 text-zinc-300 font-medium text-xs">
-                        <i className="fas fa-lock text-xs text-zinc-400" />
-                        <span>{t(`6-Prospect Cohort Required (${activeProspects}/6 enrolled)`, `Vollständiger 6er-Kader erforderlich (${activeProspects}/6)`)}</span>
-                      </div>
-                      <p className="text-[11px] text-zinc-500 font-normal">
-                        {t(
-                          'Entry unlocks once your academy holds at least 6 prospects.',
-                          'Die Teilnahme wird freigeschaltet, sobald deine Akademie mindestens 6 Talente umfasst.'
-                        )}
-                      </p>
-                    </div>
-                  )
-                ) : (
-                  <div className="w-full py-2.5 px-4 rounded-xl bg-[#14151e] text-zinc-400 text-xs font-normal border border-white/[0.04] flex items-center justify-center gap-2">
-                    <i className="fas fa-check-circle text-emerald-400 text-xs" />
-                    <span>{t(`Concluded for Season ${state.year} · Returns Next Season`, `Für Saison ${state.year} beendet · Nächste Saison wieder spielbar`)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
 
-        {/* Modal Action Footer */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#14151e] flex flex-col gap-2 shrink-0">
-
-          {/* Scouting Actions */}
-          {isAcademyFull ? (
-            <div className="w-full py-2.5 px-4 rounded-xl font-medium text-xs bg-[#181924] text-zinc-400 border border-white/[0.04] flex items-center justify-between">
-              <div className="flex items-center gap-2 text-zinc-300">
-                <i className="fas fa-warehouse text-xs text-zinc-400" />
-                <span>{t(`Academy at Full Capacity (${activeProspects}/${maxSlots})`, `Akademie voll ausgelastet (${activeProspects}/${maxSlots})`)}</span>
+        {/* Footer Actions */}
+        <div className="p-4 sm:p-5 border-t border-white/[0.06] bg-white/[0.02] flex flex-col gap-2.5 shrink-0 relative z-10">
+          {/* Youth Championship Sub-Modal Trigger */}
+          <div className="w-full">
+            {isTournamentPlayed ? (
+              <div className="w-full py-2.5 sm:py-3 px-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-7 h-7 rounded-xl ${state.lastYouthChampionshipResult?.won ? 'bg-amber-500/20 text-amber-400 border-amber-400/30' : 'bg-white/[0.04] text-zinc-400 border-white/[0.08]'} border flex items-center justify-center text-xs shrink-0`}>
+                    <i className={state.lastYouthChampionshipResult?.won ? "fa-solid fa-trophy" : "fa-solid fa-flag-checkered"}></i>
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-zinc-200">
+                      {t('National U19 Championship', 'Nationale U19 Meisterschaft')}
+                    </div>
+                    <div className="text-[11px] text-zinc-400">
+                      {state.lastYouthChampionshipResult?.won 
+                        ? (isDe ? '🏆 U19-Meister dieser Saison' : '🏆 Season Champions') 
+                        : (isDe ? 'Teilnahme diese Saison beendet' : 'Completed for this season')}
+                      <span className="text-zinc-500"> · {isDe ? `Wieder in Saison ${state.year + 1} (Vorbereitung)` : `Returns in Season ${state.year + 1} Pre-Season`}</span>
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/[0.04] text-zinc-400 border border-white/[0.08] shrink-0">
+                  1/1 {isDe ? 'Saison' : 'Season'}
+                </span>
               </div>
-              <span className="text-[11px] text-zinc-400">
-                {academyLvl < 5 ? t(`Upgrade to Lvl ${academyLvl + 1}`, `Ausbau auf Stufe ${academyLvl + 1}`) : t('Max Level', 'Höchste Stufe')}
-              </span>
-            </div>
-          ) : !canAfford ? (
+            ) : !isPreSeason ? (
+              <div className="w-full py-2.5 sm:py-3 px-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between text-zinc-400 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center text-zinc-500 text-xs shrink-0">
+                    <i className="fa-solid fa-calendar-xmark"></i>
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-zinc-300">
+                      {t('National U19 Championship', 'Nationale U19 Meisterschaft')}
+                    </div>
+                    <div className="text-[11px] text-zinc-500">
+                      {isDe 
+                        ? `Nur während der Saisonvorbereitung spielbar · Nächstes Turnier in Saison ${state.year + 1}` 
+                        : `Playable during pre-season preparation only · Returns in Season ${state.year + 1} prep`}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-white/[0.04] text-zinc-500 border border-white/[0.06] shrink-0">
+                  {isDe ? 'Saisonvorbereitung' : 'Pre-Season Only'}
+                </span>
+              </div>
+            ) : hasLevel1Cohort ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (onOpenChampionship) {
+                    onOpenChampionship();
+                  } else {
+                    setShowTournamentSubModal(true);
+                  }
+                }}
+                className="w-full py-2.5 sm:py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-yellow-500/15 hover:from-amber-500/25 hover:to-yellow-500/25 text-amber-200 border border-amber-400/30 active:scale-[0.98] shadow-sm transition flex items-center justify-between cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-400 text-xs shrink-0">
+                    <i className="fas fa-trophy"></i>
+                  </div>
+                  <div className="text-left">
+                    <div className="text-xs font-bold text-amber-300 tracking-wide uppercase">
+                      {t('Simulate National Youth Championship', 'Nationale U19 Meisterschaft simulieren')}
+                    </div>
+                    <div className="text-[11px] text-amber-200/70 font-normal">
+                      {t(`Level ${academyLvl} Academy: +${facilityBonus} OVR title advantage`, `Stufe ${academyLvl} Akademie: +${facilityBonus} GES Titel-Vorteil`)}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-400/20 text-amber-300 border border-amber-400/30 shrink-0">
+                  {t('Open', 'Öffnen')} →
+                </span>
+              </button>
+            ) : (
+              <div className="w-full py-2.5 px-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between text-zinc-400 text-xs">
+                <div className="flex items-center gap-2">
+                  <i className="fas fa-lock text-zinc-500 text-xs"></i>
+                  <span>{t('National U19 Championship', 'Nationale U19 Meisterschaft')}</span>
+                </div>
+                <span className="text-[11px] text-zinc-500">
+                  {t(`Requires at least 1 Academy Prospect (${pipeline.length}/${maxCapacity})`, `Erfordert mind. 1 Akademie-Talent (${pipeline.length}/${maxCapacity})`)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleScoutSchoolTrialist}
-              disabled={isScouting || isScoutingRef.current || isTrialistLimitReached}
-              className="w-full py-2.5 px-4 rounded-xl font-medium text-xs transition active:scale-[0.99] flex items-center justify-between cursor-pointer bg-white/[0.04] hover:bg-white/[0.08] text-white border border-white/[0.04] disabled:opacity-50"
+              onClick={onRecruitYouth}
+              disabled={isFull || isScoutCapped || !canAfford}
+              className={`flex-1 py-3.5 px-5 rounded-2xl flex items-center justify-between font-semibold text-xs tracking-wide transition shadow-sm ${
+                isFull || isScoutCapped || !canAfford
+                  ? 'bg-white/[0.04] text-zinc-500 border border-white/[0.06] cursor-not-allowed'
+                  : 'bg-sky-500 hover:bg-sky-400 text-white cursor-pointer active:scale-[0.98]'
+              }`}
             >
               <div className="flex items-center gap-2">
-                <i className="fas fa-seedling text-xs text-zinc-400" />
-                <span>{isTrialistLimitReached ? t('Trialist Quota Used (1/1 this season)', 'Schultalent-Kontingent belegt (1/1)') : t('Scout Free School Trialist', 'Freies Schultalent scouten')}</span>
+                <i className="fas fa-search text-xs"></i>
+                <span>
+                  {isFull
+                    ? t('Academy Full', 'Akademie voll')
+                    : isScoutCapped
+                    ? t(`Scout Cap Reached (${scoutsUsed}/${scoutCap} Lvl ${academyLvl})`, `Scout-Limit erreicht (${scoutsUsed}/${scoutCap} Lvl ${academyLvl})`)
+                    : t(`Scout New Talent (${scoutsUsed}/${scoutCap})`, `Talent scouten (${scoutsUsed}/${scoutCap})`)}
+                </span>
               </div>
-              <span className="text-xs text-zinc-300 font-medium tabular-nums">
-                {isTrialistLimitReached ? '1/1' : `0 € (${activeProspects}/${maxSlots})`}
-              </span>
-            </button>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleScoutNewTalent}
-                  disabled={isScouting || isScoutingRef.current || isScoutingLimitReached}
-                  className={`flex-1 py-2.5 px-3.5 rounded-xl font-medium text-xs transition active:scale-[0.99] flex items-center justify-between cursor-pointer border ${
-                    isScoutingLimitReached
-                      ? 'bg-white/[0.02] text-zinc-500 border-white/[0.04] cursor-not-allowed opacity-60'
-                      : 'bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.06] disabled:opacity-50'
-                  }`}
-                  title={isScoutingLimitReached ? t(`Annual scouting network limit reached (${scoutsUsedThisSeason}/${maxScoutingThisSeason})`, `Jährliches Scouting-Limit erreicht (${scoutsUsedThisSeason}/${maxScoutingThisSeason})`) : undefined}
-                >
-                  <div className="flex items-center gap-1.5 truncate">
-                    <i className="fas fa-magnifying-glass text-xs text-zinc-400" />
-                    <span className="truncate">
-                      {isScoutingLimitReached
-                        ? t(`Cap (${scoutsUsedThisSeason}/${maxScoutingThisSeason})`, `Limit (${scoutsUsedThisSeason}/${maxScoutingThisSeason})`)
-                        : t('Scout Domestic', 'Inland scouten')}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-zinc-300 font-mono font-medium tabular-nums shrink-0">
-                    {isScoutingLimitReached ? '' : `-${formatMoney(smallAcquisitionFee)}`}
-                  </span>
-                </button>
-
-                {academyLvl >= 4 && (
-                  <button
-                    onClick={handleScoutForeignImport}
-                    disabled={isScouting || isScoutingRef.current || isScoutingLimitReached}
-                    className={`flex-1 py-2.5 px-3.5 rounded-xl font-medium text-xs transition active:scale-[0.99] flex items-center justify-between cursor-pointer border ${
-                      isScoutingLimitReached
-                        ? 'bg-white/[0.02] text-zinc-500 border-white/[0.04] cursor-not-allowed opacity-60'
-                        : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 border-purple-500/30 shadow-sm disabled:opacity-50'
-                    }`}
-                    title={t('Scout non-domestic wonderkid (Denmark, France, Spain, etc.)', 'Internationales Talent scouten (Dänemark, Frankreich, Spanien etc.)')}
-                  >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="text-xs">🌍</span>
-                      <span className="truncate">{t('Foreign Import', 'Auslands-Talent')}</span>
-                    </div>
-                    <span className="text-[11px] text-purple-300 font-mono font-medium tabular-nums shrink-0">
-                      {isScoutingLimitReached ? '' : `-${formatMoney(smallAcquisitionFee)}`}
-                    </span>
-                  </button>
-                )}
-
-                <button
-                  onClick={handleScoutSchoolTrialist}
-                  disabled={isScouting || isScoutingRef.current || isTrialistLimitReached}
-                  className="py-2.5 px-3 rounded-xl text-xs font-medium text-zinc-300 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.04] transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                  title={isTrialistLimitReached ? "1 free school trialist quota reached for this season" : "Free trialist recruitment"}
-                >
-                  <i className="fas fa-seedling text-xs text-zinc-400" />
-                  <span>{isTrialistLimitReached ? '1/1' : '0 €'}</span>
-                </button>
-              </div>
-
-              {academyLvl < 4 && (
-                <div className="text-[10px] text-zinc-500 text-center font-normal">
-                  <span>{t('Continental Scouting (Foreign Imports) unlocks at Academy Level 4', 'Auslands-Scouting (internationale Talente) schaltet sich auf Stufe 4 frei')}</span>
-                </div>
+              {!isFull && !isScoutCapped && (
+                <span className="font-mono text-xs text-sky-100">
+                  -{formatMoney(actionCost)}
+                </span>
               )}
-            </div>
-          )}
+            </button>
 
-          <button 
-            aria-label="Close modal" 
-            onClick={onClose} 
-            className="w-full py-2 rounded-xl text-xs font-normal text-zinc-500 hover:text-zinc-300 transition cursor-pointer"
-          >
-            {t('Close', 'Schließen')}
-          </button>
+            <button
+              aria-label="Close modal"
+              onClick={onClose}
+              className="py-3.5 px-5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white font-semibold text-xs transition border border-white/[0.08] cursor-pointer"
+            >
+              {t('Close', 'Schliessen')}
+            </button>
+          </div>
         </div>
+
+        {/* Embedded Youth Championship Sub-Modal */}
+        {showTournamentSubModal && (
+          <YouthChampionshipModal
+            state={state}
+            lang={lang}
+            clubsDb={clubsDb}
+            isModActive={isModActive}
+            onClose={(_won) => {
+              setShowTournamentSubModal(false);
+            }}
+            onTournamentVictory={(prize, boost) => {
+              if (onTournamentVictory) {
+                onTournamentVictory(prize, boost);
+              }
+            }}
+          />
+        )}
       </motion.div>
-    </div>
+    </motion.div>
   );
 };

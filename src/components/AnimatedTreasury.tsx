@@ -9,7 +9,7 @@ interface AnimatedTreasuryProps {
     net: number;
     sponsorInc?: number;
   };
-  onShowTable: () => void;
+  onShowTable?: () => void;
   onShowLedger: () => void;
   
   youthCount?: number;
@@ -68,34 +68,39 @@ export const AnimatedTreasury: React.FC<AnimatedTreasuryProps> = ({
 
   return (
     <div className="flex flex-col w-full shrink-0 transition-all duration-300">
-      {/* Sleek Unified Treasury Card */}
-      <div className="bg-[#2c2c2e]/95 p-4 sm:p-4.5 rounded-[22px] border border-white/10 shadow-xl relative transition-all duration-300 flex flex-col gap-3">
+      {/* Apple-inspired Frosted Glass Treasury Card */}
+      <div className="bg-[#161820]/75 backdrop-blur-2xl p-4 sm:p-5 rounded-3xl border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.36)] relative transition-all duration-300 flex flex-col gap-3.5 overflow-hidden">
+        {/* Subtle Ambient Sky-Blue Glow */}
+        <div className="absolute -top-12 -right-12 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
         {/* Header & Balance Row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 text-xs">
-              <i className="fas fa-vault"></i>
+        <div className="flex items-center justify-between relative z-10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-sky-500/10 border border-sky-400/20 flex items-center justify-center text-sky-400 text-xs shadow-sm">
+              <i className="fa-solid fa-vault"></i>
             </div>
-            <span className="text-[11px] text-[#8e8e93] font-black uppercase tracking-wider">
+            <span className="text-[11px] text-zinc-400 font-semibold uppercase tracking-wider">
               {t('Treasury', 'Vereinskasse')}
             </span>
           </div>
           {budget < 0 && (
-            <span className="text-[9px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30 flex items-center gap-1">
-              <i className="fas fa-triangle-exclamation"></i>
-              {t('Debt', 'Schulden')}
+            <span className="text-[10px] font-medium tracking-wide bg-rose-500/10 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/20 flex items-center gap-1.5">
+              <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>
+              {t('Debt Active', 'Schulden aktiv')}
             </span>
           )}
         </div>
 
         {/* Big Crisp Balance Readout */}
-        <div className="flex items-baseline justify-between">
-          <span className="text-[10px] text-[#8e8e93] font-extrabold uppercase tracking-widest">
+        <div className="flex items-baseline justify-between relative z-10">
+          <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-widest">
             {t('Balance', 'Kontostand')}
           </span>
           <span
-            className={`text-2xl sm:text-3xl font-extrabold tracking-tight leading-none transition-colors duration-300 tabular-nums ${
-              budget < 0 ? 'text-red-400 drop-shadow-[0_0_12px_rgba(255,69,58,0.4)]' : 'text-emerald-400 drop-shadow-[0_0_12px_rgba(52,199,89,0.4)]'
+            className={`text-2xl sm:text-3xl font-black tracking-tight leading-none transition-colors duration-300 tabular-nums ${
+              budget < 0
+                ? 'text-rose-400 drop-shadow-[0_0_16px_rgba(244,63,94,0.3)]'
+                : 'text-white drop-shadow-[0_0_20px_rgba(56,189,248,0.25)]'
             }`}
           >
             {formatMoney(displayBudget)}
@@ -103,49 +108,58 @@ export const AnimatedTreasury: React.FC<AnimatedTreasuryProps> = ({
         </div>
 
         {/* Integrated Financial Summary Strip */}
-        <div className="pt-2 border-t border-white/10 text-[10px] grid grid-cols-3 gap-1 text-center bg-black/20 rounded-xl p-2">
+        <div className="text-[10px] grid grid-cols-3 gap-1 text-center bg-white/[0.03] border border-white/[0.06] rounded-2xl p-2.5 relative z-10">
           <div className="flex flex-col items-center">
-            <span className="text-emerald-500/80 uppercase font-extrabold text-[8px] tracking-wider mb-0.5">
+            <span className="text-zinc-500 uppercase font-medium text-[9px] tracking-wider mb-0.5">
               {t('Est. Rev', 'Einnahmen')}
             </span>
-            <span className="text-emerald-400 font-bold truncate">{financials.estRevenue >= 1 ? `+${formatMoney(financials.estRevenue)}` : '€0'}</span>
+            <span className="text-emerald-400 font-bold truncate">
+              {financials.estRevenue >= 1 ? `+${formatMoney(financials.estRevenue)}` : '€0'}
+            </span>
           </div>
 
-          <div className="flex flex-col items-center border-x border-white/10 px-1">
-            <span className="text-red-500/80 uppercase font-extrabold text-[8px] tracking-wider mb-0.5">
+          <div className="flex flex-col items-center border-x border-white/[0.06] px-1">
+            <span className="text-zinc-500 uppercase font-medium text-[9px] tracking-wider mb-0.5">
               {t('Expenses', 'Ausgaben')}
             </span>
-            <span className="text-red-400 font-bold truncate">{financials.wages >= 1 ? `-${formatMoney(financials.wages)}` : '€0'}</span>
-          </div>
-          
-          <div className="flex flex-col items-center">
-            <span className={`${financials.net >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'} uppercase font-extrabold text-[8px] tracking-wider mb-0.5`}>
-              {t('Op. Margin', 'Op. Marge')}
+            <span className="text-rose-400 font-bold truncate">
+              {financials.wages >= 1 ? `-${formatMoney(financials.wages)}` : '€0'}
             </span>
-            <span className={`${financials.net >= 0 ? 'text-emerald-400' : 'text-red-400'} font-bold truncate`}>
-              {financials.net >= 0 ? '+' : ''}{formatMoney(financials.net)}
+          </div>
+
+          <div className="flex flex-col items-center">
+            <span className="text-zinc-500 uppercase font-medium text-[9px] tracking-wider mb-0.5">
+              {t('Proj. Margin', 'Prognose')}
+            </span>
+            <span
+              className={`font-bold truncate ${
+                financials.net >= 0 ? 'text-sky-300' : 'text-rose-400'
+              }`}
+            >
+              {financials.net >= 0 ? '+' : ''}
+              {formatMoney(financials.net)}
             </span>
           </div>
         </div>
 
-        {/* Navigation Buttons Row ([Table], [Ledger]) */}
-        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
+        {/* Navigation Buttons Row: Standings & Financial Ledger */}
+        <div className="grid grid-cols-2 gap-2 pt-1 relative z-10">
           <button
             onClick={onShowTable}
-            className="px-2 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer border border-white/10 text-xs font-bold group shadow-sm"
-            title={t('League Standings', 'Tabelle')}
+            className="px-2.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 hover:text-white flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer border border-white/[0.08] text-xs font-semibold group shadow-sm"
+            title="League Standings & Universe Movements"
           >
-            <i className="fas fa-list-ol text-[11px] text-amber-400 group-hover:scale-110 transition"></i>
-            <span className="truncate">{t('League Standings', 'Tabelle')}</span>
+            <i className="fa-solid fa-list-ol text-[11px] text-sky-400 group-hover:scale-110 transition-transform"></i>
+            <span className="truncate">Standings</span>
           </button>
 
           <button
             onClick={onShowLedger}
-            className="px-2 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer border border-white/10 text-xs font-bold group shadow-sm"
-            title={t('Financial Ledger', 'Finanzbericht')}
+            className="px-2.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 hover:text-white flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer border border-white/[0.08] text-xs font-semibold group shadow-sm"
+            title="Financial Ledger & Balance Sheet"
           >
-            <i className="fas fa-file-invoice-dollar text-[11px] text-emerald-400 group-hover:scale-110 transition"></i>
-            <span className="truncate">{t('Financial Report', 'Finanzbericht')}</span>
+            <i className="fa-solid fa-file-invoice-dollar text-[11px] text-emerald-400 group-hover:scale-110 transition-transform"></i>
+            <span className="truncate">Ledger</span>
           </button>
         </div>
       </div>

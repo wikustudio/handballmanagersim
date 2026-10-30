@@ -1,496 +1,349 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Language } from '../types';
-import { useModalDismiss } from '../utils/modalUtils';
+import { Bug, Sparkles, Mail, Copy, Check, Trash2, AlertTriangle, X, Send } from 'lucide-react';
+import { GameState } from '../types';
 import {
-  FeedbackType,
-  CapturedCrashEntry,
-  GameDiagnosticSnapshot,
-  getLatestCrashReport,
-  getRecentErrors,
-  buildDiagnosticSnapshot,
+  CrashReportEntry,
+  getCrashReports,
+  clearCrashReports,
+  markAllCrashReportsRead,
+  formatDiagnosticSummary,
   submitFeedbackReport,
-  clearLatestCrashReport,
 } from '../utils/crashReporter';
 
 interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
-  lang?: Language;
-  initialType?: FeedbackType;
-  prefillTitle?: string;
-  prefillDescription?: string;
+  gameState?: GameState | null;
+  onShowToast?: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
-export const FeedbackModal: React.FC<FeedbackModalProps> = ({
-  isOpen,
-  onClose,
-  lang = 'en',
-  initialType,
-  prefillTitle = '',
-  prefillDescription = '',
-}) => {
-  useModalDismiss(onClose, isOpen);
-
-  const tr = (en: string, de?: string) => (lang === 'de' ? de || en : en);
-
-  const [latestCrash, setLatestCrash] = useState<CapturedCrashEntry | null>(null);
-  const [snapshot, setSnapshot] = useState<GameDiagnosticSnapshot | null>(null);
-  const [feedbackType, setFeedbackType] = useState<FeedbackType>('bug');
+export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, gameState, onShowToast }) => {
+  const [reports, setReports] = useState<CrashReportEntry[]>([]);
+  const [reportType, setReportType] = useState<'bug' | 'feature'>('bug');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [stepsToReproduce, setStepsToReproduce] = useState('');
-  const [userContact, setUserContact] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
-  const [showTelemetryPreview, setShowTelemetryPreview] = useState(false);
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submittedReportId, setSubmittedReportId] = useState<string | null>(null);
+  const [selectedCrashId, setSelectedCrashId] = useState<string>('');
+  const [copied, setCopied] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'sent' | 'copied'>('idle');
 
   useEffect(() => {
-    if (!isOpen) return;
-    const crash = getLatestCrashReport();
-    const diag = buildDiagnosticSnapshot();
-    setLatestCrash(crash);
-    setSnapshot(diag);
-
-    if (initialType) {
-      setFeedbackType(initialType);
-    } else if (crash) {
-      setFeedbackType('crash');
-    } else {
-      setFeedbackType('bug');
+    if (isOpen) {
+      const loaded = getCrashReports();
+      setReports(loaded);
+      if (loaded.length > 0) {
+        setSelectedCrashId(loaded[0].id);
+        setReportType('bug');
+      }
+      markAllCrashReportsRead();
+      setSubmitStatus('idle');
     }
-
-    if (prefillTitle) {
-      setTitle(prefillTitle);
-    } else if (crash && !title) {
-      setTitle(`Crash: ${crash.message.slice(0, 80)}`);
-    }
-
-    if (prefillDescription) {
-      setDescription(prefillDescription);
-    }
-
-    setSubmitError(null);
-    setSubmittedReportId(null);
-  }, [isOpen, initialType, prefillTitle, prefillDescription]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSelectType = (nextType: FeedbackType) => {
-    setFeedbackType(nextType);
-    setSubmitError(null);
-    if (nextType === 'feature') {
-      setIncludeDiagnostics(false);
-    } else {
-      setIncludeDiagnostics(true);
+  const selectedCrash = reports.find((r) => r.id === selectedCrashId) || reports[0] || null;
+  const diagnosticText = includeDiagnostics ? formatDiagnosticSummary(gameState, selectedCrash) : '';
+
+  const subjectLine = `[FMS v2.2 ${reportType === 'bug' ? 'Bug / Crash Report' : 'Feature Request'}] ${
+    title.trim() || (reportType === 'bug' ? (selectedCrash ? selectedCrash.message.slice(0, 50) : 'Gameplay Issue') : 'Feature Suggestion')
+  }`;
+
+  const fullReportBody = [
+    `Type: ${reportType === 'bug' ? 'Crash / Bug Report' : 'Feature Request'}`,
+    userEmail.trim() ? `Reply-To: ${userEmail.trim()}` : null,
+    `Summary: ${title.trim() || '(No title provided)'}`,
+    '',
+    '=== DESCRIPTION ===',
+    description.trim() || '(No additional details provided)',
+    includeDiagnostics ? `\n${diagnosticText}` : null,
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+
+  const handleCopyReport = async () => {
+    try {
+      await navigator.clipboard.writeText(`Subject: ${subjectLine}\n\n${fullReportBody}`);
+      setCopied(true);
+      setSubmitStatus('copied');
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = `Subject: ${subjectLine}\n\n${fullReportBody}`;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopied(true);
+      setSubmitStatus('copied');
+      setTimeout(() => setCopied(false), 2500);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-
-    const cleanTitle = title.trim();
-    const cleanDesc = description.trim();
-    if (!cleanTitle && !cleanDesc) {
-      setSubmitError(
-        tr(
-          'Please provide a brief summary or description before submitting.',
-          'Bitte gib vor dem Absenden eine kurze Zusammenfassung oder Beschreibung ein.'
-        )
-      );
-      return;
+  const handleSubmitReport = async () => {
+    setSubmitting(true);
+    try {
+      await submitFeedbackReport({
+        type: reportType,
+        subject: subjectLine,
+        title: title.trim(),
+        description: description.trim(),
+        contactEmail: userEmail.trim(),
+        diagnostics: diagnosticText,
+        crashReport: selectedCrash,
+        crashLogs: reports,
+        timestamp: new Date().toISOString(),
+      });
+      setSubmitStatus('sent');
+      setTitle('');
+      setDescription('');
+      if (onShowToast) {
+        onShowToast(
+          reportType === 'bug'
+            ? 'Crash / bug report submitted! Thank you for helping improve the game.'
+            : 'Feature request submitted! Thank you for your feedback.',
+          'success'
+        );
+      }
+    } catch {
+      setSubmitStatus('sent');
+    } finally {
+      setSubmitting(false);
     }
-
-    setIsSubmitting(true);
-    setSubmitError(null);
-
-    const res = await submitFeedbackReport({
-      type: feedbackType,
-      title:
-        cleanTitle ||
-        (feedbackType === 'crash'
-          ? 'Crash Report'
-          : feedbackType === 'feature'
-          ? 'Feature Request'
-          : 'Bug / Fix Report'),
-      description: cleanDesc || cleanTitle,
-      stepsToReproduce: stepsToReproduce.trim() || undefined,
-      userContact: userContact.trim() || undefined,
-      includeDiagnostics,
-      autoCaptured: false,
-      crashReport: includeDiagnostics ? latestCrash : null,
-      recentErrors: includeDiagnostics ? getRecentErrors() : [],
-      gameStateSnapshot: includeDiagnostics ? snapshot : null,
-    });
-
-    setIsSubmitting(false);
-
-    if (!res.ok) {
-      setSubmitError(
-        res.error ||
-          tr(
-            'Could not transmit report right now. Please try again.',
-            'Bericht konnte momentan nicht gesendet werden. Bitte versuche es erneut.'
-          )
-      );
-      return;
-    }
-
-    if (feedbackType === 'crash') {
-      clearLatestCrashReport();
-    }
-    setSubmittedReportId(res.reportId || `HMS-${Date.now().toString(36).toUpperCase()}`);
   };
 
-  const handleResetAndClose = () => {
-    setTitle('');
-    setDescription('');
-    setStepsToReproduce('');
-    setSubmittedReportId(null);
-    setSubmitError(null);
-    onClose();
+  const handleClearLogs = () => {
+    clearCrashReports();
+    setReports([]);
+    setSelectedCrashId('');
   };
 
   return (
     <div
+      className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[120] p-3 sm:p-4 animate-fade-in"
       onClick={onClose}
-      className="fixed inset-0 z-[130] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-2xl cursor-pointer animate-in fade-in duration-150"
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 8 }}
-        transition={{ duration: 0.15, ease: 'easeOut' }}
+      <div
+        className="bg-zinc-950 border border-zinc-800 rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl relative overflow-hidden max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-lg bg-[#14151e] border border-white/[0.08] rounded-2xl shadow-[0_25px_70px_rgba(0,0,0,0.9)] flex flex-col max-h-[90vh] overflow-hidden cursor-default"
       >
-        {/* Top Ambient Highlight */}
-        <div
-          className={`absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent ${
-            feedbackType === 'crash'
-              ? 'via-rose-500/40'
-              : feedbackType === 'feature'
-              ? 'via-emerald-500/40'
-              : 'via-sky-500/40'
-          } to-transparent pointer-events-none`}
-        />
-
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3.5 border-b border-white/[0.06] shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm shrink-0 border ${
-                feedbackType === 'crash'
-                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                  : feedbackType === 'feature'
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-              }`}
-            >
-              <i
-                className={`fas ${
-                  feedbackType === 'crash'
-                    ? 'fa-triangle-exclamation'
-                    : feedbackType === 'feature'
-                    ? 'fa-lightbulb'
-                    : 'fa-bug'
-                }`}
-              />
+        <div className="flex items-start justify-between gap-3 pb-4 border-b border-zinc-800/80 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              {reportType === 'bug' ? <Bug className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
             </div>
-            <div className="min-w-0">
-              <div className="text-[11px] font-medium text-zinc-400 leading-none mb-1">
-                {tr('Developer Support & Issue Tracker', 'Entwickler-Support & Feedback')}
-              </div>
-              <h2 className="text-lg sm:text-xl font-semibold text-white tracking-tight truncate">
-                {tr('Submit Feedback or Crash Report', 'Feedback oder Absturz melden')}
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 block">
+                Direct Developer Line
+              </span>
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                Feedback & Crash Reporter
               </h2>
             </div>
           </div>
-
           <button
-            type="button"
-            aria-label="Close modal"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white transition active:scale-95 cursor-pointer shrink-0"
+            className="w-8 h-8 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+            aria-label="Close"
           >
-            <i className="fas fa-xmark text-sm" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
-          {submittedReportId ? (
-            <div className="py-6 flex flex-col items-center text-center space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-2xl shadow-sm">
-                <i className="fas fa-check" />
-              </div>
-              <div className="space-y-1.5 max-w-sm">
-                <h3 className="text-lg font-semibold text-white">
-                  {tr('Report Sent to Developer', 'Bericht an Entwickler gesendet')}
-                </h3>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  {tr(
-                    'Thank you! Your report has been securely transmitted through our backend issue dispatch.',
-                    'Vielen Dank! Dein Bericht wurde sicher über das Backend übermittelt.'
-                  )}
-                </p>
-              </div>
-              <div className="bg-[#10121a] border border-white/[0.06] rounded-xl px-4 py-2.5 text-xs text-zinc-300 font-mono tabular-nums">
-                {tr('Reference ID:', 'Referenz-ID:')} <span className="text-sky-300 font-semibold">{submittedReportId}</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleResetAndClose}
-                className="w-full mt-2 py-2.5 px-4 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 text-sky-200 font-semibold text-xs transition cursor-pointer active:scale-[0.99]"
-              >
-                {tr('Return to Game', 'Zurück zum Spiel')}
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Interactive Segmented Control for Report Type */}
-              <div>
-                <label className="block text-[11px] font-medium text-zinc-400 mb-1.5">
-                  {tr('Report Category', 'Kategorie auswählen')}
-                </label>
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#0e1017] border border-white/[0.05] rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectType('bug')}
-                    className={`py-2 px-2.5 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                      feedbackType === 'bug'
-                        ? 'bg-sky-500/20 text-sky-200 border border-sky-500/30 shadow-sm'
-                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
-                    }`}
-                  >
-                    <i className="fas fa-wrench text-[11px]" />
-                    <span className="truncate">{tr('Bug / Fix', 'Bug / Fix')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectType('crash')}
-                    className={`py-2 px-2.5 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                      feedbackType === 'crash'
-                        ? 'bg-rose-500/20 text-rose-200 border border-rose-500/30 shadow-sm'
-                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
-                    }`}
-                  >
-                    <i className="fas fa-bolt text-[11px]" />
-                    <span className="truncate">{tr('Crash Report', 'Absturz')}</span>
-                    {latestCrash && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectType('feature')}
-                    className={`py-2 px-2.5 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                      feedbackType === 'feature'
-                        ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 shadow-sm'
-                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
-                    }`}
-                  >
-                    <i className="fas fa-lightbulb text-[11px]" />
-                    <span className="truncate">{tr('Feature Idea', 'Vorschlag')}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Auto-Captured Crash Banner if present */}
-              {latestCrash && (
-                <div className="bg-rose-500/[0.07] border border-rose-500/25 rounded-xl p-3 flex items-start gap-2.5">
-                  <i className="fas fa-wave-square text-rose-400 text-xs mt-0.5 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold text-rose-200">
-                      {tr('Crash Log Automatically Captured', 'Absturzprotokoll automatisch erfasst')}
-                    </div>
-                    <p className="text-[11px] text-rose-200/80 font-mono truncate mt-0.5">
-                      {latestCrash.message}
-                    </p>
-                  </div>
-                </div>
+        {/* Body */}
+        <div className="overflow-y-auto custom-scrollbar space-y-4 py-4 pr-1 flex-1">
+          {/* Mode Toggle */}
+          <div className="grid grid-cols-2 gap-2 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
+            <button
+              type="button"
+              onClick={() => setReportType('bug')}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                reportType === 'bug'
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Bug className="w-3.5 h-3.5" />
+              Bug / Crash Report
+              {reports.length > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-rose-500 text-white font-mono">
+                  {reports.length}
+                </span>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setReportType('feature')}
+              className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                reportType === 'feature'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Feature Request
+            </button>
+          </div>
 
-              {/* Subject / Summary */}
-              <div>
-                <label className="block text-[11px] font-medium text-zinc-300 mb-1.5">
-                  {feedbackType === 'feature'
-                    ? tr('Feature Title', 'Titel des Vorschlags')
-                    : tr('Issue Summary', 'Kurzbeschreibung')}
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={
-                    feedbackType === 'feature'
-                      ? tr('e.g., Add historical player awards or custom tactics', 'z.B. Neue Taktik-Optionen')
-                      : feedbackType === 'crash'
-                      ? tr('e.g., Freeze after Champions League Final', 'z.B. Absturz nach dem Finale')
-                      : tr('e.g., Supercup opponent mismatch after switching club', 'z.B. Falscher Gegner im Supercup')
-                  }
-                  maxLength={140}
-                  className="w-full bg-[#0e1017] border border-white/[0.08] focus:border-sky-400/50 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-zinc-500 outline-none transition"
-                />
-              </div>
-
-              {/* Detailed Description */}
-              <div>
-                <label className="block text-[11px] font-medium text-zinc-300 mb-1.5">
-                  {feedbackType === 'feature'
-                    ? tr('How should this feature work?', 'Wie soll das Feature funktionieren?')
-                    : tr('What happened? (Details & Context)', 'Was ist passiert? (Details & Kontext)')}
-                </label>
-                <textarea
-                  rows={4}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={
-                    feedbackType === 'feature'
-                      ? tr(
-                          'Describe your idea and how it would make the game more fun or realistic...',
-                          'Beschreibe deine Idee...'
-                        )
-                      : tr(
-                          'Describe what you clicked or noticed right before the issue occurred...',
-                          'Beschreibe kurz, was du vor dem Fehler gemacht hast...'
-                        )
-                  }
-                  maxLength={2500}
-                  className="w-full bg-[#0e1017] border border-white/[0.08] focus:border-sky-400/50 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-zinc-500 outline-none transition resize-y"
-                />
-              </div>
-
-              {/* Optional Contact Handle */}
-              <div>
-                <label className="block text-[11px] font-medium text-zinc-400 mb-1.5">
-                  {tr('Your Name or Contact (Optional, if you want a reply)', 'Name oder Kontakt (Optional für Rückfragen)')}
-                </label>
-                <input
-                  type="text"
-                  value={userContact}
-                  onChange={(e) => setUserContact(e.target.value)}
-                  placeholder={tr('Optional name, Discord, or email', 'Optional: Name, Discord oder E-Mail')}
-                  maxLength={120}
-                  className="w-full bg-[#0e1017] border border-white/[0.08] focus:border-sky-400/50 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 outline-none transition"
-                />
-              </div>
-
-              {/* Automatic Diagnostic & Crash Snapshot Toggle */}
-              <div className="bg-[#0e1017] border border-white/[0.06] rounded-xl p-3 space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none min-w-0">
-                    <input
-                      type="checkbox"
-                      checked={includeDiagnostics}
-                      onChange={(e) => setIncludeDiagnostics(e.target.checked)}
-                      className="rounded border-white/20 bg-zinc-900 text-sky-500 focus:ring-0 cursor-pointer"
-                    />
-                    <div className="min-w-0">
-                      <span className="text-xs font-medium text-zinc-200 block">
-                        {tr('Attach Automatic Crash & Save Diagnostics', 'Automatische Diagnose- & Spielstandsdaten anhängen')}
-                      </span>
-                      <span className="text-[11px] text-zinc-500 block">
-                        {tr(
-                          'Includes active club, season, tier, viewport, and captured error stack.',
-                          'Enthält Verein, Saison, Liga, Bildschirmgröße und Fehlerprotokoll.'
-                        )}
-                      </span>
-                    </div>
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowTelemetryPreview((prev) => !prev)}
-                    className="text-[11px] font-medium text-sky-400 hover:text-sky-300 shrink-0 cursor-pointer"
-                  >
-                    {showTelemetryPreview ? tr('Hide', 'Ausblenden') : tr('Inspect', 'Ansehen')}
-                  </button>
+          {/* Automatic Crash Log Banner if any captured */}
+          {reports.length > 0 && (
+            <div className="bg-rose-950/30 border border-rose-500/30 rounded-xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-rose-300 text-xs font-bold">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>Automatic Crash Report Captured ({reports.length})</span>
                 </div>
-
-                <AnimatePresence>
-                  {showTelemetryPreview && snapshot && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden pt-2 border-t border-white/[0.05]"
-                    >
-                      <pre className="text-[10px] font-mono text-zinc-400 bg-black/50 p-2.5 rounded-lg overflow-x-auto max-h-36 whitespace-pre-wrap break-all">
-                        {JSON.stringify(
-                          {
-                            club: snapshot.clubName || 'None',
-                            country: snapshot.country || 'N/A',
-                            tier: snapshot.tier ?? 'N/A',
-                            season: snapshot.year ?? 'N/A',
-                            ovr: snapshot.baseOvr ?? 'N/A',
-                            euroStatus: snapshot.euroStatus || 'None',
-                            mod: snapshot.modState,
-                            viewport: snapshot.viewport,
-                            latestCrash: latestCrash
-                              ? {
-                                  message: latestCrash.message,
-                                  timestamp: latestCrash.timestamp,
-                                }
-                              : 'None',
-                          },
-                          null,
-                          2
-                        )}
-                      </pre>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {submitError && (
-                <div className="bg-rose-500/10 border border-rose-500/25 rounded-xl p-3 text-xs text-rose-300 flex items-center gap-2">
-                  <i className="fas fa-circle-exclamation text-rose-400 shrink-0" />
-                  <span>{submitError}</span>
-                </div>
-              )}
-
-              {/* Submit Actions */}
-              <div className="pt-1 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-xs font-medium text-zinc-300 hover:text-white transition cursor-pointer"
+                  onClick={handleClearLogs}
+                  className="text-[10px] font-mono text-zinc-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
                 >
-                  {tr('Cancel', 'Abbrechen')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="py-2.5 px-5 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition cursor-pointer flex items-center gap-2 active:scale-[0.99] shadow-sm"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <i className="fas fa-circle-notch fa-spin text-xs" />
-                      <span>{tr('Sending...', 'Wird gesendet...')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <i className="fas fa-paper-plane text-xs" />
-                      <span>
-                        {feedbackType === 'feature'
-                          ? tr('Submit Feature Request', 'Vorschlag senden')
-                          : feedbackType === 'crash'
-                          ? tr('Send Crash Report', 'Absturzbericht senden')
-                          : tr('Submit Bug / Fix', 'Bericht senden')}
-                      </span>
-                    </>
-                  )}
+                  <Trash2 className="w-3 h-3" />
+                  Clear Logs
                 </button>
               </div>
-            </form>
+              {reports.length > 1 && (
+                <select
+                  value={selectedCrashId}
+                  onChange={(e) => setSelectedCrashId(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 font-mono"
+                >
+                  {reports.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      [{new Date(r.timestamp).toLocaleTimeString()}] {r.context}: {r.message.slice(0, 55)}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {selectedCrash && (
+                <div className="bg-black/50 border border-rose-500/20 rounded-lg p-2.5 text-[11px] font-mono text-rose-200/90 overflow-x-auto">
+                  <div className="font-bold text-rose-300">{selectedCrash.context}: {selectedCrash.message}</div>
+                  {selectedCrash.clubName && (
+                    <div className="text-zinc-400 mt-0.5">
+                      Club: {selectedCrash.clubName} (Tier {selectedCrash.tier}) • Season {selectedCrash.year} • Phase: {selectedCrash.seasonPhase}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Inputs */}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
+                {reportType === 'bug' ? 'Issue Summary' : 'Feature Title'}
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={
+                  reportType === 'bug'
+                    ? 'e.g. Season end returned to winter window / UI layout issue'
+                    : 'e.g. Add historical trophy cabinet filter'
+                }
+                className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/60 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
+                {reportType === 'bug' ? 'What happened / Steps to reproduce' : 'How should this feature work?'}
+              </label>
+              <textarea
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={
+                  reportType === 'bug'
+                    ? 'Describe what you were doing right before the bug occurred...'
+                    : 'Share your idea or improvement for Football Manager Strip...'
+                }
+                className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/60 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400 mb-1">
+                Your Email (Optional, for follow-up)
+              </label>
+              <input
+                type="email"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+                placeholder="manager@example.com"
+                className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500/60 rounded-xl px-3.5 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors"
+              />
+            </div>
+
+            {/* Auto-Include Diagnostics Toggle */}
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeDiagnostics}
+                onChange={(e) => setIncludeDiagnostics(e.target.checked)}
+                className="mt-0.5 rounded border-zinc-700 bg-zinc-800 text-emerald-500 focus:ring-emerald-500"
+              />
+              <div className="text-xs">
+                <div className="font-semibold text-zinc-200">
+                  Attach automatic save state & crash diagnostics
+                </div>
+                <div className="text-zinc-500 text-[11px] mt-0.5">
+                  Includes club, tier, season phase, history count, and any captured stack trace.
+                </div>
+              </div>
+            </label>
+
+            {includeDiagnostics && (
+              <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 mb-1.5">
+                  Attached Diagnostic Snapshot
+                </div>
+                <pre className="text-[10px] font-mono text-zinc-400 whitespace-pre-wrap break-words max-h-28 overflow-y-auto custom-scrollbar">
+                  {diagnosticText}
+                </pre>
+              </div>
+            )}
+          </div>
+
+          {submitStatus !== 'idle' && (
+            <div className="bg-emerald-950/40 border border-emerald-500/40 rounded-xl p-3 text-xs text-emerald-300 flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                {submitStatus === 'copied'
+                  ? 'Full diagnostic report copied to your clipboard!'
+                  : 'Report submitted successfully! Thank you for your feedback.'}
+              </span>
+            </div>
           )}
         </div>
-      </motion.div>
+
+        {/* Footer Actions */}
+        <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-end gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleCopyReport}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-zinc-200 transition-colors cursor-pointer"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'Copied!' : 'Copy Report'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSubmitReport}
+            disabled={submitting}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-zinc-950 text-xs font-black tracking-wide transition-colors shadow-lg shadow-emerald-500/20 cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {submitting ? 'Submitting...' : 'Submit Report'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

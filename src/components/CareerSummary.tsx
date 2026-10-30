@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as htmlToImage from 'html-to-image';
+import confetti from 'canvas-confetti';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,25 +13,26 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { GameState, Language } from '../types';
+import { GameState, Language, WorldCupCampaignHistoryRecord } from '../types';
+import { NATIONAL_TEAMS } from '../engine/internationalEngine';
 import { getContinentalCupNames } from '../utils/regionHelpers';
 import { getTrophyImage, getTrophyFilter } from '../utils/trophyHelpers';
 import { 
   MAX_SEASONS,
+  formatNum,
   getInitials,
   getMonogramHex,
   getOvrColor,
   getLeagueInfo,
   getDomesticCupInfo,
   calculateClubReputation,
-  HISTORICAL_MANAGERS,
-  TOURNAMENT_LOGOS, getMaxTier } from '../data/gameConstants';
+  HISTORICAL_DIRECTORS,
+  TOURNAMENT_LOGOS, 
+  getMaxTier 
+} from '../data/gameConstants';
 import { ALL_CLUBS } from '../data/clubsData';
-import { getActiveClubs, isAnyModActive } from '../utils/modManager';
 import { ClubLogo } from './ClubLogo';
 import { t as tr } from '../data/translations';
-import { calculateLiveScore, saveHighscore } from '../utils/leaderboard';
-import { useModalDismiss } from '../utils/modalUtils';
 
 ChartJS.register(
   CategoryScale,
@@ -48,12 +50,18 @@ interface CareerSummaryProps {
   lang: Language;
   onReset: () => void;
   onContinueEndless?: () => void;
-  onShowToast?: (msg: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+  onShowToast: (msg: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   onClose?: () => void;
   onShowLeaderboard?: () => void;
+  globalHighscores?: { directorName?: string; managerName?: string; score: number }[];
+  isModActive?: boolean;
+  onOpenWorldCupHistory?: () => void;
 }
 
+type SummaryTab = 'card' | 'chart' | 'clubs' | 'leaderboard';
+
 export const CareerSummary: React.FC<CareerSummaryProps> = ({
+  globalHighscores,
   state,
   lang,
   onReset,
@@ -61,23 +69,46 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
   onClose,
   onContinueEndless,
   onShowLeaderboard,
+  isModActive,
+  onOpenWorldCupHistory,
 }) => {
-  useModalDismiss(onClose, Boolean(onClose));
-  const t = (en: string, _de?: string, _ignoredEs?: string) => en;
-  const [activeMobileTab, setActiveMobileTab] = useState<'card' | 'chart' | 'clubs'>('card');
+  const t = (en: string, de?: string, _ignoredEs?: string) => tr(lang, en, de);
+  const [activeTab, setActiveTab] = useState<SummaryTab>('card');
   const [isDownloading, setIsDownloading] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(true);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const winPct =
-    state.totals?.matches > 0
-      ? Math.round((state.totals.wins / state.totals.matches) * 100)
-      : 0;
+  // Top 3 Celebration Confetti
+  useEffect(() => {
+    if (globalHighscores && globalHighscores.length > 0) {
+      const myScore = state.careerScore || 0;
+      const allScores = [...globalHighscores.map(g => g.score), myScore].sort((a, b) => b - a);
+      const myRank = allScores.indexOf(myScore) + 1;
 
-  const history = state.history || [];
+      if (myRank <= 3) {
+        const duration = 5 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 35, spread: 360, ticks: 80, zIndex: 999999 };
+        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
-  // 2. Fetch AI Summary on mount
+        const interval = setInterval(function() {
+          const timeLeft = animationEnd - Date.now();
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
+          const particleCount = 70 * (timeLeft / duration);
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+          confetti({ ...defaults, particleCount, origin: { x: 0.5, y: 0.35 } });
+        }, 300);
+        
+        return () => clearInterval(interval);
+      }
+    }
+  }, [globalHighscores, state.careerScore]);
+
+  // Fetch AI Career Summary or client-side fallback
   useEffect(() => {
     let isMounted = true;
     const fetchSummary = async () => {
@@ -86,7 +117,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            managerName: state.managerName,
+            directorName: (state.managerName || (lang === 'de' ? 'Der Manager' : 'The Manager')),
             clubName: state.club.name,
             managedClubs: Array.from(new Set(state.history?.map(h => h.clubName) || [])),
             seasons: state.history?.length || 0,
@@ -101,11 +132,6 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
           })
         });
         
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error("KEY_MISSING");
-        }
-        
         const data = await response.json();
         if (!response.ok) {
            if (data.error === "GEMINI_API_KEY not configured") {
@@ -118,65 +144,56 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
           setAiSummary(data.text);
         }
       } catch (err: any) {
-        if (err.message !== "KEY_MISSING" && err.name !== "SyntaxError") {
-          console.warn("AI Summary using offline procedural generator:", err.message);
-        }
         if (isMounted) {
-           
-    const earlyQuits = [
-      `After a mere ${state.history?.length || 0} seasons across clubs like ${Array.from(new Set(state.history?.map(h => h.clubName) || [])).slice(0, 3).join(', ')}, ${state.managerName} packed their bags, proving they simply couldn't handle the heat.`,
-      `${state.managerName} throws in the towel after just ${state.history?.length || 0} seasons, presumably to pursue a career in television punditry.`,
-      `Fleeing coaching after ${state.history?.length || 0} seasons, ${state.managerName} leaves behind a trail of confused fans and half-finished tactical whiteboards at ${state.club.name}.`
-    ];
-    
-    const endlessCareers = [
-      `Refusing to retire after an absurd ${state.history?.length || 0} campaigns at clubs like ${Array.from(new Set(state.history?.map(h => h.clubName) || [])).slice(0, 3).join(', ')}, ${state.managerName} has basically become part of the arena architecture.`,
-      `After ${state.history?.length || 0} seasons in the dugout, ${state.managerName} finally retires, presumably because they ran out of tracksuits.`,
-      `${state.history?.length || 0} seasons. ${state.totals?.matches || 0} matches. ${state.managerName}'s reign lasted longer than most modern nations.`
-    ];
-    
-    const standardCareers = [
-      `${state.managerName} calls time on a textbook ${state.history?.length || 0}-season stint across clubs like ${Array.from(new Set(state.history?.map(h => h.clubName) || [])).slice(0, 3).join(', ')}, stepping away from the touchline at last.`,
-      `The ${state.managerName} era comes to an end after ${state.history?.length || 0} solid campaigns of touchline theatrics.`,
-      `After ${state.history?.length || 0} seasons of tactical tweaks and media scuffles, ${state.managerName} bids farewell to the fans of ${state.club.name} and others.`
-    ];
+          const seasons = state.history?.length || 0;
+          const trophies = state.totals?.trophies || 0;
+          const matches = state.totals?.matches || 0;
+          const wins = state.totals?.wins || 0;
+          const winPct = matches > 0 ? Math.round((wins / matches) * 100) : 0;
+          const managerName = state.managerName || (lang === 'de' ? 'Der Manager' : 'The Manager');
 
-    const frauds = [
-      `Despite a ${winPct}% win rate, they depart with an empty trophy cabinet and the undeniable label of a tactical fraud.`,
-      `Zero trophies across ${state.totals?.matches || 0} matches is a special kind of achievement, cementing their legacy as a total fraud.`,
-      `They leave with 0 pieces of silverware, proving that possession stats don't win you handball matches.`
-    ];
+          const earlyQuits = [
+            `After a mere ${seasons} seasons across clubs like ${Array.from(new Set(state.history?.map(h => h.clubName) || [])).slice(0, 3).join(', ')}, ${managerName} packed their bags, proving they simply couldn't handle the heat.`,
+            `${managerName} throws in the towel after just ${seasons} seasons, stepping away from the technical area.`,
+            `Fleeing management after ${seasons} seasons, ${managerName} leaves behind an intriguing tactical legacy at ${state.club.name}.`
+          ];
 
-    const cheatCodes = [
-      `A haul of ${state.totals?.trophies || 0} trophies makes this run look less like real life and more like a video game cheat code.`,
-      `Collecting ${state.totals?.trophies || 0} pieces of silverware along the way, this coach essentially completed handball.`,
-      `With ${state.totals?.trophies || 0} trophies secured, they leave behind a legacy so dominant it should probably be investigated by the authorities.`
-    ];
+          const endlessCareers = [
+            `Stepping through ${seasons} campaigns at clubs like ${Array.from(new Set(state.history?.map(h => h.clubName) || [])).slice(0, 3).join(', ')}, ${managerName} has basically become part of modern football folklore.`,
+            `After ${seasons} seasons at the highest level, ${managerName} concludes a historic and enduring managerial reign.`,
+            `${seasons} seasons, ${matches} matches. ${managerName}'s tenure stands as an indelible landmark.`
+          ];
 
-    const averages = [
-      `Walking away with ${state.totals?.trophies || 0} pieces of silverware, they leave behind a respectable, if slightly chaotic, legacy.`,
-      `They managed to scrape together ${state.totals?.trophies || 0} trophies, providing just enough joy to keep the board from sacking them.`,
-      `With ${state.totals?.trophies || 0} trophies to their name, they'll be remembered fondly, though perhaps not with a statue.`
-    ];
+          const standardCareers = [
+            `${managerName} calls time on a textbook ${seasons}-season stint across clubs like ${Array.from(new Set(state.history?.map(h => h.clubName) || [])).slice(0, 3).join(', ')}, stepping away from the touchline with distinction.`,
+            `The ${managerName} era comes to an end after ${seasons} campaigns of refined sporting direction and high-stakes football.`,
+            `After ${seasons} seasons of tactical mastery and roster management, ${managerName} bids farewell to the supporters of ${state.club.name}.`
+          ];
 
-    const randomPick = (arr: any) => arr[Math.floor(Math.random() * arr.length)];
-    const seasons = state.history?.length || 0;
-    const trophies = state.totals?.trophies || 0;
-    
-    let s1 = "";
-    if (seasons < 35) s1 = randomPick(earlyQuits);
-    else if (seasons > 35) s1 = randomPick(endlessCareers);
-    else s1 = randomPick(standardCareers);
+          const frauds = [
+            `Despite a ${winPct}% win rate, they depart with an empty trophy cabinet and the elusive title of a purist theoretician.`,
+            `Zero trophies across ${matches} matches leaves an appetite for silverware unfulfilled.`,
+            `They leave with 0 pieces of silverware, demonstrating that stylistic football alone doesn't always guarantee medals.`
+          ];
 
-    let s2 = "";
-    if (trophies === 0) s2 = randomPick(frauds);
-    else if (trophies >= (seasons * 0.5)) s2 = randomPick(cheatCodes);
-    else s2 = randomPick(averages);
+          const cheatCodes = [
+            `A glittering haul of ${trophies} trophies elevates this career into an untouchable golden pantheon.`,
+            `Collecting ${trophies} pieces of silverware along the journey, this director effectively mastered every level of competition.`,
+            `With ${trophies} trophies secured, they leave behind an era of undisputed supremacy.`
+          ];
 
-    const clientSideSummary = s1 + " " + s2;
+          const averages = [
+            `Walking away with ${trophies} pieces of silverware, they leave behind a respectable and hard-earned legacy.`,
+            `Securing ${trophies} major trophies provided plenty of indelible memories for loyal supporters.`,
+            `With ${trophies} trophies in the cabinet, they will be remembered fondly across every club they guided.`
+          ];
 
-           setAiSummary(clientSideSummary);
-           setAiError(null);
+          const randomPick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+          let s1 = seasons < 35 ? randomPick(earlyQuits) : seasons > 35 ? randomPick(endlessCareers) : randomPick(standardCareers);
+          let s2 = trophies === 0 ? randomPick(frauds) : trophies >= (seasons * 0.5) ? randomPick(cheatCodes) : randomPick(averages);
+
+          setAiSummary(`${s1} ${s2}`);
+          setAiError(null);
         }
       } finally {
         if (isMounted) setIsAiLoading(false);
@@ -189,58 +206,20 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
       isMounted = false;
     };
   }, []);
+
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const historyDomTrophies = history.reduce(
-    (acc, h) =>
-      acc +
-      (h.trophiesThisYear?.bl || 0) +
-      (h.trophiesThisYear?.lower || 0) +
-      (h.trophiesThisYear?.dfb || 0) +
-      (h.trophiesThisYear?.reg || 0) +
-      (h.trophiesThisYear?.sc || 0),
-    0
-  );
-  const domTrophies = Math.max(state.totals?.domTrophies ?? 0, historyDomTrophies);
-
-  const formatScore = (score: number) => {
-    if (score >= 1000000) return (score / 1000000).toFixed(1) + 'm';
-    if (score >= 1000) return Math.floor(score / 1000) + 'k';
-    return score.toString();
-  };
-
-  const currentScore = calculateLiveScore(state);
-
-  const historyIntTrophies = history.reduce(
-    (acc, h) =>
-      acc +
-      (h.trophiesThisYear?.cl || 0) +
-      (h.trophiesThisYear?.el || 0) +
-      (h.trophiesThisYear?.ecl || 0) +
-      (h.trophiesThisYear?.cwc || 0) +
-      (h.trophiesThisYear?.esc || 0),
-    0
-  );
-  const intTrophies = Math.max(state.totals?.intTrophies ?? 0, historyIntTrophies);
-  const totalTrophies = Math.max(state.totals?.trophies ?? 0, domTrophies + intTrophies);
-
-  const clWins =
-    state.clWins ??
-    history.reduce((acc, h) => acc + (h.trophiesThisYear?.cl || 0), 0);
+  const history = state.history || [];
+  const matches = state.totals?.matches || 0;
+  const wins = state.totals?.wins || 0;
+  const winPct = matches > 0 ? Math.round((wins / matches) * 100) : 0;
+  const totalTrophies = state.totals?.trophies || 0;
 
   const managerReputation = Math.min(100, Math.max(0, Math.round(state.reputation || 50)));
   const clubReputation = Math.min(100, Math.max(1, calculateClubReputation(state.club.baseOvr, state.club.tier)));
 
   const finalCountry = state.club.country || 'GER';
-  const isEcu = finalCountry === 'ECU';
-  const isUsa = finalCountry === 'USA';
-  const clLogo = getTrophyImage('cl', finalCountry);
-  const elLogo = getTrophyImage('el', finalCountry);
-  const eclLogo = getTrophyImage('ecl', finalCountry);
   const { cl: clTitle, el: elTitle, ecl: eclTitle } = getContinentalCupNames(finalCountry);
-  const mainLeagueTitle = getLeagueInfo(1, finalCountry || 'GER').name;
-  const mainCupTitle = getDomesticCupInfo(finalCountry, 1).name || 'National Cup';
-  
 
   const clubStats: Record<
     string,
@@ -256,23 +235,18 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
     }
   > = {};
 
-
-  const totalTrophyCounts = { cl: 0, el: 0, ecl: 0, cwc: 0, bl: 0, lower: 0, dfb: 0, reg: 0 };
+  const totalTrophyCounts = { cl: 0, el: 0, ecl: 0, cwc: 0, bl: 0, lower: 0, dfb: 0, reg: 0, wc: 0 };
   history.forEach((h) => {
     if (h.trophiesThisYear) {
-      const isLower = Boolean(h.promoted || (h.tier && h.tier > 1));
-      const isChamp = h.pos === undefined || h.pos === 1;
-      const blCount = (!isLower && h.tier === 1 && !h.promoted && isChamp && h.trophiesThisYear.bl) ? (h.trophiesThisYear.bl || 1) : 0;
-      const lowerCount = (h.trophiesThisYear.lower || 0) + ((isLower && isChamp) ? (h.trophiesThisYear.bl || 0) : 0);
-
       totalTrophyCounts.cl += h.trophiesThisYear.cl || 0;
       totalTrophyCounts.el += h.trophiesThisYear.el || 0;
       totalTrophyCounts.ecl += h.trophiesThisYear.ecl || 0;
       totalTrophyCounts.cwc = (totalTrophyCounts.cwc || 0) + (h.trophiesThisYear.cwc || 0);
-      totalTrophyCounts.bl += blCount;
-      totalTrophyCounts.lower += lowerCount;
+      totalTrophyCounts.bl += h.trophiesThisYear.bl || 0;
+      totalTrophyCounts.lower += h.trophiesThisYear.lower || 0;
       totalTrophyCounts.dfb += h.trophiesThisYear.dfb || 0;
       totalTrophyCounts.reg += h.trophiesThisYear.reg || 0;
+      totalTrophyCounts.wc += h.trophiesThisYear.wc || 0;
     }
 
     if (!clubStats[h.clubName]) {
@@ -290,39 +264,130 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
     const club = clubStats[h.clubName];
     club.seasons += 1;
     if (!h.bankrupt) {
-      const seasonMatches = (h.wins !== undefined && h.draws !== undefined && h.losses !== undefined)
-        ? ((h.wins || 0) + (h.draws || 0) + (h.losses || 0))
-        : 34;
-      club.matches += seasonMatches;
+      club.matches += 34;
       club.wins += (h.wins || 0);
     }
     if (h.trophiesThisYear) {
-      const isLower = Boolean(h.promoted || (h.tier && h.tier > 1));
-      const isChamp = h.pos === undefined || h.pos === 1;
-      const blCount = (!isLower && h.tier === 1 && !h.promoted && isChamp && h.trophiesThisYear.bl) ? (h.trophiesThisYear.bl || 1) : 0;
-      const lowerCount = (h.trophiesThisYear.lower || 0) + ((isLower && isChamp) ? (h.trophiesThisYear.bl || 0) : 0);
-
       club.trophyCounts.cl += h.trophiesThisYear.cl || 0;
       club.trophyCounts.el += h.trophiesThisYear.el || 0;
       club.trophyCounts.ecl += h.trophiesThisYear.ecl || 0;
       club.trophyCounts.cwc = (club.trophyCounts.cwc || 0) + (h.trophiesThisYear.cwc || 0);
-      club.trophyCounts.bl += blCount;
-      club.trophyCounts.lower += lowerCount;
+      club.trophyCounts.bl += h.trophiesThisYear.bl || 0;
+      club.trophyCounts.lower += h.trophiesThisYear.lower || 0;
       club.trophyCounts.dfb += h.trophiesThisYear.dfb || 0;
       club.trophyCounts.reg += h.trophiesThisYear.reg || 0;
     }
   });
 
-  if (Object.keys(clubStats).length === 0 && state.club?.name) {
-    clubStats[state.club.name] = {
-      name: state.club.name,
-      color: state.club.colors?.primary || '#0a84ff',
-      logo: state.club.logo,
-      country: state.club.country,
-      seasons: 1,
-      matches: state.totals?.matches || 0,
-      wins: state.totals?.wins || 0,
-      trophyCounts: { cl: 0, el: 0, ecl: 0, cwc: 0, bl: 0, lower: 0, dfb: 0, reg: 0 },
+  // Aggregate National Team (World Cup) participation stats
+  interface NationalTeamTenureStats {
+    name: string;
+    code?: string;
+    flag: string;
+    color: string;
+    years: number[];
+    matches: number;
+    wins: number;
+    draws: number;
+    losses: number;
+    goalsFor: number;
+    goalsAgainst: number;
+    trophiesCount: number;
+    bestFinish: string;
+    campaigns: WorldCupCampaignHistoryRecord[];
+  }
+
+  const nationalStats: Record<string, NationalTeamTenureStats> = {};
+  const rawCampaigns: WorldCupCampaignHistoryRecord[] = Array.isArray(state.worldCupCampaigns) ? state.worldCupCampaigns : [];
+
+  rawCampaigns.forEach((camp) => {
+    const teamName = camp.teamName || 'National Team';
+    const ntMeta = NATIONAL_TEAMS.find(
+      (nt) => nt.name.toLowerCase() === teamName.toLowerCase() || nt.code === teamName
+    );
+    const resolvedName = ntMeta?.name || teamName;
+
+    if (!nationalStats[resolvedName]) {
+      nationalStats[resolvedName] = {
+        name: resolvedName,
+        code: ntMeta?.code,
+        flag: camp.teamFlag || ntMeta?.flag || '🌍',
+        color: ntMeta?.color || '#3b82f6',
+        years: [],
+        matches: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        goalsFor: 0,
+        goalsAgainst: 0,
+        trophiesCount: 0,
+        bestFinish: camp.bestFinish || 'Participant',
+        campaigns: []
+      };
+    }
+
+    const stat = nationalStats[resolvedName];
+    stat.campaigns.push(camp);
+    if (!stat.years.includes(camp.year)) stat.years.push(camp.year);
+    stat.matches += camp.matchesPlayed || 0;
+    stat.wins += camp.matchesWon || 0;
+    stat.draws += camp.matchesDrawn || 0;
+    stat.losses += camp.matchesLost || 0;
+    stat.goalsFor += camp.goalsFor || 0;
+    stat.goalsAgainst += camp.goalsAgainst || 0;
+    if (camp.wonTrophy || (camp.bestFinish && camp.bestFinish.toLowerCase().includes('champ'))) {
+      stat.trophiesCount += 1;
+    }
+
+    const finishRank = (f: string): number => {
+      const lower = (f || '').toLowerCase();
+      if (lower.includes('champ') || lower.includes('winner') || lower.includes('meister')) return 6;
+      if (lower.includes('final') && !lower.includes('semi') && !lower.includes('quarter')) return 5;
+      if (lower.includes('semi')) return 4;
+      if (lower.includes('quarter')) return 3;
+      if (lower.includes('16') || lower.includes('achtel')) return 2;
+      return 1;
+    };
+
+    if (finishRank(camp.bestFinish) > finishRank(stat.bestFinish)) {
+      stat.bestFinish = camp.bestFinish;
+    }
+  });
+
+  if (
+    Object.keys(nationalStats).length === 0 &&
+    ((state.worldCupMatchesPlayed || 0) > 0 ||
+      (state.worldCupTournamentsPlayed || 0) > 0 ||
+      (state.worldCupTrophies || 0) > 0 ||
+      (state.internationalTrophies || 0) > 0 ||
+      (totalTrophyCounts.wc || 0) > 0)
+  ) {
+    const teamName =
+      state.worldCupLastTeam ||
+      (state.club?.country ? (NATIONAL_TEAMS.find((nt) => nt.code === state.club.country)?.name || 'National Team') : 'National Team');
+    const ntMeta = NATIONAL_TEAMS.find(
+      (nt) => nt.name.toLowerCase() === teamName.toLowerCase() || nt.code === teamName
+    );
+    const resolvedName = ntMeta?.name || teamName;
+    const won =
+      (state.worldCupTrophies || 0) > 0 ||
+      (state.internationalTrophies || 0) > 0 ||
+      (totalTrophyCounts.wc || 0) > 0;
+    nationalStats[resolvedName] = {
+      name: resolvedName,
+      code: ntMeta?.code,
+      flag: ntMeta?.flag || '🌍',
+      color: ntMeta?.color || '#3b82f6',
+      years: [2026],
+      matches: state.worldCupMatchesPlayed || (won ? 7 : 4),
+      wins: state.worldCupMatchesWon || (won ? 6 : 2),
+      draws: state.worldCupMatchesDrawn || 0,
+      losses: state.worldCupMatchesLost || (won ? 1 : 2),
+      goalsFor: state.worldCupGoalsFor || (won ? 14 : 6),
+      goalsAgainst: state.worldCupGoalsAgainst || (won ? 5 : 5),
+      trophiesCount: Math.max(state.worldCupTrophies || 0, state.internationalTrophies || 0, totalTrophyCounts.wc || 0, won ? 1 : 0),
+      bestFinish: state.worldCupBestFinish || (won ? 'Champion' : 'World Cup Participant'),
+      campaigns: []
     };
   }
 
@@ -331,24 +396,17 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
     setIsDownloading(true);
     
     try {
-      const fallbackDataUri = 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
       const blob = await htmlToImage.toBlob(cardRef.current, {
         quality: 1.0,
-        backgroundColor: '#1c1c1e',
+        backgroundColor: '#0c0d14',
         style: { transform: 'scale(1)', transformOrigin: 'top left' },
-        includeQueryParams: true,
-        imagePlaceholder: fallbackDataUri,
-        filter: (node: any) => node.tagName !== 'IMG',
+        filter: () => true,
       });
-      if (!blob) throw new Error('Failed to create blob');
+      if (!blob) throw new Error('Failed to create image blob');
       
       const filename = `career-legacy-${state.club.name.replace(/\s+/g, '-')}.png`;
       const file = new File([blob], filename, { type: 'image/png' });
-      
-      const score = Math.round(calculateLiveScore(state));
-      const trophies = totalTrophies;
-      const shareUrl = `https://handballmanagersim.com/?share=dynasty&club=${encodeURIComponent(state.club.name)}&manager=${encodeURIComponent(state.managerName)}&trophies=${trophies}&score=${score}`;
-      const text = `I finished a ${MAX_SEASONS}-season career with ${state.club.name} and won ${trophies} trophies! Play free: ${shareUrl} #HandballManagerSim`;
+      const text = `I completed a ${history.length}-season career with ${state.club.name} and won ${totalTrophies} trophies!`;
       
       const fallbackDownload = () => {
         const url = URL.createObjectURL(blob);
@@ -362,9 +420,8 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
-            title: 'Handball Manager Legacy',
+            title: 'Sporting Director Legacy',
             text: text,
-            url: shareUrl,
             files: [file]
           });
         } catch (shareErr) {
@@ -377,45 +434,10 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
     } catch (err: any) {
       if (err.name !== 'AbortError' && !err?.message?.toLowerCase().includes('cancel')) {
         console.warn('Share failed', err);
-        if (onShowToast) onShowToast('Failed to export image', 'error');
+        onShowToast(t('Failed to export image', 'Bildexport fehlgeschlagen'), 'error');
       }
     } finally {
       setIsDownloading(false);
-    }
-  };
-
-  const shareDynastyLink = async () => {
-    const score = Math.round(calculateLiveScore(state));
-    const trophies = totalTrophies;
-    const shareUrl = `https://handballmanagersim.com/?share=dynasty&club=${encodeURIComponent(state.club.name)}&manager=${encodeURIComponent(state.managerName)}&trophies=${trophies}&score=${score}`;
-    const bragText = `🏆 ${state.managerName}'s ${state.club.name} Dynasty\n👑 ${trophies} Major Trophies | Career Score: ${score.toLocaleString()}\n👉 Play free: ${shareUrl}`;
-
-    const fallbackCopyText = (textToCopy: string) => {
-      try {
-        const textArea = document.createElement('textarea');
-        textArea.value = textToCopy;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = '0';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        if (onShowToast) onShowToast(t('Dynasty brag link copied to clipboard!', 'Dynastie-Link in die Zwischenablage kopiert!'), 'success');
-      } catch {
-        if (onShowToast) onShowToast(t('Could not copy link automatically.', 'Link konnte nicht automatisch kopiert werden.'), 'error');
-      }
-    };
-
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(bragText);
-        if (onShowToast) onShowToast(t('Dynasty brag link copied to clipboard!', 'Dynastie-Link in die Zwischenablage kopiert!'), 'success');
-      } else {
-        fallbackCopyText(bragText);
-      }
-    } catch {
-      fallbackCopyText(bragText);
     }
   };
 
@@ -431,36 +453,47 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
   const hasChangedCountry = countriesUsed.length > 1;
   const singleCountry = countriesUsed[0] || state.club?.country || 'GER';
 
-  const maxTier = React.useMemo(() => {
-    let mt = 5;
-    history.forEach((h) => {
-      if ((h.tier || 1) > mt) {
-        mt = h.tier || 1;
-      }
-    });
-    if (state.club?.tier && state.club.tier > mt) mt = state.club.tier;
-    if (countriesUsed.includes('GER') && mt < 7) mt = 7;
-    return mt;
-  }, [countriesUsed, history, state.club?.tier]);
+  const historyTiers = history.map((h: any) => h.tier || 1);
+  const minHistoryTier = historyTiers.length > 0 ? Math.min(...historyTiers) : 1;
+  const maxHistoryTier = historyTiers.length > 0 ? Math.max(...historyTiers) : 1;
+  const totalTierSpan = Math.max(1, maxHistoryTier - minHistoryTier + 1);
 
-  const chartHistory = history.length > 0 
-    ? history 
-    : [{ year: state.year, tier: state.club?.tier || 1, pos: 1, clubName: state.club?.name || '', country: state.club?.country || 'GER' }];
+  // Stratified positional hierarchy:
+  // Tier 1: ranks 1..20
+  // Tier 2: ranks 21..40 (21 = 1st in Tier 2)
+  // Tier 3: ranks 41..60 (41 = 1st in Tier 3)
+  const getStratifiedPos = (h: any) => {
+    const tier = Math.max(1, h.tier || 1);
+    const pos = Math.max(1, Math.min(20, h.pos || 1));
+    return ((tier - 1) * 20) + pos;
+  };
 
   const chartData = {
-    labels: chartHistory.map((h) => h.year),
+    labels: history.map((h) => h.year),
     datasets: [
       {
-        label: 'League',
-        data: chartHistory.map((h) => h.tier || 1),
-        borderColor: '#0a84ff',
-        backgroundColor: 'rgba(10, 132, 255, 0.15)',
-        borderWidth: 3,
+        label: t('Position', 'Platzierung'),
+        data: history.map((h) => getStratifiedPos(h)),
+        borderColor: '#38bdf8',
+        backgroundColor: 'rgba(56, 189, 248, 0.08)',
+        borderWidth: 2.5,
         fill: true,
-        tension: 0.3,
-        pointBackgroundColor: '#ffffff',
-        pointRadius: 4,
-        pointHoverRadius: 6,
+        tension: 0.25,
+        pointBackgroundColor: history.map((h) => {
+          if (h.pos === 1) return '#fbbf24'; // Gold star for champions
+          if ((h.tier || 1) === 1) return '#38bdf8'; // Sky blue for top flight
+          if ((h.tier || 1) === 2) return '#34d399'; // Emerald for tier 2
+          return '#c084fc'; // Purple for tier 3+
+        }),
+        pointBorderColor: history.map((h) => {
+          if (h.pos === 1) return '#ffffff';
+          if ((h.tier || 1) === 1) return '#0284c7';
+          if ((h.tier || 1) === 2) return '#059669';
+          return '#7e22ce';
+        }),
+        pointBorderWidth: 2,
+        pointRadius: history.map((h) => (h.pos === 1 ? 6 : 4.5)),
+        pointHoverRadius: 7,
       },
     ],
   };
@@ -471,689 +504,1355 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
     plugins: {
       legend: { display: false },
       tooltip: {
+        backgroundColor: 'rgba(18, 21, 32, 0.95)',
+        titleColor: '#ffffff',
+        bodyColor: '#a1a1aa',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
+        padding: 12,
+        cornerRadius: 12,
         callbacks: {
+          title: (items: any) => {
+            const h = history[items[0].dataIndex];
+            return h ? `${h.year} Season · ${h.clubName}` : '';
+          },
           label: (context: any) => {
-            const h = chartHistory[context.dataIndex];
+            const h = history[context.dataIndex];
             if (!h) return '';
-            const country = h?.country || singleCountry;
-            if (hasChangedCountry) {
-              return `${h.clubName} (${country}): Tier ${context.raw} (${h.pos}. Pos)`;
-            } else {
-              return `${h.clubName}: Tier ${context.raw} (${h.pos}. Pos)`;
+            const tier = h.tier || 1;
+            const country = h.country || singleCountry;
+            const leagueInfo = getLeagueInfo(tier, country);
+            const leagueName = leagueInfo?.name || `Tier ${tier}`;
+            let statusSuffix = '';
+            if (h.pos === 1) {
+              statusSuffix = tier === 1 ? ' · League Champions 🏆' : ' · Tier Champions & Promoted 🏆';
+            } else if (tier > 1 && h.pos <= 2) {
+              statusSuffix = ' · Promoted ⬆';
+            } else if (tier === 1 && h.pos <= 4) {
+              statusSuffix = ' · Continental Cup Qualified ★';
             }
+            return [
+              `Division: ${leagueName} (Tier ${tier})`,
+              `Finish: ${h.pos}. Place${statusSuffix}`,
+              h.gf !== undefined && h.ga !== undefined ? `Record: ${h.gf} GF · ${h.ga} GA` : ''
+            ].filter(Boolean);
           },
         },
       },
     },
     scales: {
       y: {
+        type: 'linear' as const,
+        position: 'left' as const,
+        display: true,
         reverse: true,
-        min: 1,
-        max: getMaxTier(singleCountry),
-        ticks: {
-          stepSize: 1,
-          callback: (value: any) => {
-            return `Tier ${value}`;
-          },
-          color: '#8e8e93',
-          font: { weight: 'bold' as const, size: 10 },
+        min: Math.max(1, ((minHistoryTier - 1) * 20) + 1),
+        max: Math.max(maxHistoryTier * 20, 20),
+        afterBuildTicks: (axis: any) => {
+          axis.ticks = [];
+          for (let t = minHistoryTier; t <= maxHistoryTier; t++) {
+             axis.ticks.push({ value: (t - 1) * 20 + 1 }); // 1st place mark
+             if (totalTierSpan <= 5) {
+               axis.ticks.push({ value: (t - 1) * 20 + 10 }); // 10th place mark
+             }
+             if (totalTierSpan <= 3) {
+               axis.ticks.push({ value: (t - 1) * 20 + 20 }); // 20th place mark
+             }
+          }
         },
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: {
+          color: '#94a3b8',
+          font: { weight: 600 as const, size: 10 },
+          callback: (value: any) => {
+            const val = Number(value);
+            const tier = Math.floor((val - 1) / 20) + 1;
+            const posInTier = ((val - 1) % 20) + 1;
+            const leagueInfo = getLeagueInfo(tier, singleCountry);
+            const tierTag = hasChangedCountry ? `T${tier}` : (leagueInfo?.tag || `T${tier}`);
+            
+            if (posInTier === 1) return `${tierTag}: 1st 🏆`;
+            if (posInTier === 10) return `${tierTag}: 10th`;
+            if (posInTier === 20) return `${tierTag}: 20th`;
+            return null;
+          },
+        },
+        grid: {
+          color: (context: any) => {
+            if (!context.tick) return 'rgba(255, 255, 255, 0.04)';
+            const val = context.tick.value;
+            if (val === 1 || val % 20 === 1) return 'rgba(251, 191, 36, 0.25)'; // Gold line for 1st
+            if (val % 20 === 0) return 'rgba(244, 63, 94, 0.2)'; // Red line for bottom
+            return 'rgba(255, 255, 255, 0.04)';
+          },
+        },
+      },
+      yRight: {
+        type: 'linear' as const,
+        position: 'right' as const,
+        display: true,
+        reverse: true,
+        min: Math.max(1, ((minHistoryTier - 1) * 20) + 1),
+        max: Math.max(maxHistoryTier * 20, 20),
+        afterBuildTicks: (axis: any) => {
+          axis.ticks = [];
+          for (let t = minHistoryTier; t <= maxHistoryTier; t++) {
+             // Center label explicitly in the middle of each tier's bracket
+             axis.ticks.push({ value: (t - 1) * 20 + 10 }); 
+          }
+        },
+        ticks: {
+          color: '#71717a',
+          font: { weight: 600 as const, size: 10 },
+          callback: (value: any) => {
+            const val = Number(value);
+            const tier = Math.floor((val - 1) / 20) + 1;
+            const posInTier = ((val - 1) % 20) + 1;
+            if (posInTier === 10) return `Tier ${tier}`;
+            return null;
+          },
+        },
+        grid: {
+          drawOnChartArea: false, // Prevent duplicate horizontal grid lines across the chart
+        }
       },
       x: {
-        ticks: { color: '#8e8e93', font: { size: 10 } },
-        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { color: '#71717a', font: { size: 10 } },
+        grid: { color: 'rgba(255, 255, 255, 0.04)' },
       },
     },
   };
 
+  const bestFinish = React.useMemo(() => {
+    if (!history.length) return null;
+    let best = history[0];
+    for (const h of history) {
+      if ((h.tier || 1) < (best.tier || 1) || ((h.tier || 1) === (best.tier || 1) && (h.pos || 99) < (best.pos || 99))) {
+        best = h;
+      }
+    }
+    return best;
+  }, [history]);
+
+  const stadiumMetrics = React.useMemo(() => {
+    if (!history.length) return null;
+    let peakAtt = 0;
+    let peakAttSeason: any = null;
+    let peakCap = state.club.stadium || 0;
+    let totalCrowd = 0;
+    let totalUtil = 0;
+
+    for (const h of history) {
+      const att = h.att || 0;
+      totalCrowd += (att * 17);
+      totalUtil += (h.util || 0);
+      if (att > peakAtt) {
+        peakAtt = att;
+        peakAttSeason = h;
+      }
+      const cap = (h as any).stadiumCapacity || 0;
+      if (cap > peakCap) {
+        peakCap = cap;
+      }
+    }
+
+    const avgUtil = history.length ? Math.round(totalUtil / history.length) : 0;
+    return {
+      peakAtt,
+      peakAttSeason,
+      peakCap,
+      totalCrowd: (state.totals?.att && state.totals.att > totalCrowd) ? state.totals.att : totalCrowd,
+      avgUtil,
+    };
+  }, [history, state.totals?.att, state.club.stadium]);
+
   return (
-        <div className={onClose ? "fixed inset-0 z-[10050] bg-black/85 flex justify-center overflow-y-auto backdrop-blur-xl p-3 sm:p-6" : ""}>
-      <div className={`max-w-4xl mx-auto fade-in px-2 sm:px-4 pb-16 w-full relative ${onClose ? 'mt-3 sm:mt-6' : 'mt-4'}`}>
+    <div className={onClose ? "fixed inset-0 z-50 bg-black/80 flex justify-center overflow-y-auto backdrop-blur-2xl p-3 sm:p-6 text-white animate-in fade-in duration-100" : "w-full text-white"}>
+      <div className={`max-w-4xl mx-auto px-2 sm:px-4 pb-20 w-full relative ${onClose ? 'mt-4' : 'mt-4'}`}>
+        
+        {/* Apple-style Frosted Close Button */}
         {onClose && (
-          <button aria-label="Close modal" onClick={onClose} className="active:scale-95 absolute -top-2 right-2 sm:-right-2 bg-white/[0.06] hover:bg-white/[0.14] w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-white border border-white/10 z-[200] shadow-xl transition-all cursor-pointer">
+          <button 
+            aria-label="Close modal" 
+            onClick={onClose} 
+            className="absolute -top-2 right-2 sm:-right-2 bg-white/10 hover:bg-white/20 active:scale-95 w-10 h-10 rounded-full flex items-center justify-center text-white/80 hover:text-white border border-white/15 z-10 shadow-[0_8px_24px_rgba(0,0,0,0.5)] backdrop-blur-xl transition cursor-pointer"
+          >
             <i className="fas fa-times text-sm"></i>
           </button>
         )}
-      {/* Top Header Banner */}
-      <div className="text-center mb-6">
-        <span className="inline-flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[10px] font-medium uppercase tracking-wider px-3 py-1 rounded-full mb-2">
-          <i className="fas fa-award text-xs"></i>
-          {t('Career Completed', 'Karriere Abgeschlossen')}
-        </span>
-        <h1 className="text-2xl sm:text-4xl font-semibold text-white tracking-tight uppercase">
-          {state.managerName}
-        </h1>
-        <p className="text-xs sm:text-sm text-zinc-400 mt-1 font-medium">
-          <span className="tabular-nums">{history.length}</span> {t('Seasons Coached', 'Saisons als Trainer')} · <span className="tabular-nums">{state.totals?.wins || 0}</span> {t('Wins', 'Siege')} · <span className="tabular-nums">{totalTrophies}</span> {t('Trophies', 'Titel')}
-        </p>
-      </div>
 
-      {/* Modern Segmented Navigation Tabs */}
-      <div className="flex bg-[#10121a] p-1 rounded-xl border border-white/[0.04] mb-6 gap-1 max-w-md mx-auto">
-        <button
-          onClick={() => setActiveMobileTab('card')}
-          className={`flex-1 py-2 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeMobileTab === 'card'
-              ? 'bg-sky-500/[0.05] border border-sky-500/20 text-sky-300 shadow-sm'
-              : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-          }`}
-        >
-          <i className="fas fa-id-card text-[11px]"></i>
-          <span>{t('Coach Card', 'Karte')}</span>
-        </button>
-        <button
-          onClick={() => setActiveMobileTab('chart')}
-          className={`flex-1 py-2 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeMobileTab === 'chart'
-              ? 'bg-sky-500/[0.05] border border-sky-500/20 text-sky-300 shadow-sm'
-              : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-          }`}
-        >
-          <i className="fas fa-chart-line text-[11px]"></i>
-          <span>{t('Progression', 'Verlauf')}</span>
-        </button>
-        <button
-          onClick={() => setActiveMobileTab('clubs')}
-          className={`flex-1 py-2 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            activeMobileTab === 'clubs'
-              ? 'bg-sky-500/[0.05] border border-sky-500/20 text-sky-300 shadow-sm'
-              : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-          }`}
-        >
-          <i className="fas fa-shield-halved text-[11px]"></i>
-          <span>Clubs</span>
-        </button>
-      </div>
+        {/* Ambient Sky-Blue & Muted Glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 bg-sky-500/10 rounded-full blur-[120px] pointer-events-none -z-10" />
 
-      {/* Section 1: Manager Share Card */}
-      <div className={`${activeMobileTab === 'card' ? 'flex' : 'hidden'} flex-col items-center w-full max-w-md mx-auto mb-8`}>
-        <div className="w-full max-w-md flex flex-col">
-          <div
-            ref={cardRef}
-            id="marketing-share-card"
-            className="bg-[#14151e] border border-white/[0.04] rounded-2xl p-6 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col items-center justify-between relative overflow-hidden w-full min-h-[480px] sm:min-h-[520px] m-0"
+        {/* Top Header Banner - Minimalist Apple Style */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 bg-sky-500/10 border border-sky-400/25 text-sky-300 text-xs font-semibold px-3 py-1 rounded-lg tracking-wide uppercase mb-3 shadow-[0_0_20px_rgba(56,189,248,0.15)]">
+            <i className="fas fa-award text-xs text-sky-400"></i>
+            <span>{t('Career Completed', 'Karriere Abgeschlossen')}</span>
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+            {(state.managerName || (lang === 'de' ? 'Der Manager' : 'The Manager'))}
+          </h1>
+          <p className="text-xs sm:text-sm text-zinc-400 mt-2 font-medium flex items-center justify-center gap-2 flex-wrap">
+            <span className="tabular-nums">{history.length}</span> {t('Seasons as Director', 'Saisons als Direktor')}
+            <span className="text-zinc-600">•</span>
+            <span className="tabular-nums">{wins}</span> {t('Wins', 'Siege')}
+            <span className="text-zinc-600">•</span>
+            <span className="tabular-nums">{totalTrophies}</span> {t('Trophies', 'Titel')}
+          </p>
+        </div>
+
+        {/* Apple Frosted Segmented Control (Progressive Disclosure) */}
+        <div className="flex bg-white/[0.04] p-1 rounded-2xl border border-white/[0.08] backdrop-blur-2xl mb-8 gap-1 max-w-xl mx-auto shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
+          <button
+            onClick={() => setActiveTab('card')}
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'card'
+                ? 'bg-white/10 text-white shadow-sm border border-white/15'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
           >
-          <div className="absolute top-[-40px] left-[-40px] w-48 h-48 bg-sky-500/10 rounded-full blur-[60px] pointer-events-none"></div>
-          <div className="absolute bottom-[-40px] right-[-40px] w-48 h-48 bg-amber-500/10 rounded-full blur-[60px] pointer-events-none"></div>
-
-          {/* Card Header */}
-          <div className="w-full text-center z-10">
-            <div className="flex items-center justify-center gap-1.5 text-[10px] text-amber-400 font-mono font-medium uppercase tracking-widest mb-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              <span>HANDBALL COACH LEGEND</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight uppercase truncate">
-              {state.managerName}
-            </h2>
-          </div>
-
-          {/* Center Club Badge & Rep Stat Row */}
-          <div className="flex flex-col items-center z-10 my-3 w-full">
-            <div className="flex items-center justify-center gap-2.5 mb-3 text-center">
-              <ClubLogo
-                name={state.club.name}
-                clubId={state.club.id}
-                club={state.club}
-                color={state.club.color}
-                color2={state.club.color2}
-                logo={isAnyModActive() ? state.club.logo : undefined}
-                fallbackLogo={isAnyModActive() ? state.club.fallbackLogo : undefined}
-                className="w-7 h-7 rounded-lg object-contain shrink-0 border border-white/10"
-              />
-              <div className="text-lg font-semibold text-white tracking-tight">
-                {state.club.name}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
-              <div className="bg-[#10121a] border border-white/[0.04] rounded-xl px-2.5 py-2 flex flex-col items-center text-center">
-                <span className="text-[9px] font-medium text-zinc-400 uppercase tracking-wider">
-                  Final OVR
-                </span>
-                <span className={`text-sm font-semibold tabular-nums ${getOvrColor(state.club.baseOvr, getLeagueInfo(state.club.tier, state.club.country).avgOvr)}`}>
-                  {state.club.baseOvr}
-                </span>
-              </div>
-              <div className="bg-[#10121a] border border-white/[0.04] rounded-xl px-2.5 py-2 flex flex-col items-center text-center">
-                <span className="text-[9px] font-medium text-sky-400 uppercase tracking-wider">
-                  Coach Rep
-                </span>
-                <span className="text-sm font-semibold text-sky-300 tabular-nums">
-                  {managerReputation}/100
-                </span>
-              </div>
-              <div className="bg-[#10121a] border border-white/[0.04] rounded-xl px-2.5 py-2 flex flex-col items-center text-center">
-                <span className="text-[9px] font-medium text-purple-400 uppercase tracking-wider">
-                  Club Rep
-                </span>
-                <span className="text-sm font-semibold text-purple-300 tabular-nums">
-                  {clubReputation}/100
-                </span>
-              </div>
-              <div className="bg-[#10121a] border border-white/[0.04] rounded-xl px-2.5 py-2 flex flex-col items-center text-center">
-                <span className="text-[9px] font-medium text-emerald-400 uppercase tracking-wider">
-                  Score
-                </span>
-                <span className="text-sm font-semibold text-emerald-300 tabular-nums">
-                  {currentScore.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Streamlined Stat Badges & Cabinet */}
-          <div className="flex flex-row justify-between w-full gap-2 z-10 my-2">
-            <div className="flex-1 bg-[#10121a] rounded-xl p-2.5 border border-white/[0.04] text-center flex flex-col items-center justify-center">
-              <div className="text-[8px] sm:text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
-                {t('Seasons', 'Saisons')}
-              </div>
-              <div className="text-sm sm:text-base font-semibold text-white tabular-nums">{history.length}</div>
-            </div>
-            <div className="flex-1 bg-[#10121a] rounded-xl p-2.5 border border-white/[0.04] text-center flex flex-col items-center justify-center">
-              <div className="text-[8px] sm:text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
-                Win %
-              </div>
-              <div className="text-sm sm:text-base font-semibold text-emerald-400 tabular-nums">{winPct}%</div>
-            </div>
-            <div className="flex-1 bg-[#10121a] rounded-xl p-2.5 border border-white/[0.04] text-center flex flex-col items-center justify-center">
-              <div className="text-[8px] sm:text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
-                {t('Wins', 'Siege')}
-              </div>
-              <div className="text-sm sm:text-base font-semibold text-white tabular-nums">{state.totals?.wins || 0}</div>
-            </div>
-
-            
-          </div>
+            <i className="fas fa-id-card text-xs text-sky-400"></i>
+            <span>{t('Director Card', 'Direktor-Karte')}</span>
+          </button>
           
-          <div className="bg-[#10121a] rounded-xl p-3 border border-white/[0.04] flex flex-col gap-2 my-2 w-full">
-             <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-widest text-center flex items-center justify-center gap-1.5">
-               <i className="fas fa-trophy text-amber-400"></i> {t('Total Trophy Cabinet', 'Gesamter Trophaeenschrank')} (<span className="tabular-nums">{totalTrophies}</span>)
-             </div>
-             {totalTrophies === 0 ? (
-               <div className="text-center text-xs text-white/30 italic py-2">{t('No titles won', 'Keine Titel gewonnen')}</div>
-             ) : (
-               <div className="flex flex-wrap items-center justify-center gap-3">
-                 {totalTrophyCounts.cl > 0 && (
-                   <div className="relative">
-                     <div className="w-9 h-9 rounded-full bg-slate-200 border border-slate-400 flex items-center justify-center shadow-[0_0_10px_rgba(203,213,225,0.5)] z-10 overflow-hidden" title={clTitle}>
-                       <i className="fas fa-trophy text-slate-800 text-[18px] drop-shadow-md relative z-10"></i>
-                     </div>
-                     {totalTrophyCounts.cl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.cl}</span>}
-                   </div>
-                 )}
-                 {totalTrophyCounts.el > 0 && (
-                   <div className="relative">
-                     <div className="w-9 h-9 rounded-full bg-amber-600 border border-amber-500 flex items-center justify-center shadow-[0_0_10px_rgba(217,119,6,0.5)] z-10 overflow-hidden" title={elTitle}>
-                       <i className="fas fa-trophy text-amber-100 text-[18px] drop-shadow-md relative z-10"></i>
-                     </div>
-                     {totalTrophyCounts.el > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.el}</span>}
-                   </div>
-                 )}
-                 {totalTrophyCounts.ecl > 0 && (
-                   <div className="relative">
-                     <div className="w-9 h-9 rounded-full bg-emerald-600 border border-emerald-500 flex items-center justify-center shadow-[0_0_10px_rgba(5,150,105,0.5)] z-10 overflow-hidden" title={eclTitle}>
-                       <i className="fas fa-trophy text-emerald-100 text-[18px] drop-shadow-md relative z-10"></i>
-                     </div>
-                     {totalTrophyCounts.ecl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.ecl}</span>}
-                   </div>
-                 )}
-                 {totalTrophyCounts.cwc > 0 && (
-                   <div className="relative">
-                     <div className="w-9 h-9 rounded-full bg-blue-900 border border-yellow-500/50 flex items-center justify-center z-10 overflow-hidden" title="Global Club Cup">
-                       <i className="fas fa-globe text-yellow-400 text-[18px] drop-shadow-md relative z-10"></i>
-                     </div>
-                     {totalTrophyCounts.cwc > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.cwc}</span>}
-                   </div>
-                 )}
-                 {totalTrophyCounts.bl > 0 && (
-                   <div className="relative">
-                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 border border-amber-300 flex items-center justify-center shadow-[0_0_10px_rgba(245,158,11,0.5)] z-10 overflow-hidden" title={t('League Titles', 'Liga-Titel')}>
-                       <i className="fas fa-medal text-white drop-shadow-md text-[18px] relative z-10"></i>
-                     </div>
-                     {totalTrophyCounts.bl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.bl}</span>}
-                   </div>
-                 )}
-                 {totalTrophyCounts.dfb > 0 && (
-                   <div className="relative">
-                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 border border-slate-200 flex items-center justify-center shadow-[0_0_10px_rgba(203,213,225,0.5)] z-10 overflow-hidden" title={t('Domestic Cups', 'Nationale Pokale')}>
-                       <i className="fas fa-trophy text-slate-700 drop-shadow-md text-[18px] relative z-10"></i>
-                     </div>
-                     {totalTrophyCounts.dfb > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.dfb}</span>}
-                   </div>
-                 )}
-                 {totalTrophyCounts.lower > 0 && (
-                   <div className="relative">
-                     <div className="w-8 h-8 rounded-full bg-slate-600 border border-slate-500 flex items-center justify-center z-10" title="Lower League Title">
-                       <i className="fas fa-medal text-slate-300 text-xs"></i>
-                     </div>
-                     {totalTrophyCounts.lower > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.lower}</span>}
-                   </div>
-                 )}
-                 {totalTrophyCounts.reg > 0 && (
-                   <div className="relative">
-                     <div className="w-8 h-8 rounded-full bg-amber-800 border border-amber-700 flex items-center justify-center z-10" title={getDomesticCupInfo(state?.club?.country || 'GER', 4).name || 'Regional Cup'}>
-                       <i className="fas fa-shield-halved text-amber-200 text-xs"></i>
-                     </div>
-                     {totalTrophyCounts.reg > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.reg}</span>}
-                   </div>
-                 )}
-               </div>
-             )}
+          <button
+            onClick={() => setActiveTab('chart')}
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'chart'
+                ? 'bg-white/10 text-white shadow-sm border border-white/15'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <i className="fas fa-chart-line text-xs text-sky-400"></i>
+            <span>{t('Progression', 'Verlauf')}</span>
+          </button>
 
-          </div>
+          <button
+            onClick={() => setActiveTab('clubs')}
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'clubs'
+                ? 'bg-white/10 text-white shadow-sm border border-white/15'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <i className="fas fa-shield-halved text-xs text-sky-400"></i>
+            <span>{t('Clubs', 'Vereine')}</span>
+          </button>
 
-          {/* AI Pundit Summary */}
-          <div className="w-full bg-[#10121a] rounded-xl p-3 sm:p-4 my-2 border border-purple-500/20 relative overflow-hidden group">
-             <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 opacity-60"></div>
-             <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-               <i className="fas fa-robot text-purple-400"></i> {t('AI Career Analysis', 'KI-Karriere-Analyse')}
-             </div>
-             <div className="text-sm text-zinc-200 leading-relaxed font-normal">
-               {isAiLoading ? (
-                 <div className="flex items-center gap-2 text-zinc-400 animate-pulse">
-                   <i className="fas fa-spinner fa-spin text-xs"></i> Analyzing career legacy...
-                 </div>
-               ) : aiError === 'KEY_MISSING' ? (
-                 <div className="text-zinc-400 italic text-xs">
-                   API Key not found. Add your Gemini API Key in Settings &gt; Secrets to enable the AI Pundit.
-                 </div>
-               ) : aiError ? (
-                 <div className="text-zinc-400 italic text-xs">
-                   Analyzing offline...
-                 </div>
-               ) : (
-                 aiSummary
-               )}
-             </div>
-          </div>
-
-          {/* Footer watermark */}
-          <div className="w-full text-center mt-3 z-10 opacity-60">
-            <div className="text-[9px] font-medium text-white/80 tracking-widest uppercase">
-              Handball Coach Legend • Career Legacy
-            </div>
-          </div>
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              activeTab === 'leaderboard'
+                ? 'bg-white/10 text-white shadow-sm border border-white/15'
+                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+            }`}
+          >
+            <i className="fas fa-crown text-xs text-amber-400"></i>
+            <span>{t('Hall of Fame', 'Rangliste')}</span>
+          </button>
         </div>
 
-        </div>
-      </div>
-
-      {/* Global Career Action Bar (Visible across all tabs so users can always exit, view leaderboard, or continue endless mode) */}
-      <div className="flex flex-col items-center w-full max-w-md mx-auto mb-8">
-        <div className="flex flex-col gap-3 w-full">
-          {onShowLeaderboard && (
-            <button 
-              onClick={() => {
-                  onShowLeaderboard();
-              }}
-              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold py-3.5 px-8 rounded-xl shadow-[0_4px_20px_rgba(245,158,11,0.25)] transition active:scale-95 flex items-center justify-center gap-2 text-sm border border-amber-400/40 cursor-pointer"
-            >
-              <i className="fas fa-globe text-base"></i> {t('VIEW GLOBAL LEADERBOARD', 'GLOBALE BESTENLISTE ANSEHEN')}
-            </button>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-3 w-full">
-            {activeMobileTab === 'card' && (
-              <>
-                <button
-                  onClick={shareCard}
-                  disabled={isDownloading}
-                  className="w-full sm:flex-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-70 text-white font-semibold py-3.5 px-6 rounded-xl transition active:scale-95 shadow-[0_4px_20px_rgba(37,99,235,0.35)] flex items-center justify-center gap-2 text-sm cursor-pointer border border-blue-400/30"
-                >
-                  {isDownloading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-share-nodes"></i>}
-                  <span>{isDownloading ? t('Processing...', 'Wird erstellt...') : t('Share Manager Card', 'Manager-Karte Teilen')}</span>
-                </button>
-
-                <button
-                  onClick={shareDynastyLink}
-                  className="w-full sm:flex-1 bg-white/[0.06] hover:bg-white/[0.12] text-white font-semibold py-3.5 px-6 rounded-xl transition active:scale-95 shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer border border-white/10"
-                  title="Copy shareable link with dynamic card preview for Discord, Reddit, and Twitter"
-                >
-                  <i className="fas fa-link text-amber-400 text-xs"></i>
-                  <span>{t('Copy Dynasty Link', 'Dynastie-Link Kopieren')}</span>
-                </button>
-              </>
-            )}
-            
-            {onClose ? (
-              <button
-                onClick={onClose}
-                className="w-full sm:flex-1 bg-white/[0.04] hover:bg-white/[0.08] text-white font-semibold py-3.5 px-6 rounded-xl transition active:scale-95 shadow-sm flex items-center justify-center gap-2 text-sm cursor-pointer border border-white/[0.06]"
-              >
-                <i className="fas fa-times"></i>
-                <span>{t('Close Overview', 'Übersicht Schließen')}</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  saveHighscore(state).catch(() => {});
-                  onReset();
-                }}
-                className="w-full sm:flex-1 bg-white hover:bg-zinc-200 text-black font-semibold uppercase tracking-wider py-3.5 px-6 rounded-xl shadow-md transition active:scale-95 flex items-center justify-center gap-2 text-sm cursor-pointer"
-              >
-                <i className="fas fa-check"></i>
-                {t('Submit & Exit', 'Abschließen & Beenden')}
-              </button>
-            )}
-          </div>
-          
-          {!onClose && (
-            <button
-              onClick={onContinueEndless ? onContinueEndless : undefined}
-              disabled={!onContinueEndless || state.history.length < 35 || state.endlessModeActive}
-              className="active:scale-[0.99] mt-3 w-full bg-amber-500/[0.04] border border-amber-500/30 text-amber-300 hover:bg-amber-500/[0.08] font-semibold py-3 rounded-xl transition-all duration-300 uppercase tracking-widest text-xs relative group disabled:opacity-50 disabled:cursor-not-allowed"
-              title={state.history.length < 35 ? t('Complete 35 seasons to unlock', 'Absolviere 35 Saisons zum Freischalten') : ''}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <i className={`fas fa-infinity text-xs`}></i>
-                <span>{t('Endless Mode', 'Endlosmodus')}</span>
-              </div>
-              {(!onContinueEndless || state.history.length < 35 || state.endlessModeActive) && (
-                <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[1px]">
-                  <span className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">{state.endlessModeActive ? 'Endless Mode Active' : 'Requires 35 Seasons'}</span>
-                </div>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Section 2: Progression Line Chart */}
-      <div className={`${activeMobileTab === 'chart' ? 'block' : 'hidden'} bg-[#14151e] rounded-2xl p-5 sm:p-6 border border-white/[0.04] shadow-xl mb-8`}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base sm:text-lg font-semibold text-white tracking-tight flex items-center gap-2">
-            <i className="fas fa-chart-line text-sky-400"></i>
-            <span>{t('Career League Progression', 'Karriere-Ligenverlauf')}</span>
-          </h2>
-          <span className="text-[10px] font-medium text-zinc-400 bg-white/[0.04] border border-white/[0.06] px-2.5 py-1 rounded-lg uppercase tabular-nums">
-            {history.length} {t('Seasons', 'Saisons')}
-          </span>
-        </div>
-        <div className="h-56 sm:h-64 w-full relative">
-          <Line data={chartData} options={chartOptions} />
-        </div>
-      </div>
-
-      {/* Section 2.5: Historic Manager Timeline */}
-      <div className={`${activeMobileTab === 'clubs' ? 'block' : 'hidden'} mb-10`}>
-        <h2 className="text-lg sm:text-xl font-semibold text-white tracking-tight mb-4 flex items-center gap-2">
-          <i className="fas fa-crown text-amber-400"></i>
-          <span>{t('Hall of Fame', 'Ruhmeshalle')}</span>
-        </h2>
-        
-        <div className="bg-[#14151e] rounded-2xl p-4 sm:p-6 border border-white/[0.04] shadow-xl w-full">
-          {/* We will build a responsive vertical list on mobile, and a horizontal timeline on desktop */}
-          
-          <div className="hidden sm:block overflow-x-auto custom-scrollbar relative pb-4">
-            {(() => { const maxScale = 2000000; return (<div className="min-w-[800px] mx-12 h-48 relative flex items-center pb-8 mt-4">
-              {/* Base line */}
-              <div className="absolute top-1/2 left-0 right-0 h-1.5 bg-white/10 rounded-full -translate-y-1/2"></div>
-              {/* Progress line */}
-              <div className="absolute top-1/2 left-0 h-1.5 bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-1000 -translate-y-1/2" style={{ width: `${Math.min(100, (currentScore / maxScale) * 100)}%` }}></div>
-              
-              {/* Coach markers */}
-              {HISTORICAL_MANAGERS.map((mgr, index) => {
-                const posPct = (mgr.score / maxScale) * 100;
-                const hasPassed = currentScore >= mgr.score;
-                // Place names above and below the line to completely eliminate crowding
-                const isTop = index % 2 === 0;
-                
-                return (
-                  <div key={`mgr-timeline-${mgr.id}`} className="absolute flex flex-col items-center group hover:z-30 transition-all" style={{ left: `${posPct}%`, top: '50%', transform: 'translate(-50%, -50%)' }}>
-                    {/* TOP LABEL */}
-                    {isTop && (
-                      <div className="absolute bottom-full mb-6 flex flex-col items-center">
-                        <div className={`text-[10px] whitespace-nowrap font-medium transition-colors text-center ${hasPassed ? 'text-white' : 'text-[#8e8e93]'}`}>
-                          {mgr.name.split(' ').map((n, i) => <div key={`name-${i}`}>{n}</div>)}
-                        </div>
-                        <div className={`mt-2 w-0.5 h-4 ${hasPassed ? 'bg-amber-400' : 'bg-white/20'}`}></div>
-                      </div>
-                    )}
-                    
-                    <div className={`px-2 h-7 rounded-full border flex items-center justify-center font-semibold text-[10px] tabular-nums z-10 transition-all cursor-default ${hasPassed ? 'bg-amber-500/20 border-amber-400/40 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)] scale-105' : 'bg-[#2c2c2e] border-white/10 text-zinc-400'}`}>
-                      {formatScore(mgr.score)}
-                    </div>
-                    
-                    {/* BOTTOM LABEL */}
-                    {!isTop && (
-                      <div className="absolute top-full mt-6 flex flex-col items-center">
-                        <div className={`mb-2 w-0.5 h-4 ${hasPassed ? 'bg-amber-400' : 'bg-white/20'}`}></div>
-                        <div className={`text-[10px] whitespace-nowrap font-medium transition-colors text-center ${hasPassed ? 'text-white' : 'text-[#8e8e93]'}`}>
-                          {mgr.name.split(' ').map((n, i) => <div key={`name-${i}`}>{n}</div>)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              
-              {/* Player marker */}
-              <div className="absolute flex flex-col items-center z-40 transition-all duration-1000" style={{ left: `${Math.min(100, (currentScore / maxScale) * 100)}%`, top: '50%', transform: 'translate(-50%, -50%)' }}>
-                <div className="absolute bottom-full mb-2 flex flex-col items-center animate-pulse">
-                  <div className="bg-sky-500 text-white text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md shadow-[0_4px_15px_rgba(14,165,233,0.5)] whitespace-nowrap border border-sky-300/40">
-                    {t('You', 'Du')}
-                  </div>
-                  <div className="w-0.5 h-4 bg-sky-400 mt-1.5"></div>
-                </div>
-                
-                <div className="px-2.5 h-8 rounded-full bg-sky-600 border border-sky-300/50 flex items-center justify-center font-semibold text-white text-[10px] tabular-nums shadow-[0_0_15px_rgba(14,165,233,0.6)] z-20">
-                  {formatScore(currentScore)}
-                </div>
-              </div>
-            </div>
-            );
-            })()}
-          </div>
-          
-          {/* Mobile Vertical View */}
-          <div className="block sm:hidden space-y-2.5 mt-4">
-             <div className="bg-sky-500/[0.04] p-4 rounded-xl border border-sky-500/20 flex items-center justify-between mb-4 shadow-sm relative overflow-hidden">
-               <div className="relative z-10">
-                 <div className="text-[10px] text-sky-400 font-medium uppercase tracking-widest mb-0.5">{t('Your Rank', 'Dein Rang')}</div>
-                 <div className="text-xl font-semibold text-white">{t('You', 'Du')}</div>
-               </div>
-               <div className="px-3 h-8 rounded-lg bg-sky-600 border border-sky-400/50 flex items-center justify-center font-semibold text-white text-xs shadow-md z-10 relative tabular-nums">
-                 {formatScore(currentScore)}
-               </div>
-             </div>
-             
-             <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-widest pl-1 mb-2">{t('Hall of Fame', 'Hall of Fame')}</div>
-             
-             {[...HISTORICAL_MANAGERS].sort((a,b) => b.score - a.score).map((mgr) => {
-                const hasPassed = currentScore >= mgr.score;
-                return (
-                  <div key={`mgr-list-${mgr.id}`} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${hasPassed ? 'bg-amber-500/[0.03] border-amber-500/20' : 'bg-white/[0.02] border-white/[0.04] opacity-70'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`px-2.5 h-7 rounded-lg border flex items-center justify-center font-semibold text-[11px] tabular-nums ${hasPassed ? 'bg-amber-500/15 border-amber-400/30 text-amber-300' : 'bg-white/[0.04] border-white/10 text-zinc-400'}`}>
-                        {formatScore(mgr.score)}
-                      </div>
-                      <div className={`text-sm font-medium ${hasPassed ? 'text-amber-300' : 'text-zinc-300'}`}>
-                        {mgr.name}
-                      </div>
-                    </div>
-                    {hasPassed && <i className="fas fa-check text-amber-400 text-xs"></i>}
-                  </div>
-                )
-             })}
-          </div>
-
-          <div className="text-center text-[10px] text-[#8e8e93] font-medium uppercase tracking-widest mt-4">
-            {t('Career Score Timeline', 'Karriere-Score Zeitstrahl')}
-          </div>
-        </div>
-      </div>
-
-      {/* Section 3: Club History Grid */}
-      <div className={`${activeMobileTab === 'clubs' ? 'block' : 'hidden'}`}>
-        <h2 className="text-lg sm:text-xl font-semibold text-white tracking-tight mb-4 flex items-center gap-2">
-          <i className="fas fa-trophy text-amber-400"></i>
-          <span>{t('Club History & Trophy Cabinet', 'Vereinshistorie & Titel')}</span>
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Object.values(clubStats).map((c, cIdx) => {
-            const domCount =
-              (c.trophyCounts.bl || 0) +
-              (c.trophyCounts.dfb || 0) +
-              (c.trophyCounts.lower || 0) +
-              (c.trophyCounts.reg || 0);
-            const intlCount =
-              (c.trophyCounts.cl || 0) +
-              (c.trophyCounts.el || 0) +
-              (c.trophyCounts.ecl || 0) + (c.trophyCounts.cwc || 0);
-
-            const activePoolForClub = getActiveClubs(c.country || state.club?.country);
-            const clubInfo =
-              activePoolForClub.find(club => club.name === c.name || club.name.toLowerCase() === c.name.toLowerCase()) ||
-              ALL_CLUBS.find(club => club.name === c.name || club.name.toLowerCase() === c.name.toLowerCase());
-            const clubCountry = c.country || clubInfo?.country || 'GER';
-            const clubClLogo = TOURNAMENT_LOGOS.cl;
-            const clubElLogo = TOURNAMENT_LOGOS.el;
-            const clubEclLogo = TOURNAMENT_LOGOS.ecl;
-            const clubLeagueTitle = getLeagueInfo(1, clubCountry).name;
-            const clubCupTitle = getDomesticCupInfo(clubCountry, 1).name || 'National Cup';
-            
-            const { cl: clubClTitle, el: clubElTitle, ecl: clubEclTitle } = getContinentalCupNames(clubCountry);
-            const modActiveNow = isAnyModActive();
-
-            return (
+        {/* ========================================================================= */}
+        {/* Tab 1: Director Share Card & Legacy */}
+        {/* ========================================================================= */}
+        {activeTab === 'card' && (
+          <div className="flex flex-col items-center w-full max-w-md mx-auto mb-8 animate-fadeIn">
+            <div className="w-full flex flex-col">
               <div
-                key={`c-${c.name}-${cIdx}`}
-                className="bg-[#14151e] rounded-2xl p-5 border border-white/[0.04] shadow-lg flex flex-col justify-between relative overflow-hidden group hover:border-white/[0.08] transition"
+                ref={cardRef}
+                id="marketing-share-card"
+                className="bg-gradient-to-b from-[#181b28] via-[#11131c] to-[#0c0d14] border border-white/[0.12] rounded-[32px] p-6 sm:p-7 shadow-[0_24px_70px_rgba(0,0,0,0.85)] flex flex-col items-center justify-between relative overflow-hidden w-full min-h-[500px] sm:min-h-[530px]"
               >
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <ClubLogo
-                      name={c.name}
-                      clubId={clubInfo?.id}
-                      club={clubInfo}
-                      color={c.color || clubInfo?.color}
-                      color2={clubInfo?.color2}
-                      logo={modActiveNow ? (clubInfo?.logo || c.logo) : undefined}
-                      fallbackLogo={modActiveNow ? clubInfo?.fallbackLogo : undefined}
-                      className="w-10 h-10 rounded-xl object-contain shrink-0 border border-white/10 shadow-md bg-white/[0.03]"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base sm:text-lg font-semibold text-white tracking-tight truncate">{c.name}</h3>
-                      <p className="text-xs text-zinc-400 font-normal mt-0.5">
-                        <span className="tabular-nums">{c.seasons}</span> {c.seasons === 1 ? t('Season', 'Saison') : t('Seasons', 'Saisons')}
-                      </p>
-                    </div>
-                  </div>
+                {/* Subtle Ambient Glows */}
+                <div className="absolute top-[-50px] left-[-50px] w-56 h-56 bg-sky-500/15 rounded-full blur-[80px] pointer-events-none" />
+                <div className="absolute bottom-[-50px] right-[-50px] w-56 h-56 bg-amber-500/10 rounded-full blur-[80px] pointer-events-none" />
+                {state.club.color && (
+                  <div 
+                    className="absolute top-1/3 right-[-30px] w-48 h-48 rounded-full blur-[90px] opacity-10 pointer-events-none"
+                    style={{ backgroundColor: state.club.color }}
+                  />
+                )}
 
-                  <div className="grid grid-cols-3 gap-2 bg-[#10121a] p-3 rounded-xl border border-white/[0.04] mb-4 text-center">
-                    <div>
-                      <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
-                        {t('Wins', 'Siege')}
-                      </div>
-                      <div className="text-sm font-semibold text-emerald-400 tabular-nums">{c.wins}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
-                        {t('Matches', 'Spiele')}
-                      </div>
-                      <div className="text-sm font-semibold text-white tabular-nums">{c.matches}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
-                        Win %
-                      </div>
-                      <div className="text-sm font-semibold text-sky-400 tabular-nums">
-                        {c.matches > 0 ? Math.round((c.wins / c.matches) * 100) : 0}%
-                      </div>
-                    </div>
+                {/* Card Header */}
+                <div className="w-full text-center z-10">
+                  <div className="flex items-center justify-center gap-1.5 text-[10px] text-sky-300 font-semibold uppercase tracking-widest mb-1.5">
+                    <i className="fas fa-crown text-amber-400 text-xs"></i>
+                    <span>Sporting Director Legend</span>
                   </div>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight break-words">
+                    {(state.managerName || (lang === 'de' ? 'Der Manager' : 'The Manager'))}
+                  </h2>
                 </div>
 
-                <div className="bg-[#10121a] rounded-xl p-4 border border-white/[0.04] flex flex-col gap-3 relative overflow-hidden">
-                  <div className="text-[10px] text-amber-400 font-medium uppercase tracking-widest text-center relative z-10 flex items-center justify-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    <span>{t('Trophy Cabinet', 'Trophaeenschrank')}</span>
+                {/* Center Club Badge & Rep Badges (Zero-Pill Discipline) */}
+                <div className="flex flex-col items-center z-10 my-3 w-full">
+                  <div className="relative mb-2">
+                    <ClubLogo
+                      name={state.club.name}
+                      id={state.club.id}
+                      color={state.club.color}
+                      logo={state.club.logo}
+                      fallbackLogo={state.club.fallbackLogo}
+                      isModActive={isModActive}
+                      className="w-16 h-16 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.6)]"
+                      fallbackClassName="w-16 h-16 text-2xl rounded-2xl shadow-lg border border-white/10 flex items-center justify-center font-bold text-white shrink-0"
+                    />
                   </div>
-                  {(domCount + intlCount) === 0 ? (
-                    <div className="text-center text-xs text-white/30 italic py-4 relative z-10">{t('No titles won', 'Keine Titel gewonnen')}</div>
+                  <div className="text-sm font-bold text-white tracking-wide mb-2.5 text-center">
+                    {state.club.name}
+                  </div>
+
+                  {/* Refined Stat Chips */}
+                  <div className="flex items-center gap-2 flex-wrap justify-center w-full">
+                    <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-1 flex items-center gap-2 shadow-sm">
+                      <span className="text-[9px] font-semibold text-zinc-400 uppercase tracking-wider">
+                        Final OVR
+                      </span>
+                      <span className={`text-xs font-bold tabular-nums ${getOvrColor(state.club.baseOvr)}`}>
+                        {state.club.baseOvr}
+                      </span>
+                    </div>
+
+                    <div className="bg-sky-500/10 border border-sky-400/25 rounded-xl px-3 py-1 flex items-center gap-2 shadow-sm">
+                      <span className="text-[9px] font-semibold text-sky-400 uppercase tracking-wider">
+                        {t('Director Rep', 'Direktor-Ansehen')}
+                      </span>
+                      <span className="text-xs font-bold tabular-nums text-sky-300">
+                        {managerReputation}/100
+                      </span>
+                    </div>
+
+                    <div className="bg-purple-500/10 border border-purple-400/25 rounded-xl px-3 py-1 flex items-center gap-2 shadow-sm">
+                      <span className="text-[9px] font-semibold text-purple-400 uppercase tracking-wider">
+                        {t('Club Rep', 'Vereins-Ansehen')}
+                      </span>
+                      <span className="text-xs font-bold tabular-nums text-purple-300">
+                        {clubReputation}/100
+                      </span>
+                    </div>
+
+                    <div className="bg-emerald-500/10 border border-emerald-400/25 rounded-xl px-3 py-1 flex items-center gap-2 shadow-sm">
+                      <span className="text-[9px] font-semibold text-emerald-400 uppercase tracking-wider">
+                        {t('Career Score', 'Karriere-Punkte')}
+                      </span>
+                      <span className="text-xs font-bold tabular-nums text-emerald-300">
+                        {(state.careerScore || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Final Head Coach card */}
+                  {state.currentCoach && (
+                    <div className="mt-3 bg-white/[0.03] border border-white/[0.08] rounded-2xl p-3 w-full max-w-sm flex justify-between items-center z-10 shadow-sm backdrop-blur-md">
+                      <div className="text-left">
+                        <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                          {t('Final Head Coach', 'Letzter Cheftrainer')}
+                        </div>
+                        <div className="text-sm font-bold text-white">{state.currentCoach.name}</div>
+                        <div className="text-[11px] text-sky-300 font-medium">{state.currentCoach.style}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-emerald-400 font-extrabold text-base tabular-nums">+{state.currentCoach.ovrBoost}</div>
+                        <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider">OVR Boost</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bento Stat Badges */}
+                <div className="grid grid-cols-3 w-full gap-2 z-10 my-2">
+                  <div className="bg-white/[0.03] rounded-2xl p-2.5 border border-white/[0.07] text-center flex flex-col items-center justify-center">
+                    <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                      {t('Seasons', 'Saisons')}
+                    </div>
+                    <div className="text-base font-extrabold text-white tabular-nums">{history.length}</div>
+                  </div>
+
+                  <div className="bg-white/[0.03] rounded-2xl p-2.5 border border-white/[0.07] text-center flex flex-col items-center justify-center">
+                    <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                      Win %
+                    </div>
+                    <div className="text-base font-extrabold text-sky-400 tabular-nums">{winPct}%</div>
+                  </div>
+
+                  <div className="bg-white/[0.03] rounded-2xl p-2.5 border border-white/[0.07] text-center flex flex-col items-center justify-center">
+                    <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                      {t('Wins', 'Siege')}
+                    </div>
+                    <div className="text-base font-extrabold text-white tabular-nums">{wins}</div>
+                  </div>
+                </div>
+                
+                {/* Total Trophy Cabinet Showcase */}
+                <div className="bg-white/[0.03] rounded-2xl p-3.5 border border-white/[0.07] flex flex-col gap-2.5 my-2 w-full">
+                  <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-widest text-center flex items-center justify-center gap-1.5">
+                    <i className="fas fa-trophy text-amber-400"></i>
+                    <span>{t('Total Trophy Cabinet', 'Gesamter Trophäenschrank')}</span>
+                    <span className="text-white font-bold tabular-nums">({totalTrophies})</span>
+                  </div>
+
+                  {totalTrophies === 0 ? (
+                    <div className="text-center text-xs text-zinc-500 italic py-2">{t('No titles won', 'Keine Titel gewonnen')}</div>
                   ) : (
-                    <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 relative z-10 pt-2 pb-1">
-                      {c.trophyCounts.cl > 0 && (
-                        <div className="relative group flex flex-col items-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center relative transition-transform group-hover:scale-110" title={clubClTitle}>
-                            <i className="fas fa-trophy text-4xl text-slate-300 drop-shadow-[0_0_15px_rgba(203,213,225,0.5)]"></i>
-                            <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.cl}</span>
+                    <div className="flex flex-wrap items-center justify-center gap-2.5">
+                      {(totalTrophyCounts.wc > 0 || (state.internationalTrophies || 0) > 0) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenWorldCupHistory?.();
+                          }}
+                          className="relative cursor-pointer group hover:scale-105 transition-transform"
+                          title="World Cup Champion (Click to view World Cup Archive)"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-300 via-yellow-400 to-amber-500 border border-yellow-200 flex items-center justify-center shadow-[0_0_12px_rgba(251,191,36,0.5)] z-10">
+                            <i className="fas fa-trophy text-amber-950 text-base"></i>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubClTitle}</div>
+                          {Math.max(totalTrophyCounts.wc, state.internationalTrophies || 0) > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{Math.max(totalTrophyCounts.wc, state.internationalTrophies || 0)}
+                            </span>
+                          )}
+                        </button>
+                      )}
+
+                      {totalTrophyCounts.cl > 0 && (
+                        <div className="relative" title={clTitle}>
+                          <div className="w-9 h-9 rounded-xl bg-slate-200 border border-slate-300 flex items-center justify-center shadow-[0_0_10px_rgba(203,213,225,0.4)] z-10">
+                            <i className="fas fa-trophy text-slate-800 text-base"></i>
+                          </div>
+                          {totalTrophyCounts.cl > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{totalTrophyCounts.cl}
+                            </span>
+                          )}
                         </div>
                       )}
-                      {c.trophyCounts.el > 0 && (
-                        <div className="relative group flex flex-col items-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center relative transition-transform group-hover:scale-110" title={clubElTitle}>
-                            <i className="fas fa-trophy text-4xl text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]"></i>
-                            <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.el}</span>
+
+                      {totalTrophyCounts.el > 0 && (
+                        <div className="relative" title={elTitle}>
+                          <div className="w-9 h-9 rounded-xl bg-amber-600 border border-amber-500 flex items-center justify-center shadow-[0_0_10px_rgba(217,119,6,0.4)] z-10">
+                            <i className="fas fa-trophy text-amber-100 text-base"></i>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubElTitle}</div>
+                          {totalTrophyCounts.el > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{totalTrophyCounts.el}
+                            </span>
+                          )}
                         </div>
                       )}
-                      {c.trophyCounts.ecl > 0 && (
-                        <div className="relative group flex flex-col items-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center relative transition-transform group-hover:scale-110" title={clubEclTitle}>
-                            <i className="fas fa-trophy text-4xl text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]"></i>
-                            <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.ecl}</span>
+
+                      {totalTrophyCounts.ecl > 0 && (
+                        <div className="relative" title={eclTitle}>
+                          <div className="w-9 h-9 rounded-xl bg-emerald-600 border border-emerald-500 flex items-center justify-center shadow-[0_0_10px_rgba(5,150,105,0.4)] z-10">
+                            <i className="fas fa-trophy text-emerald-100 text-base"></i>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubEclTitle}</div>
+                          {totalTrophyCounts.ecl > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{totalTrophyCounts.ecl}
+                            </span>
+                          )}
                         </div>
                       )}
-                      {c.trophyCounts.cwc > 0 && (
-                        <div className="relative group flex flex-col items-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center relative transition-transform group-hover:scale-110" title="Global Club Cup">
-                            <i className="fas fa-globe text-4xl text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)]"></i>
-                            <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.cwc}</span>
+
+                      {totalTrophyCounts.cwc > 0 && (
+                        <div className="relative" title="Global Club Cup">
+                          <div className="w-9 h-9 rounded-xl bg-sky-900 border border-sky-600 flex items-center justify-center z-10">
+                            <i className="fas fa-globe text-yellow-400 text-base"></i>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">Global Club Cup</div>
+                          {totalTrophyCounts.cwc > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{totalTrophyCounts.cwc}
+                            </span>
+                          )}
                         </div>
                       )}
-                      {c.trophyCounts.bl > 0 && (
-                        <div className="relative group flex flex-col items-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center relative transition-transform group-hover:scale-110" title={clubLeagueTitle}>
-                            {getTrophyImage('bl', clubCountry) ? <img src={getTrophyImage('bl', clubCountry)} alt="League" className="w-full h-full object-contain" style={{ filter: getTrophyFilter('bl') }} onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <i className="fas fa-medal text-4xl text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]"></i>}
-                            <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.bl}</span>
+
+                      {totalTrophyCounts.bl > 0 && (
+                        <div className="relative" title={t('League Titles', 'Liga-Titel')}>
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 border border-amber-300 flex items-center justify-center shadow-[0_0_10px_rgba(245,158,11,0.4)] z-10">
+                            <i className="fas fa-medal text-white text-base"></i>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubLeagueTitle}</div>
+                          {totalTrophyCounts.bl > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{totalTrophyCounts.bl}
+                            </span>
+                          )}
                         </div>
                       )}
-                      {c.trophyCounts.dfb > 0 && (
-                        <div className="relative group flex flex-col items-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center relative transition-transform group-hover:scale-110" title={clubCupTitle}>
-                            <i className="fas fa-trophy text-4xl text-slate-400 drop-shadow-[0_0_15px_rgba(148,163,184,0.5)]"></i>
-                            <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.dfb}</span>
+
+                      {totalTrophyCounts.dfb > 0 && (
+                        <div className="relative" title={t('Domestic Trophies', 'Nationale Pokale')}>
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-300 to-slate-400 border border-slate-200 flex items-center justify-center shadow-[0_0_10px_rgba(203,213,225,0.4)] z-10">
+                            <i className="fas fa-trophy text-slate-700 text-base"></i>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubCupTitle}</div>
+                          {totalTrophyCounts.dfb > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{totalTrophyCounts.dfb}
+                            </span>
+                          )}
                         </div>
                       )}
-                      {c.trophyCounts.lower > 0 && (
-                        <div className="relative group flex flex-col items-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center relative transition-transform group-hover:scale-110" title={t("Lower League", "Untere Liga")}>
-                            {getTrophyImage('generic', clubCountry) ? <img src={getTrophyImage('generic', clubCountry)} alt="Lower League" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <i className="fas fa-medal text-4xl text-zinc-400 drop-shadow-[0_0_15px_rgba(161,161,170,0.5)]"></i>}
-                            <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.lower}</span>
+
+                      {totalTrophyCounts.lower > 0 && (
+                        <div className="relative" title="Lower League Title">
+                          <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center z-10">
+                            <i className="fas fa-medal text-zinc-400 text-xs"></i>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{t("Lower League", "Untere Liga")}</div>
+                          {totalTrophyCounts.lower > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{totalTrophyCounts.lower}
+                            </span>
+                          )}
                         </div>
                       )}
-                      {c.trophyCounts.reg > 0 && (
-                        <div className="relative group flex flex-col items-center">
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center relative transition-transform group-hover:scale-110" title={getDomesticCupInfo(state?.club?.country || 'GER', 4).name || 'Regional Cup'}>
-                            {getTrophyImage('generic', clubCountry) ? <img src={getTrophyImage('generic', clubCountry)} alt="Regional Cup" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <i className="fas fa-medal text-4xl text-zinc-400 drop-shadow-[0_0_15px_rgba(161,161,170,0.5)]"></i>}
-                            <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.reg}</span>
+
+                      {totalTrophyCounts.reg > 0 && (
+                        <div className="relative" title={getDomesticCupInfo(state?.club?.country || 'GER', 4, state?.club?.name, state?.club?.id).name || 'Regional Cup'}>
+                          <div className="w-8 h-8 rounded-lg bg-amber-900/80 border border-amber-700 flex items-center justify-center z-10">
+                            <i className="fas fa-shield-halved text-amber-300 text-xs"></i>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{getDomesticCupInfo(state?.club?.country || 'GER', 4).name || 'Regional Cup'}</div>
+                          {totalTrophyCounts.reg > 1 && (
+                            <span className="absolute -top-1.5 -right-1.5 bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-white/20 z-20 tabular-nums">
+                              x{totalTrophyCounts.reg}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
                   )}
                 </div>
+
+                {/* AI Career Analysis Card */}
+                <div className="w-full bg-white/[0.03] rounded-2xl p-4 my-2 border border-white/[0.07] relative overflow-hidden backdrop-blur-md">
+                  <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-sky-400 via-indigo-400 to-sky-400 opacity-60" />
+                  <div className="text-[10px] text-sky-300 font-semibold uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <i className="fas fa-wand-magic-sparkles text-sky-400 text-xs"></i>
+                    <span>{t('Career Analysis', 'Karriere-Analyse')}</span>
+                  </div>
+                  <div className="text-xs sm:text-sm text-zinc-200 leading-relaxed font-normal">
+                    {isAiLoading ? (
+                      <div className="flex items-center gap-2 text-zinc-400">
+                        <i className="fas fa-circle-notch fa-spin text-xs text-sky-400"></i>
+                        <span>Analyzing career legacy...</span>
+                      </div>
+                    ) : aiError === 'KEY_MISSING' ? (
+                      <div className="text-zinc-400 italic text-xs">
+                        API Key not found. Add your Gemini API Key in Settings &gt; Secrets to enable the AI Pundit.
+                      </div>
+                    ) : aiError ? (
+                      <div className="text-zinc-400 italic text-xs">Analyzing offline...</div>
+                    ) : (
+                      aiSummary
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer Watermark */}
+                <div className="w-full text-center mt-3 z-10 opacity-50">
+                  <div className="text-[9px] font-semibold text-zinc-400 tracking-widest uppercase">
+                    Sporting Director Legend • Career Legacy
+                  </div>
+                </div>
               </div>
-            );
-          })}
-        </div>
-        </div>
+            </div>
+
+            {/* Apple Actions Grid */}
+            <div className="flex flex-col gap-3 mt-6 w-full">
+              {!onClose && (
+                <button 
+                  onClick={onShowLeaderboard}
+                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold py-3.5 px-6 rounded-2xl shadow-[0_4px_24px_rgba(245,158,11,0.25)] transition active:scale-[0.99] flex items-center justify-center gap-2 text-sm cursor-pointer"
+                >
+                  <i className="fas fa-crown text-base"></i>
+                  <span>{t('View Global Leaderboard', 'Globale Rangliste')}</span>
+                </button>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <button
+                  onClick={shareCard}
+                  disabled={isDownloading}
+                  className="w-full sm:flex-1 bg-sky-500 hover:bg-sky-400 active:scale-[0.99] disabled:opacity-60 text-white font-semibold py-3.5 px-6 rounded-2xl transition shadow-[0_4px_20px_rgba(56,189,248,0.25)] flex items-center justify-center gap-2 text-sm cursor-pointer border border-sky-400/30"
+                >
+                  {isDownloading ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-share-nodes"></i>}
+                  <span>{isDownloading ? t('Processing...', 'Wird erstellt...') : t('Share Director Card', 'Direktor-Karte Teilen')}</span>
+                </button>
+                
+                {!onClose && (
+                  <button
+                    onClick={onReset}
+                    className="w-full sm:flex-1 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white font-semibold py-3.5 px-6 rounded-2xl shadow-[0_4px_20px_rgba(16,185,129,0.25)] transition flex items-center justify-center gap-2 text-sm cursor-pointer border border-emerald-500/30"
+                  >
+                    <i className="fas fa-redo"></i>
+                    <span>{t('Start New Career', 'Neue Karriere')}</span>
+                  </button>
+                )}
+              </div>
+              
+              {!onClose && (
+                <button
+                  onClick={onContinueEndless ? onContinueEndless : undefined}
+                  disabled={!onContinueEndless || history.length < 35 || state.endlessModeActive}
+                  className="w-full bg-white/[0.05] hover:bg-white/[0.09] disabled:bg-white/[0.02] disabled:text-zinc-600 text-zinc-300 font-semibold py-3.5 px-6 rounded-2xl transition active:scale-[0.99] flex items-center justify-center gap-2 text-sm border border-white/[0.08] disabled:border-white/[0.04] disabled:cursor-not-allowed group relative cursor-pointer"
+                  title={history.length < 35 ? t('Complete 35 seasons to unlock', 'Absolviere 35 Saisons zum Freischalten') : ''}
+                >
+                  <i className={`fas fa-infinity ${(history.length < 35 || state.endlessModeActive) ? 'text-zinc-700' : 'text-sky-400'}`}></i>
+                  <span>{t('Endless Mode', 'Endlosmodus')}</span>
+                  {(!onContinueEndless || history.length < 35 || state.endlessModeActive) && (
+                    <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
+                      <span className="text-[10px] font-semibold text-amber-300 uppercase tracking-wider">
+                        {state.endlessModeActive ? 'Endless Mode Active' : 'Requires 35 Seasons'}
+                      </span>
+                    </div>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* Tab 2: Career League Progression */}
+        {/* ========================================================================= */}
+        {activeTab === 'chart' && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="bg-[#121520]/90 rounded-[28px] p-5 sm:p-7 border border-white/[0.08] shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-400/25 flex items-center justify-center text-sky-400">
+                    <i className="fas fa-chart-line text-sm"></i>
+                  </div>
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                      {t('Career League Progression', 'Karriere-Ligenverlauf')}
+                    </h2>
+                    <p className="text-xs text-zinc-400 font-medium">
+                      {t('Division hierarchy and season finish trends over time', 'Entwicklung der Ligapositionen über Zeit')}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-sky-300 bg-sky-500/10 border border-sky-400/20 px-3 py-1 rounded-lg tabular-nums">
+                  {history.length} {t('Seasons', 'Saisons')}
+                </span>
+              </div>
+
+              {/* Tier & Honour Visual Guide */}
+              <div className="flex items-center gap-3 sm:gap-4 mb-4 text-[10px] font-semibold text-zinc-400 flex-wrap border-b border-white/[0.04] pb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-400 border border-sky-300" />
+                  <span>{t('Tier 1 (Top Flight)', '1. Liga (Oberhaus)')}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-300" />
+                  <span>{t('Tier 2 (Second Division)', '2. Liga (Unterhaus)')}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-400 border border-purple-300" />
+                  <span>{t('Tier 3+ (Lower Leagues)', '3.+ Liga (Basis)')}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <i className="fa-solid fa-trophy text-amber-400 text-xs" />
+                  <span className="text-amber-300 font-bold">{t('Champions / Promoted', 'Meister / Aufstieg')}</span>
+                </div>
+              </div>
+
+              <div className="h-64 sm:h-72 w-full relative">
+                <Line data={chartData} options={chartOptions} />
+              </div>
+            </div>
+
+            {/* Progressive Disclosure: Career Milestones Bento */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 backdrop-blur-xl">
+                <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">
+                  {t('Peak Division Finish', 'Beste Platzierung')}
+                </div>
+                <div className="text-xl font-extrabold text-white tabular-nums">
+                  {bestFinish ? `${bestFinish.pos}. Place` : 'N/A'}
+                </div>
+                <div className="text-xs text-sky-300 font-medium truncate mt-0.5">
+                  {bestFinish ? `${bestFinish.clubName} (${bestFinish.year})` : ''}
+                </div>
+              </div>
+
+              <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 backdrop-blur-xl">
+                <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">
+                  {t('Overall Match Record', 'Gesamtbilanz')}
+                </div>
+                <div className="text-xl font-extrabold text-white tabular-nums">
+                  {wins} <span className="text-xs text-zinc-400 font-normal">/ {matches}</span>
+                </div>
+                <div className="text-xs text-emerald-400 font-medium mt-0.5 tabular-nums">
+                  {winPct}% {t('Win Rate', 'Siegquote')}
+                </div>
+              </div>
+
+              <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 backdrop-blur-xl">
+                <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-1">
+                  {t('Silverware Efficiency', 'Titelausbeute')}
+                </div>
+                <div className="text-xl font-extrabold text-amber-400 tabular-nums">
+                  {totalTrophies} <span className="text-xs text-zinc-400 font-normal">{t('Cups', 'Pokale')}</span>
+                </div>
+                <div className="text-xs text-zinc-300 font-medium mt-0.5 tabular-nums">
+                  {history.length > 0 ? (totalTrophies / history.length).toFixed(2) : '0.00'} {t('per season', 'pro Saison')}
+                </div>
+              </div>
+            </div>
+
+            {/* Crowd & Stadium Expansion Footprint */}
+            {stadiumMetrics && (
+              <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-4 sm:p-5 backdrop-blur-xl">
+                <div className="flex items-center justify-between mb-3 border-b border-white/[0.05] pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-sky-500/15 border border-sky-400/25 flex items-center justify-center text-sky-400 text-xs">
+                      <i className="fas fa-users"></i>
+                    </div>
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      {t('Crowd & Stadium Infrastructure', 'Zuschauer & Stadion-Infrastruktur')}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-zinc-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06] tabular-nums">
+                    {t('Avg. Utilization', 'Ø Auslastung')}: {stadiumMetrics.avgUtil}%
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-black/20 rounded-xl p-3 border border-white/[0.04]">
+                    <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                      {t('Career Spectators', 'Gesamtzuschauer')}
+                    </div>
+                    <div className="text-lg font-extrabold text-sky-300 tabular-nums">
+                      {formatNum(stadiumMetrics.totalCrowd)}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                      {t('Total home turnstile attendance', 'Heimspiel-Stadionbesucher')}
+                    </div>
+                  </div>
+
+                  <div className="bg-black/20 rounded-xl p-3 border border-white/[0.04]">
+                    <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                      {t('Peak Season Turnout', 'Rekord-Zuschauerschnitt')}
+                    </div>
+                    <div className="text-lg font-extrabold text-white tabular-nums">
+                      {formatNum(stadiumMetrics.peakAtt)}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                      {stadiumMetrics.peakAttSeason ? `${stadiumMetrics.peakAttSeason.clubName} ('${String(stadiumMetrics.peakAttSeason.year).slice(-2)})` : '—'}
+                    </div>
+                  </div>
+
+                  <div className="bg-black/20 rounded-xl p-3 border border-white/[0.04]">
+                    <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                      {t('Peak Arena Capacity', 'Max. Stadionkapazität')}
+                    </div>
+                    <div className="text-lg font-extrabold text-emerald-400 tabular-nums">
+                      {formatNum(stadiumMetrics.peakCap)} <span className="text-xs text-zinc-400 font-normal">{t('Seats', 'Plätze')}</span>
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                      {t('Highest capacity reached', 'Höchster Ausbauzustand')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Season Journey Breakdown (Chronological Season-by-Season Log) */}
+            <div className="bg-[#121520]/90 rounded-[28px] p-5 sm:p-7 border border-white/[0.08] shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
+              <div className="flex items-center justify-between mb-4 border-b border-white/[0.06] pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-400/25 flex items-center justify-center text-amber-400 text-xs">
+                    <i className="fa-solid fa-list-ol"></i>
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                      {t('Season-by-Season Division Journey', 'Saison-Verlauf & Platzierungen')}
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 font-medium">
+                      {t('Exact finishes, promotions, and achievements across every campaign', 'Genaue Platzierungen, Aufstiege und Titel über alle Spielzeiten')}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-semibold text-zinc-400 tabular-nums">
+                  {history.length} {t('Completed Seasons', 'Gespielte Saisons')}
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {history.map((h: any, idx: number) => {
+                  const tier = h.tier || 1;
+                  const country = h.country || singleCountry;
+                  const leagueInfo = getLeagueInfo(tier, country);
+                  const isChamp = h.pos === 1;
+                  const nextH = history[idx + 1];
+                  const sameClubNext = Boolean(nextH && (
+                    (h.clubId != null && nextH.clubId != null && String(nextH.clubId) === String(h.clubId)) ||
+                    (nextH.clubName && h.clubName && nextH.clubName.toLowerCase().trim() === h.clubName.toLowerCase().trim())
+                  ));
+                  const isCurrentClubLast = idx === history.length - 1 && Boolean(
+                    (h.clubId != null && state.club?.id != null && String(state.club.id) === String(h.clubId)) ||
+                    (state.club?.name && h.clubName && state.club.name.toLowerCase().trim() === h.clubName.toLowerCase().trim())
+                  );
+                  const hasKnownNextTier = sameClubNext || isCurrentClubLast;
+                  const nextTierVal = sameClubNext ? (nextH.tier || tier) : (isCurrentClubLast ? (state.club?.tier || tier) : tier);
+                  const maxCountryTier = getMaxTier(country);
+                  const isPromo = !isChamp && tier > 1 && (
+                    h.status === 'P' ||
+                    (hasKnownNextTier ? nextTierVal < tier : h.pos <= 2)
+                  );
+                  const isTop4 = !isChamp && tier === 1 && h.pos <= 4;
+                  const isRelegated = !isChamp && tier < maxCountryTier && !h.survived && (
+                    h.status === 'R' ||
+                    h.financialRelegation ||
+                    (hasKnownNextTier ? nextTierVal > tier : h.pos >= 17)
+                  );
+
+                  return (
+                    <div
+                      key={`journey-${h.year}-${idx}`}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] transition-all"
+                    >
+                      {/* Left: Year & Club */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-xs font-bold text-sky-300 tabular-nums w-10 shrink-0">
+                          {h.year}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm font-bold text-white truncate">
+                            {h.clubName}
+                          </div>
+                          <div className="text-[10px] text-zinc-400 flex items-center gap-1.5 flex-wrap">
+                            <span className={tier === 1 ? 'text-sky-300 font-semibold' : tier === 2 ? 'text-emerald-300 font-semibold' : 'text-purple-300 font-semibold'}>
+                              {leagueInfo?.name || `Tier ${tier}`}
+                            </span>
+                            <span className="text-zinc-600">·</span>
+                            <span>Tier {tier}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Exact Finish & Status */}
+                      <div className="flex items-center gap-3 shrink-0 text-right">
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-1.5 text-xs sm:text-sm font-extrabold tabular-nums">
+                            {isChamp && <i className="fa-solid fa-trophy text-amber-400 text-xs" />}
+                            <span className={isChamp ? 'text-amber-300' : isTop4 ? 'text-sky-300' : isPromo ? 'text-emerald-300' : isRelegated ? 'text-rose-400' : 'text-white'}>
+                              {h.pos}. Place
+                            </span>
+                          </div>
+                          <div className="text-[10px] font-semibold tracking-wide">
+                            {isChamp && (tier === 1 ? (
+                              <span className="text-amber-300">{t('League Champions', 'Meister')}</span>
+                            ) : (
+                              <span className="text-emerald-400">{t('Tier Champions & Promoted', 'Meister & Aufstieg')}</span>
+                            ))}
+                            {!isChamp && isPromo && (
+                              <span className="text-emerald-400">
+                                {tier > 2 ? t(`Promoted to Tier ${tier - 1} ⬆`, `Aufstieg in ${tier - 1}. Liga ⬆`) : t('Promoted to Tier 1 ⬆', 'Aufstieg in 1. Liga ⬆')}
+                              </span>
+                            )}
+                            {!isChamp && isTop4 && (
+                              <span className="text-sky-300">{t('Continental Qualified ★', 'Kontinental-Quali ★')}</span>
+                            )}
+                            {isRelegated && (
+                              <span className="text-rose-400">{t('Relegated ⬇', 'Abstieg ⬇')}</span>
+                            )}
+                            {!isChamp && !isPromo && !isTop4 && !isRelegated && (
+                              <span className="text-zinc-500">{t('Mid-Table', 'Mittelfeld')}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Optional Goal Record & Attendance */}
+                        <div className="hidden sm:flex flex-col items-end pl-3 border-l border-white/[0.08] text-[10px] text-zinc-400 tabular-nums">
+                          <span>{h.gf || 0} : {h.ga || 0} {t('Goals', 'Tore')}</span>
+                          {h.att ? <span>{formatNum(h.att)} {t('Fans', 'Fans')}</span> : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* Tab 3: Clubs & Silverware History */}
+        {/* ========================================================================= */}
+        {activeTab === 'clubs' && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+                  <i className="fas fa-trophy text-amber-400"></i>
+                  <span>
+                    {Object.keys(nationalStats).length > 0
+                      ? t('Club & International History & Trophy Cabinet', 'Vereins- & Länderspielhistorie & Titel')
+                      : t('Club History & Trophy Cabinet', 'Vereinshistorie & Titel')}
+                  </span>
+                </h2>
+                <p className="text-xs text-zinc-400 font-medium mt-0.5">
+                  {Object.keys(nationalStats).length > 0
+                    ? t('Records, match ratios, and trophies won across each club and international tenure', 'Bilanzen und Trophäen nach Verein und Nationalteam')
+                    : t('Records, match ratios, and trophies won across each tenure', 'Bilanzen und Trophäen nach Verein')}
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-3 py-1 rounded-lg tabular-nums">
+                {Object.keys(nationalStats).length > 0
+                  ? `${Object.keys(clubStats).length} ${t('Clubs', 'Vereine')} · ${Object.keys(nationalStats).length} ${Object.keys(nationalStats).length === 1 ? t('National Team', 'Nationalteam') : t('National Teams', 'Nationalteams')}`
+                  : `${Object.keys(clubStats).length} ${t('Clubs Managed', 'Vereine')}`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.values(clubStats).map((c) => {
+                const domCount =
+                  (c.trophyCounts.bl || 0) +
+                  (c.trophyCounts.dfb || 0) +
+                  (c.trophyCounts.lower || 0) +
+                  (c.trophyCounts.reg || 0);
+                const intlCount =
+                  (c.trophyCounts.cl || 0) +
+                  (c.trophyCounts.el || 0) +
+                  (c.trophyCounts.ecl || 0) + 
+                  (c.trophyCounts.cwc || 0);
+
+                const matchClub = ALL_CLUBS.find(club => club.name === c.name);
+                const clubCountry = c.country || matchClub?.country || 'GER';
+                const clubLeagueTitle = getLeagueInfo(1, clubCountry).name;
+                const clubCupTitle = getDomesticCupInfo(clubCountry, 1, c.name, matchClub?.id).name || 'National Cup';
+                const { cl: clubClTitle, el: clubElTitle, ecl: clubEclTitle } = getContinentalCupNames(clubCountry);
+
+                return (
+                  <div
+                    key={c.name}
+                    className="bg-[#121520]/90 rounded-[28px] p-5 border border-white/[0.08] hover:border-white/[0.16] shadow-xl flex flex-col justify-between relative overflow-hidden backdrop-blur-2xl transition duration-200"
+                  >
+                    <div>
+                      <div className="flex items-center gap-3.5 mb-4">
+                        <ClubLogo
+                          name={c.name}
+                          id={matchClub?.id}
+                          color={c.color}
+                          logo={c.logo || matchClub?.logo}
+                          fallbackLogo={matchClub?.fallbackLogo}
+                          isModActive={isModActive}
+                          className="w-12 h-12 object-contain drop-shadow shrink-0"
+                          fallbackClassName="w-12 h-12 text-lg rounded-xl shadow flex items-center justify-center font-bold text-white shrink-0 border border-white/10"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base font-bold text-white tracking-tight break-words">{c.name}</h3>
+                          <p className="text-xs text-zinc-400 font-medium">
+                            <span className="tabular-nums">{c.seasons}</span> {c.seasons === 1 ? t('Season', 'Saison') : t('Seasons', 'Saisons')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Stats bento */}
+                      <div className="grid grid-cols-3 gap-2 bg-white/[0.03] p-3 rounded-2xl border border-white/[0.06] mb-4 text-center">
+                        <div>
+                          <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                            {t('Wins', 'Siege')}
+                          </div>
+                          <div className="text-sm font-extrabold text-emerald-400 tabular-nums">{c.wins}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                            {t('Matches', 'Spiele')}
+                          </div>
+                          <div className="text-sm font-extrabold text-white tabular-nums">{c.matches}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                            Win %
+                          </div>
+                          <div className="text-sm font-extrabold text-sky-400 tabular-nums">
+                            {c.matches > 0 ? Math.round((c.wins / c.matches) * 100) : 0}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Trophy Cabinet showcase inside club card */}
+                    <div className="bg-black/40 rounded-2xl p-3.5 border border-white/[0.06] flex flex-col gap-2.5 relative overflow-hidden shadow-inner">
+                      <div className="text-[10px] text-amber-400/90 font-semibold uppercase tracking-widest text-center flex items-center justify-center gap-1.5">
+                        <i className="fas fa-trophy text-[9px]"></i>
+                        <span>{t('Trophy Cabinet', 'Trophäenschrank')}</span>
+                        <span className="text-white font-bold tabular-nums">({domCount + intlCount})</span>
+                      </div>
+
+                      {(domCount + intlCount) === 0 ? (
+                        <div className="text-center text-xs text-zinc-500 italic py-2">{t('No titles won', 'Keine Titel gewonnen')}</div>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                          {c.trophyCounts.cl > 0 && (
+                            <div className="relative group flex flex-col items-center">
+                              <div className="w-10 h-10 flex items-center justify-center relative transition-transform group-hover:scale-105" title={clubClTitle}>
+                                <i className="fas fa-trophy text-2xl text-slate-300 drop-shadow-[0_0_10px_rgba(203,213,225,0.4)]"></i>
+                                {c.trophyCounts.cl > 1 && (
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                    x{c.trophyCounts.cl}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-400 text-center mt-1 font-semibold max-w-[70px] truncate">{clubClTitle}</div>
+                            </div>
+                          )}
+
+                          {c.trophyCounts.el > 0 && (
+                            <div className="relative group flex flex-col items-center">
+                              <div className="w-10 h-10 flex items-center justify-center relative transition-transform group-hover:scale-105" title={clubElTitle}>
+                                <i className="fas fa-trophy text-2xl text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.4)]"></i>
+                                {c.trophyCounts.el > 1 && (
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                    x{c.trophyCounts.el}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-400 text-center mt-1 font-semibold max-w-[70px] truncate">{clubElTitle}</div>
+                            </div>
+                          )}
+
+                          {c.trophyCounts.ecl > 0 && (
+                            <div className="relative group flex flex-col items-center">
+                              <div className="w-10 h-10 flex items-center justify-center relative transition-transform group-hover:scale-105" title={clubEclTitle}>
+                                <i className="fas fa-trophy text-2xl text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.4)]"></i>
+                                {c.trophyCounts.ecl > 1 && (
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                    x{c.trophyCounts.ecl}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-400 text-center mt-1 font-semibold max-w-[70px] truncate">{clubEclTitle}</div>
+                            </div>
+                          )}
+
+                          {c.trophyCounts.cwc > 0 && (
+                            <div className="relative group flex flex-col items-center">
+                              <div className="w-10 h-10 flex items-center justify-center relative transition-transform group-hover:scale-105" title="Global Club Cup">
+                                <i className="fas fa-globe text-2xl text-yellow-400 drop-shadow-[0_0_10px_rgba(234,179,8,0.4)]"></i>
+                                {c.trophyCounts.cwc > 1 && (
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                    x{c.trophyCounts.cwc}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-400 text-center mt-1 font-semibold max-w-[70px] truncate">Club Cup</div>
+                            </div>
+                          )}
+
+                          {c.trophyCounts.bl > 0 && (
+                            <div className="relative group flex flex-col items-center">
+                              <div className="w-10 h-10 flex items-center justify-center relative transition-transform group-hover:scale-105" title={clubLeagueTitle}>
+                                {getTrophyImage('bl', clubCountry) ? (
+                                  <img 
+                                    src={getTrophyImage('bl', clubCountry)} 
+                                    alt="League" 
+                                    className="w-8 h-8 object-contain" 
+                                    style={{ filter: getTrophyFilter('bl') }} 
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                                  />
+                                ) : (
+                                  <i className="fas fa-medal text-2xl text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.4)]"></i>
+                                )}
+                                {c.trophyCounts.bl > 1 && (
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                    x{c.trophyCounts.bl}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-400 text-center mt-1 font-semibold max-w-[70px] truncate">{clubLeagueTitle}</div>
+                            </div>
+                          )}
+
+                          {c.trophyCounts.dfb > 0 && (
+                            <div className="relative group flex flex-col items-center">
+                              <div className="w-10 h-10 flex items-center justify-center relative transition-transform group-hover:scale-105" title={clubCupTitle}>
+                                <i className="fas fa-trophy text-2xl text-slate-300 drop-shadow-[0_0_10px_rgba(148,163,184,0.4)]"></i>
+                                {c.trophyCounts.dfb > 1 && (
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                    x{c.trophyCounts.dfb}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-400 text-center mt-1 font-semibold max-w-[70px] truncate">{clubCupTitle}</div>
+                            </div>
+                          )}
+
+                          {c.trophyCounts.lower > 0 && (
+                            <div className="relative group flex flex-col items-center">
+                              <div className="w-9 h-9 flex items-center justify-center relative" title={t("Lower League", "Untere Liga")}>
+                                <i className="fas fa-medal text-xl text-zinc-400"></i>
+                                {c.trophyCounts.lower > 1 && (
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                    x{c.trophyCounts.lower}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-400 text-center mt-1 font-semibold max-w-[70px] truncate">Lower Div</div>
+                            </div>
+                          )}
+
+                          {c.trophyCounts.reg > 0 && (
+                            <div className="relative group flex flex-col items-center">
+                              <div className="w-9 h-9 flex items-center justify-center relative" title={getDomesticCupInfo(clubCountry, 4, c.name, matchClub?.id).name || 'Regional Cup'}>
+                                <i className="fas fa-shield-halved text-xl text-amber-300"></i>
+                                {c.trophyCounts.reg > 1 && (
+                                  <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                    x{c.trophyCounts.reg}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-zinc-400 text-center mt-1 font-semibold max-w-[70px] truncate">Regional</div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* National Team Tenures & World Cup Silverware */}
+              {Object.values(nationalStats).map((nat) => {
+                const winPct = nat.matches > 0 ? Math.round((nat.wins / nat.matches) * 100) : 0;
+                const sortedYears = [...nat.years].sort((a, b) => a - b);
+                const yearsLabel = sortedYears.length > 0
+                  ? sortedYears.map((y) => `${y} ${t('World Cup', 'WM')}`).join(', ')
+                  : t('World Cup Campaign', 'WM-Kampagne');
+
+                return (
+                  <div
+                    key={`nat-${nat.name}`}
+                    onClick={() => onOpenWorldCupHistory?.()}
+                    className="bg-[#121520]/90 rounded-[28px] p-5 border border-amber-500/25 hover:border-amber-400/50 shadow-xl flex flex-col justify-between relative overflow-hidden backdrop-blur-2xl transition duration-200 cursor-pointer group"
+                    title={t('Click to view World Cup tournament archive', 'Klicken für WM-Archiv')}
+                  >
+                    {/* Top ambient gold accent */}
+                    <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500/0 via-amber-400/70 to-amber-500/0"></div>
+
+                    <div>
+                      <div className="flex items-center gap-3.5 mb-4">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/15 to-yellow-400/25 border border-amber-400/30 flex items-center justify-center text-2xl drop-shadow shrink-0 shadow-inner group-hover:scale-105 transition-transform">
+                          {nat.flag}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h3 className="text-base font-bold text-white tracking-tight break-words">
+                              {nat.name}
+                            </h3>
+                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 tracking-wider shrink-0">
+                              {t('National Team', 'Nationalelf')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-amber-300/80 font-medium flex items-center gap-1.5 mt-0.5 truncate">
+                            <i className="fa-solid fa-earth-americas text-[10px] shrink-0 text-amber-400"></i>
+                            <span className="truncate">{yearsLabel}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Stats bento */}
+                      <div className="grid grid-cols-3 gap-2 bg-white/[0.03] p-3 rounded-2xl border border-white/[0.06] mb-4 text-center">
+                        <div>
+                          <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                            {t('Wins', 'Siege')}
+                          </div>
+                          <div className="text-sm font-extrabold text-emerald-400 tabular-nums">{nat.wins}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                            {t('Matches', 'Spiele')}
+                          </div>
+                          <div className="text-sm font-extrabold text-white tabular-nums">{nat.matches}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+                            Win %
+                          </div>
+                          <div className="text-sm font-extrabold text-amber-400 tabular-nums">{winPct}%</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Trophy Cabinet & Best Finish Showcase */}
+                    <div className="bg-black/40 rounded-2xl p-3.5 border border-amber-500/20 flex flex-col gap-2.5 relative overflow-hidden shadow-inner">
+                      <div className="text-[10px] text-amber-400/90 font-semibold uppercase tracking-widest text-center flex items-center justify-center gap-1.5">
+                        <i className="fas fa-trophy text-[9px]"></i>
+                        <span>{t('World Cup Silverware', 'WM-Trophäen')}</span>
+                        <span className="text-white font-bold tabular-nums">({nat.trophiesCount})</span>
+                      </div>
+
+                      {nat.trophiesCount === 0 ? (
+                        <div className="text-center py-2 flex flex-col items-center justify-center gap-1">
+                          <span className="text-xs font-bold text-zinc-300">
+                            {t('Best Finish:', 'Beste Platzierung:')}{' '}
+                            <span className="text-amber-400">{nat.bestFinish}</span>
+                          </span>
+                          <span className="text-[10px] text-zinc-500 italic">
+                            {t('Click to inspect tournament log', 'Klicken für Details')}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center gap-1.5 pt-1">
+                          <div className="relative group/trophy flex flex-col items-center">
+                            <div
+                              className="w-11 h-11 flex items-center justify-center relative transition-transform group-hover/trophy:scale-110"
+                              title="FIFA World Cup Champion"
+                            >
+                              <i className="fas fa-trophy text-3xl text-amber-400 drop-shadow-[0_0_14px_rgba(251,191,36,0.6)]"></i>
+                              {nat.trophiesCount > 1 && (
+                                <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[9px] font-extrabold px-1.5 py-0.2 rounded-md shadow-md tabular-nums">
+                                  x{nat.trophiesCount}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-amber-300 text-center mt-1 font-bold">
+                              {t('World Cup Champion', 'Weltmeister')}
+                            </div>
+                          </div>
+                          {sortedYears.length > 0 && (
+                            <div className="text-[10px] text-zinc-400 text-center font-medium">
+                              {sortedYears.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* Tab 4: Hall of Fame & Global Leaderboard */}
+        {/* ========================================================================= */}
+        {activeTab === 'leaderboard' && (
+          <div className="animate-fadeIn">
+            <div className="bg-[#0c0e14]/90 rounded-3xl p-5 sm:p-7 border border-white/[0.08] shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur-2xl relative overflow-hidden">
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex items-center justify-between mb-6 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-sky-500/15 border border-sky-400/25 flex items-center justify-center text-sky-400 text-sm">
+                    <i className="fa-solid fa-trophy" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase font-semibold tracking-wider text-sky-400 mb-0.5">
+                      {t('Hall of Fame Standards', 'Hall of Fame Vergleich')}
+                    </div>
+                    <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                      {t('Global Leaderboard', 'Globale Rangliste')}
+                    </h2>
+                    <p className="text-xs text-zinc-400 font-normal">
+                      {t('Historical sporting directors and all-time career benchmarks', 'Historische Manager und allzeitige Karriere-Punkte')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Your Score Hero Row */}
+              <div className="bg-gradient-to-r from-sky-500/[0.08] via-white/[0.02] to-transparent p-4 sm:p-5 rounded-2xl border border-sky-400/25 flex items-center justify-between mb-6 shadow-[0_0_24px_rgba(56,189,248,0.08)] relative z-10">
+                <div>
+                  <div className="text-[10px] text-sky-400 font-semibold uppercase tracking-wider mb-1">
+                    {t('Your Career Score', 'Deine Karriere-Punkte')}
+                  </div>
+                  <div className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                    {(state.managerName || (lang === 'de' ? 'Der Manager' : 'The Manager'))}
+                  </div>
+                  <div className="text-xs text-zinc-400 font-normal mt-0.5 flex items-center gap-1.5">
+                    <span>{history.length} {t('Seasons', 'Saisons')}</span>
+                    <span className="text-zinc-600">·</span>
+                    <span className="text-amber-400/90 font-medium">{totalTrophies} {t('Trophies', 'Titel')}</span>
+                  </div>
+                </div>
+                <div className="px-5 py-2.5 rounded-2xl bg-sky-500/20 text-sky-300 font-mono font-bold text-lg sm:text-xl shadow-[0_0_20px_rgba(56,189,248,0.2)] tabular-nums border border-sky-400/30">
+                  {((state.careerScore || 0) / 1000).toFixed(1)}k
+                </div>
+              </div>
+
+              {/* Hall of Fame List */}
+              <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-widest mb-3 pl-1 relative z-10">
+                {t('All-Time Benchmarks', 'Allzeit-Vergleich')}
+              </div>
+
+              <div className="space-y-2 relative z-10">
+                {(globalHighscores && globalHighscores.length > 0 ? globalHighscores : HISTORICAL_DIRECTORS).slice(0, 10).map((mgr, index) => {
+                  const score = mgr.score || 0;
+                  const name = (mgr as any).managerName || (mgr as any).directorName || (mgr as any).name || 'Director';
+                  const hasPassed = (state.careerScore || 0) >= score;
+                  const rank = index + 1;
+
+                  return (
+                    <div 
+                      key={index} 
+                      className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                        hasPassed 
+                          ? 'bg-amber-500/[0.07] border-amber-400/25 shadow-[0_0_15px_rgba(245,158,11,0.06)]' 
+                          : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-xl border flex items-center justify-center font-bold text-xs tabular-nums shrink-0 ${
+                          hasPassed 
+                            ? 'bg-amber-400/20 border-amber-400/40 text-amber-300 shadow-sm' 
+                            : 'bg-white/[0.04] border-white/[0.06] text-zinc-400'
+                        }`}>
+                          #{rank}
+                        </div>
+                        <div>
+                          <div className={`text-xs sm:text-sm font-bold ${hasPassed ? 'text-amber-200' : 'text-zinc-200'}`}>
+                            {name}
+                          </div>
+                          {(mgr as any).era && (
+                            <div className="text-[10px] text-zinc-500">{(mgr as any).era}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="text-xs sm:text-sm font-mono font-bold text-white tabular-nums">
+                            {formatNum(score)}
+                          </div>
+                          <div className="text-[9px] text-zinc-500 uppercase font-semibold">
+                            {t('Points', 'Punkte')}
+                          </div>
+                        </div>
+
+                        {hasPassed ? (
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-400/20">
+                            <i className="fa-solid fa-check text-[9px]" />
+                            <span>{t('Surpassed', 'Übertroffen')}</span>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider hidden sm:inline">
+                            Target
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {onShowLeaderboard && (
+                <button
+                  type="button"
+                  onClick={onShowLeaderboard}
+                  className="mt-6 w-full py-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-zinc-300 hover:text-white transition flex items-center justify-center gap-2 cursor-pointer shadow-sm relative z-10"
+                >
+                  <i className="fa-solid fa-list-ol text-xs text-sky-400" />
+                  <span>{t('Open Full Highscores Board', 'Vollständige Bestenliste öffnen')}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

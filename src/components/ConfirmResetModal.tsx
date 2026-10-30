@@ -1,78 +1,91 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Language } from '../types';
 import { t as tr } from '../data/translations';
-import { useModalDismiss } from '../utils/modalUtils';
 
 interface ConfirmResetModalProps {
   lang: Language;
   onConfirm: () => void;
-  onClose: () => void;
+  onCancel: () => void;
 }
 
 export const ConfirmResetModal: React.FC<ConfirmResetModalProps> = ({
   lang,
   onConfirm,
-  onClose,
+  onCancel,
 }) => {
-  const t = (en: string, _de?: string, _ignoredEs?: string) => en;
+  const t = (en: string, de?: string, _ignoredEs?: string) => tr(lang, en, de);
 
-  useModalDismiss(onClose);
+  // Isolate Escape key so resetting confirmation closes cleanly
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopImmediatePropagation();
+        e.stopPropagation();
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onCancel]);
 
-  const modal = (
+  return (
     <motion.div
-      initial={{ opacity: 0 }} 
-      animate={{ opacity: 1 }} 
-      exit={{ opacity: 0 }} 
-      transition={{ duration: 0.15 }}
-      onClick={onClose}
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10020] p-4 backdrop-blur-2xl cursor-pointer"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.1, ease: 'linear' }}
+      onClick={onCancel}
+      className="fixed inset-0 bg-black/80 flex flex-col items-center justify-center z-[70] p-2.5 sm:p-4 backdrop-blur-xl cursor-pointer overflow-y-auto overscroll-contain"
     >
       <motion.div
-        initial={{ scale: 0.95, y: 15, opacity: 0 }} 
-        animate={{ scale: 1, y: 0, opacity: 1 }} 
-        exit={{ scale: 0.95, y: 10 }} 
-        transition={{ type: 'spring', damping: 26, stiffness: 340 }}
+        initial={{ scale: 0.98, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.98, opacity: 0 }}
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] w-full max-w-sm rounded-2xl border border-white/[0.04] p-6 shadow-[0_25px_70px_rgba(0,0,0,0.85)] relative cursor-default overflow-hidden max-h-[92vh] overflow-y-auto custom-scrollbar"
+        className="bg-[#1c1c1e] w-full max-w-md rounded-[32px] p-5 sm:p-8 shadow-2xl border border-white/15 text-center relative overflow-hidden cursor-default max-h-[92vh] sm:max-h-[88vh] flex flex-col min-h-0 my-auto shrink-0"
       >
-        {/* Top Radiant Rose Glow */}
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-rose-500/30 to-transparent pointer-events-none" />
-        
-        <div className="relative z-10">
-          <div className="w-12 h-12 rounded-xl bg-rose-500/[0.05] border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
-            <i className="fas fa-rotate-right text-lg"></i>
-          </div>
-          
-          <h2 className="text-lg font-semibold text-white text-center mb-2 tracking-tight">
-            {t('Start New Career?', 'Neue Karriere starten?')}
-          </h2>
-          <p className="text-xs text-zinc-400 font-normal text-center mb-7 px-4 leading-relaxed">
-            {t(
-              'Are you sure you want to start over? All your current club progress, trophies, season history, and treasury funds will be reset.',
-              'Bist du sicher, dass du neu anfangen möchtest? Alle Vereinsfortschritte, Trophäen, Saisonhistorien und das Budget werden zurückgesetzt.'
-            )}
-          </p>
-          
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 py-3 rounded-xl font-medium text-xs sm:text-sm text-zinc-300 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.04] transition active:scale-[0.99] cursor-pointer"
-            >
-              {t('Keep Playing', 'Weiterspielen')}
-            </button>
-            <button
-              onClick={onConfirm}
-              className="flex-1 py-3 rounded-xl font-medium text-xs sm:text-sm text-white bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 shadow-[0_4px_16px_rgba(244,63,94,0.25)] border border-rose-400/20 transition active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <i className="fas fa-rotate-right text-xs"></i>
-              {t('Reset Career', 'Karriere zurücksetzen')}
-            </button>
-          </div>
+        {/* Glow backdrop accent */}
+        <div className="absolute -top-12 -left-12 w-40 h-40 bg-rose-500/20 rounded-full blur-[50px] pointer-events-none"></div>
+        <div className="absolute -bottom-12 -right-12 w-40 h-40 bg-rose-500/10 rounded-full blur-[50px] pointer-events-none"></div>
+
+        {/* Warning Badge Icon */}
+        <div className="relative z-10 w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-500/20 to-rose-600/10 text-rose-400 flex items-center justify-center text-2xl mx-auto mb-5 border border-rose-500/30 shadow-lg shadow-rose-500/10">
+          <i className="fas fa-rotate-right"></i>
+        </div>
+
+        {/* Title */}
+        <h3 className="relative z-10 text-2xl font-black text-white tracking-tight mb-2">
+          {t('Start New Career?', 'Karriere Neu Starten?')}
+        </h3>
+
+        {/* Description */}
+        <p className="relative z-10 text-xs sm:text-sm text-[#8e8e93] font-medium leading-relaxed mb-8 px-2">
+          {t(
+            'Are you sure you want to start over? All your current club progress, trophies, season history, and treasury funds will be reset.',
+            'Moechtest du wirklich eine neue Karriere beginnen? Dein aktueller Vereinsfortschritt, Titel, Saisondaten und Kontostand werden zurueckgesetzt.'
+          )}
+        </p>
+
+        {/* Action Buttons */}
+        <div className="relative z-10 flex items-center gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white font-bold py-3.5 px-4 rounded-2xl transition active:scale-95 text-xs sm:text-sm cursor-pointer border border-white/10 shadow-sm"
+          >
+            {t('Keep Playing', 'Weiterbauen')}
+          </button>
+
+          <button
+            onClick={onConfirm}
+            className="flex-1 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold py-3.5 px-4 rounded-2xl transition active:scale-95 text-xs sm:text-sm cursor-pointer shadow-lg shadow-rose-600/25 border border-rose-400/30 flex items-center justify-center gap-2"
+          >
+            <i className="fas fa-arrows-rotate text-xs"></i>
+            <span>{t('Reset Career', 'Neu Starten')}</span>
+          </button>
         </div>
       </motion.div>
     </motion.div>
   );
-  return createPortal(modal, document.body);
 };

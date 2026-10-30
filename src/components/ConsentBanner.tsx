@@ -1,431 +1,326 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ShieldCheck,
-  X,
-  Check,
-  Lock,
-  BarChart3,
-  Sparkles,
-  Megaphone,
-  ChevronLeft,
-} from 'lucide-react';
-import {
+  ConsentPreferences,
   getStoredConsent,
   saveConsent,
   acceptAllConsent,
-  rejectNonEssentialConsent,
-  StoredConsentState,
-} from '../utils/consentManager';
-
-type ViewMode = 'main' | 'customize' | 'notice';
+  rejectAllConsent,
+  initializeConsentOnLoad,
+} from '../utils/consentMode';
 
 export const ConsentBanner: React.FC = () => {
-  const [consent, setConsent] = useState<StoredConsentState>(getStoredConsent);
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('main');
-
-  // Editable draft states for customize view
-  const [analytics, setAnalytics] = useState<boolean>(false);
-  const [preferences, setPreferences] = useState<boolean>(false);
-  const [marketing, setMarketing] = useState<boolean>(false);
+  const [hasDecision, setHasDecision] = useState<boolean>(true); // Start true to prevent flash
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [customPrefs, setCustomPrefs] = useState<ConsentPreferences>({
+    necessary: true,
+    analytics: false,
+    marketing: false,
+    preferences: false,
+  });
 
   useEffect(() => {
-    const current = getStoredConsent();
-    setConsent(current);
-    if (current.status === 'unconfigured') {
-      const timer = setTimeout(() => setIsOpen(true), 350);
-      return () => clearTimeout(timer);
+    // Synchronize Consent Mode v2 signals upon mounting
+    initializeConsentOnLoad();
+
+    const stored = getStoredConsent();
+    if (!stored) {
+      setHasDecision(false);
+    } else {
+      setCustomPrefs(stored.preferences);
     }
-  }, []);
 
-  useEffect(() => {
-    const handleOpen = () => {
+    // Global listener for players who want to revisit settings from in-game links/footer
+    const handleReopen = () => {
       const current = getStoredConsent();
-      setConsent(current);
-      setAnalytics(current.analytics);
-      setPreferences(current.preferences);
-      setMarketing(current.marketing);
-      setViewMode('customize');
-      setIsOpen(true);
-    };
-
-    const handleConsentChanged = (e: any) => {
-      if (e.detail) {
-        setConsent(e.detail);
+      if (current) {
+        setCustomPrefs(current.preferences);
       }
+      setIsModalOpen(true);
     };
 
-    window.addEventListener('hms:open-consent', handleOpen);
-    window.addEventListener('hms:consent-changed', handleConsentChanged);
+    window.addEventListener('open_privacy_settings', handleReopen);
     return () => {
-      window.removeEventListener('hms:open-consent', handleOpen);
-      window.removeEventListener('hms:consent-changed', handleConsentChanged);
+      window.removeEventListener('open_privacy_settings', handleReopen);
     };
   }, []);
 
   const handleAcceptAll = () => {
-    const updated = acceptAllConsent();
-    setConsent(updated);
-    setIsOpen(false);
-    setViewMode('main');
+    acceptAllConsent();
+    setHasDecision(true);
+    setIsModalOpen(false);
   };
 
-  const handleRejectNonEssential = () => {
-    const updated = rejectNonEssentialConsent();
-    setConsent(updated);
-    setIsOpen(false);
-    setViewMode('main');
+  const handleRejectAll = () => {
+    rejectAllConsent();
+    setHasDecision(true);
+    setIsModalOpen(false);
   };
 
-  const handleSavePreferences = () => {
-    const updated = saveConsent({
-      analytics,
-      preferences,
-      marketing,
-    });
-    setConsent(updated);
-    setIsOpen(false);
-    setViewMode('main');
-  };
-
-  const handleOpenCustomize = () => {
-    setAnalytics(consent.analytics);
-    setPreferences(consent.preferences);
-    setMarketing(consent.marketing);
-    setViewMode('customize');
-  };
-
-  const handleClose = () => {
-    if (consent.status === 'unconfigured') {
-      rejectNonEssentialConsent();
-    }
-    setIsOpen(false);
-    setViewMode('main');
+  const handleSaveCustom = () => {
+    saveConsent(customPrefs, 'customized');
+    setHasDecision(true);
+    setIsModalOpen(false);
   };
 
   return (
     <>
+      {/* ──────────────────────────────────────────────────────────
+          1. BOTTOM CONSENT BANNER (Shown on first visit until decision)
+          ────────────────────────────────────────────────────────── */}
       <AnimatePresence>
-        {isOpen && (
-          /* Compact non-takeover bottom floating pop up */
-          <div className="fixed bottom-3 left-3 right-3 sm:right-auto sm:left-5 sm:bottom-5 z-[10060] sm:w-[440px] max-w-full pointer-events-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 15, scale: 0.96 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              role="region"
-              aria-label="Privacy & Performance Preferences"
-              className="bg-[#12131b]/95 backdrop-blur-md border border-white/15 rounded-2xl p-4 sm:p-4.5 shadow-[0_12px_36px_rgba(0,0,0,0.85)] text-zinc-200 relative overflow-hidden"
-            >
-              {/* VIEW 1: Main Compact Pop-Up */}
-              {viewMode === 'main' && (
-                <div className="space-y-2.5">
-                  {/* Top Bar: Label on Left, Close on Right */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-black tracking-wider uppercase text-white/80">
-                      PRIVACY & PERFORMANCE
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      aria-label="Close"
-                      className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition border border-white/10 cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+        {!hasDecision && !isModalOpen && (
+          <motion.aside
+            key="gdpr-consent-banner"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            aria-label="Privacy and Cookie Consent"
+            className="fixed bottom-3 inset-x-3 sm:bottom-5 sm:inset-x-auto sm:right-6 sm:max-w-xl z-[9998] pointer-events-auto"
+          >
+            <div className="bg-[#0f1117]/95 backdrop-blur-md border border-white/10 rounded-2xl p-4 sm:p-5 shadow-2xl text-zinc-200">
+              <div className="flex items-start gap-3.5 mb-3.5">
+                <div className="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-400/25 flex items-center justify-center shrink-0 text-sky-400">
+                  <i className="fa-solid fa-shield-halved text-sm" aria-hidden="true"></i>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-sm font-bold text-white tracking-tight">
+                      Privacy & Cookie Consent
+                    </h2>
+                    <span className="text-[10px] text-zinc-400 font-mono" aria-hidden="true">·</span>
+                    <span className="text-[10px] text-zinc-400 font-mono">GDPR & ePrivacy Compliant</span>
                   </div>
-
-                  {/* Heading */}
-                  <h3 className="text-sm sm:text-base font-black text-white tracking-tight leading-snug">
-                    Transparency & Analytics
-                  </h3>
-
-                  {/* Body Text */}
-                  <p className="text-[11px] text-zinc-300 leading-relaxed font-normal">
-                    We use anonymous analytics to understand visitor engagement with Handball Manager Sim and optimize site performance. In accordance with GDPR, tracking activates only with your consent.
+                  <p className="text-xs text-zinc-300 leading-relaxed">
+                    We use cookies and local device storage to power game saves, maintain your device preferences, and analyze gameplay performance. We do not personalize content. Non-essential cookies and analytics remain inactive until you choose to accept them.
                   </p>
+                </div>
+              </div>
 
-                  {/* Bottom Action Row */}
-                  <div className="pt-1.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-                    {/* Left: Pill Buttons */}
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={handleAcceptAll}
-                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-3.5 py-1.5 rounded-full bg-white hover:bg-zinc-200 text-black font-extrabold text-[11px] shadow transition active:scale-95 cursor-pointer whitespace-nowrap"
-                      >
-                        <Check className="w-3 h-3 stroke-[3]" />
-                        <span>Accept All</span>
-                      </button>
+              {/* Action Buttons: Parity of choice between Accept and Reject under EU law */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-white/[0.08]">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] transition text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                >
+                  Manage Preferences
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRejectAll}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.12] transition text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                >
+                  Reject Non-Essential
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAcceptAll}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-black bg-sky-400 hover:bg-sky-300 shadow-md shadow-sky-500/20 transition text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                >
+                  Accept All
+                </button>
+              </div>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
-                      <button
-                        type="button"
-                        onClick={handleRejectNonEssential}
-                        className="flex-1 sm:flex-initial px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 text-zinc-200 border border-white/15 font-bold text-[11px] transition active:scale-95 cursor-pointer text-center whitespace-nowrap"
-                      >
-                        Essential Only
-                      </button>
-                    </div>
+      {/* ──────────────────────────────────────────────────────────
+          2. GRANULAR PREFERENCES MODAL (Manage specific categories)
+          ────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.1, ease: 'linear' }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setIsModalOpen(false)}
+            />
 
-                    {/* Right: Text Links */}
-                    <div className="flex items-center justify-end gap-2.5 text-[11px] text-zinc-300 shrink-0">
-                      <button
-                        type="button"
-                        onClick={handleOpenCustomize}
-                        className="hover:text-white transition cursor-pointer font-medium underline underline-offset-2"
-                      >
-                        Customize
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setViewMode('notice')}
-                        className="hover:text-white transition cursor-pointer font-medium underline underline-offset-2"
-                      >
-                        Privacy Notice
-                      </button>
-                    </div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+              className="relative w-full max-w-lg bg-[#0e1017] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl text-zinc-200 overflow-hidden flex flex-col max-h-[90vh]"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="privacy-modal-title"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.08]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/25 flex items-center justify-center text-sky-400 text-xs">
+                    <i className="fa-solid fa-sliders" aria-hidden="true"></i>
+                  </div>
+                  <div>
+                    <h2 id="privacy-modal-title" className="text-base font-bold text-white">
+                      Cookie & Storage Preferences
+                    </h2>
+                    <p className="text-[11px] text-zinc-400">
+                      Google Consent Mode v2 & GDPR Granular Control
+                    </p>
                   </div>
                 </div>
-              )}
 
-              {/* VIEW 2: Granular Customize Settings */}
-              {viewMode === 'customize' && (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('main')}
-                      className="p-0.5 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer flex items-center gap-1 text-[11px]"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                      <span>Back</span>
-                    </button>
-                    <span className="text-[11px] font-bold text-white uppercase tracking-wider">
-                      Preferences
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      aria-label="Close"
-                      className="w-5 h-5 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] flex items-center justify-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                  aria-label="Close preferences modal"
+                >
+                  <i className="fa-solid fa-xmark text-sm" aria-hidden="true"></i>
+                </button>
+              </div>
 
-                  <div className="space-y-2 max-h-[38vh] overflow-y-auto pr-1 text-[11px]">
-                    {/* Strictly Necessary */}
-                    <div className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10 flex items-start justify-between gap-2.5">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5 font-bold text-white text-[11px]">
-                          <Lock className="w-3 h-3 text-emerald-400" />
-                          <span>Strictly Necessary Storage</span>
-                          <span className="text-[8px] uppercase px-1 py-0.2 rounded bg-emerald-500/15 text-emerald-400">
-                            Required
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-zinc-400 leading-normal">
-                          Retains career saves, tactics, finances, and roster states in browser storage.
-                        </p>
-                      </div>
-                      <div className="shrink-0 pt-0.5">
-                        <div className="w-7 h-4 rounded-full bg-emerald-600/70 p-0.5 flex items-center justify-end opacity-80 cursor-not-allowed">
-                          <div className="w-3 h-3 rounded-full bg-white flex items-center justify-center text-emerald-700">
-                            <Check className="w-2 h-2 stroke-[3]" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Analytics */}
-                    <div className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10 flex items-start justify-between gap-2.5">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5 font-bold text-white text-[11px]">
-                          <BarChart3 className="w-3 h-3 text-sky-400" />
-                          <span>Analytics & Performance</span>
-                        </div>
-                        <p className="text-[10px] text-zinc-400 leading-normal">
-                          Maps to `analytics_storage`. Measures simulation speed and game errors to optimize balance.
-                        </p>
-                      </div>
-                      <div className="shrink-0 pt-0.5">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={analytics}
-                          onClick={() => setAnalytics(!analytics)}
-                          className={`w-8 h-4.5 rounded-full p-0.5 transition-colors cursor-pointer flex items-center ${
-                            analytics ? 'bg-sky-500 justify-end' : 'bg-zinc-700 justify-start'
-                          }`}
-                        >
-                          <div className="w-3.5 h-3.5 rounded-full bg-white shadow" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Preferences */}
-                    <div className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10 flex items-start justify-between gap-2.5">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5 font-bold text-white text-[11px]">
-                          <Sparkles className="w-3 h-3 text-amber-400" />
-                          <span>Preferences & UI</span>
-                        </div>
-                        <p className="text-[10px] text-zinc-400 leading-normal">
-                          Retains sound settings, interface density, and custom database selections.
-                        </p>
-                      </div>
-                      <div className="shrink-0 pt-0.5">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={preferences}
-                          onClick={() => setPreferences(!preferences)}
-                          className={`w-8 h-4.5 rounded-full p-0.5 transition-colors cursor-pointer flex items-center ${
-                            preferences ? 'bg-amber-500 justify-end' : 'bg-zinc-700 justify-start'
-                          }`}
-                        >
-                          <div className="w-3.5 h-3.5 rounded-full bg-white shadow" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Marketing */}
-                    <div className="p-2.5 rounded-xl bg-white/[0.04] border border-white/10 flex items-start justify-between gap-2.5">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5 font-bold text-white text-[11px]">
-                          <Megaphone className="w-3 h-3 text-rose-400" />
-                          <span>Attribution & Outreach</span>
-                        </div>
-                        <p className="text-[10px] text-zinc-400 leading-normal">
-                          Measures referral traffic from community forums and handball announcements.
-                        </p>
-                      </div>
-                      <div className="shrink-0 pt-0.5">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={marketing}
-                          onClick={() => setMarketing(!marketing)}
-                          className={`w-8 h-4.5 rounded-full p-0.5 transition-colors cursor-pointer flex items-center ${
-                            marketing ? 'bg-rose-500 justify-end' : 'bg-zinc-700 justify-start'
-                          }`}
-                        >
-                          <div className="w-3.5 h-3.5 rounded-full bg-white shadow" />
-                        </button>
-                      </div>
+              {/* Category Options List */}
+              <div className="overflow-y-auto custom-scrollbar my-4 pr-1 space-y-3 flex-1 text-xs">
+                {/* Category 1: Strictly Necessary */}
+                <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-sm">Strictly Necessary</span>
+                      <span className="text-[10px] uppercase font-mono tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                        Always Active
+                      </span>
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="pt-1.5 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={handleRejectNonEssential}
-                      className="flex-1 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-[11px] transition cursor-pointer text-center"
-                    >
-                      Reject Optional
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSavePreferences}
-                      className="flex-1 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-black font-extrabold text-[11px] shadow transition cursor-pointer text-center"
-                    >
-                      Save Preferences
-                    </button>
-                  </div>
+                  <p className="text-zinc-400 leading-relaxed text-[11px]">
+                    Essential for the football simulation to function. Stores career saves, league standings, user session state, and security authentication tokens. These cannot be disabled.
+                  </p>
                 </div>
-              )}
 
-              {/* VIEW 3: Privacy Notice */}
-              {viewMode === 'notice' && (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('main')}
-                      className="p-0.5 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer flex items-center gap-1 text-[11px]"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                      <span>Back</span>
-                    </button>
-                    <span className="text-[11px] font-bold text-white uppercase tracking-wider">
-                      Privacy Notice
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      aria-label="Close"
-                      className="w-5 h-5 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                {/* Category 2: Analytics & Measurement */}
+                <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="toggle-analytics" className="font-bold text-white text-sm cursor-pointer">
+                      Analytics & Performance
+                    </label>
+                    <input
+                      id="toggle-analytics"
+                      type="checkbox"
+                      checked={customPrefs.analytics}
+                      onChange={(e) =>
+                        setCustomPrefs((prev) => ({ ...prev, analytics: e.target.checked }))
+                      }
+                      className="w-4 h-4 rounded text-sky-500 bg-black/40 border-white/20 focus:ring-sky-400 focus:ring-offset-0 cursor-pointer accent-sky-400"
+                    />
                   </div>
-
-                  <div className="space-y-1.5 text-[11px] text-zinc-300 leading-relaxed max-h-[38vh] overflow-y-auto pr-1">
-                    <div className="p-2 rounded-xl bg-white/[0.04] border border-white/5 space-y-0.5">
-                      <strong className="text-white block text-[11px]">1. Data Controller & Scope</strong>
-                      <p className="text-[10px] text-zinc-400">
-                        Handball Manager Sim processes data on your local device. No personal profiles are sold or transferred to data brokers.
-                      </p>
-                    </div>
-
-                    <div className="p-2 rounded-xl bg-white/[0.04] border border-white/5 space-y-0.5">
-                      <strong className="text-white block text-[11px]">2. Legal Basis (GDPR Art. 6)</strong>
-                      <p className="text-[10px] text-zinc-400">
-                        - <strong>Necessary Data:</strong> Art. 6(1)(b) (gameplay save states).<br />
-                        - <strong>Optional Analytics:</strong> Art. 6(1)(a) & ePrivacy Directive Art. 5(3) (affirmative consent).
-                      </p>
-                    </div>
-
-                    <div className="p-2 rounded-xl bg-white/[0.04] border border-white/5 space-y-0.5">
-                      <strong className="text-white block text-[11px]">3. Right of Withdrawal</strong>
-                      <p className="text-[10px] text-zinc-400">
-                        Withdraw or modify consent anytime via the bottom "Privacy Settings" button or the Header menu.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('main')}
-                      className="w-full py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-[11px] transition cursor-pointer text-center"
-                    >
-                      Back to Privacy Choices
-                    </button>
-                  </div>
+                  <p className="text-zinc-400 leading-relaxed text-[11px]">
+                    Helps us understand gameplay telemetry, match engine performance, and crash reports using Google Analytics (GA4) with anonymous client identifiers (<code className="text-zinc-300">analytics_storage</code>).
+                  </p>
                 </div>
-              )}
+
+                {/* Category 3: Non-Personalized Ad Measurement */}
+                <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="toggle-marketing" className="font-bold text-white text-sm cursor-pointer">
+                      Ad Measurement (Non-Personalized)
+                    </label>
+                    <input
+                      id="toggle-marketing"
+                      type="checkbox"
+                      checked={customPrefs.marketing}
+                      onChange={(e) =>
+                        setCustomPrefs((prev) => ({ ...prev, marketing: e.target.checked }))
+                      }
+                      className="w-4 h-4 rounded text-sky-500 bg-black/40 border-white/20 focus:ring-sky-400 focus:ring-offset-0 cursor-pointer accent-sky-400"
+                    />
+                  </div>
+                  <p className="text-zinc-400 leading-relaxed text-[11px]">
+                    Controls non-personalized ad and sponsorship measurement signals (<code className="text-zinc-300">ad_storage</code>, <code className="text-zinc-300">ad_user_data</code>). We do not personalize content or ads.
+                  </p>
+                </div>
+
+                {/* Explicit Guarantee: No Content Personalization */}
+                <div className="p-3 rounded-xl bg-sky-500/[0.04] border border-sky-400/20 flex items-center justify-between text-[11px]">
+                  <div className="flex items-center gap-2 text-zinc-300">
+                    <i className="fa-solid fa-user-shield text-sky-400 text-xs" aria-hidden="true"></i>
+                    <span>Content Personalization & Profiling</span>
+                  </div>
+                  <span className="font-mono text-[10px] text-zinc-400">Disabled (Not Used)</span>
+                </div>
+
+                {/* Category 4: Functionality & UI Preferences */}
+                <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="toggle-preferences" className="font-bold text-white text-sm cursor-pointer">
+                      Functional & Game Preferences
+                    </label>
+                    <input
+                      id="toggle-preferences"
+                      type="checkbox"
+                      checked={customPrefs.preferences}
+                      onChange={(e) =>
+                        setCustomPrefs((prev) => ({ ...prev, preferences: e.target.checked }))
+                      }
+                      className="w-4 h-4 rounded text-sky-500 bg-black/40 border-white/20 focus:ring-sky-400 focus:ring-offset-0 cursor-pointer accent-sky-400"
+                    />
+                  </div>
+                  <p className="text-zinc-400 leading-relaxed text-[11px]">
+                    Preserves your customized tactical view settings, sound volume, stadium chant toggles, and custom database modifications across sessions (<code className="text-zinc-300">functionality_storage</code>).
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Action Footer */}
+              <div className="pt-3 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleRejectAll}
+                    className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] transition text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                  >
+                    Reject All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAcceptAll}
+                    className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] transition text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                  >
+                    Accept All
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveCustom}
+                  className="w-full sm:w-auto px-5 py-2 rounded-xl text-xs font-bold text-black bg-sky-400 hover:bg-sky-300 shadow-md shadow-sky-500/20 transition text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                >
+                  Save Preferences
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Discreet Re-open Button (bottom left, unobtrusive per GDPR Art 7(3)) */}
-      {!isOpen && (
+      {/* ──────────────────────────────────────────────────────────
+          3. DISCREET WITHDRAWAL / SETTINGS TRIGGER (Right to change)
+          GDPR requires consent to be as easy to withdraw as to give.
+          ────────────────────────────────────────────────────────── */}
+      {hasDecision && !isModalOpen && (
         <button
           type="button"
           onClick={() => {
             const current = getStoredConsent();
-            setConsent(current);
-            setAnalytics(current.analytics);
-            setPreferences(current.preferences);
-            setMarketing(current.marketing);
-            setViewMode('customize');
-            setIsOpen(true);
+            if (current) setCustomPrefs(current.preferences);
+            setIsModalOpen(true);
           }}
+          className="fixed bottom-2.5 left-2.5 z-[9000] p-2 rounded-xl bg-black/60 hover:bg-black/85 text-zinc-500 hover:text-sky-300 border border-white/10 backdrop-blur-sm shadow-md transition-all text-xs flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 opacity-70 hover:opacity-100"
           title="Privacy & Cookie Preferences"
-          aria-label="Privacy & Cookie Preferences"
-          className="fixed bottom-3 left-3 z-40 p-1.5 sm:px-2.5 sm:py-1.5 rounded-full bg-[#12131b]/90 hover:bg-[#1a1b26] border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white shadow-lg backdrop-blur transition active:scale-95 text-xs flex items-center gap-1.5 cursor-pointer group opacity-60 hover:opacity-100"
+          aria-label="Open Privacy and Cookie Settings"
         >
-          <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
-          <span className="hidden sm:inline text-[11px] font-medium text-zinc-400 group-hover:text-zinc-200">
-            Privacy Settings
-          </span>
+          <i className="fa-solid fa-shield-halved text-[11px]" aria-hidden="true"></i>
+          <span className="hidden md:inline font-mono text-[10px]">Privacy & Cookies</span>
         </button>
       )}
     </>
   );
 };
+export default ConsentBanner;

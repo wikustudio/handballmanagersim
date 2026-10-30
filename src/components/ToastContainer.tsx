@@ -1,213 +1,182 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { GameState } from '../types';
-import { AnimatePresence, motion } from 'motion/react';
-import { useGameStore } from '../store/useGameStore';
-import Confetti from 'react-confetti';
-import { useWindowSize } from 'react-use';
+import React, { useEffect, useRef } from 'react';
+import confetti from 'canvas-confetti';
 
-export const ToastContainer = ({ state }: { state: GameState }) => {
-  const unreadNotifs = (state.notifications || []).filter((n: any) => !n.read);
-  const { width, height } = useWindowSize();
-  const [celebrating, setCelebrating] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const prevIdsRef = useRef<Set<string>>(new Set());
+export interface ToastItem {
+  id: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+}
 
-  // Immediately clear previous backlog when multiple unread notifications arrive/exist
+interface ToastContainerProps {
+  toasts: ToastItem[];
+}
+
+export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts }) => {
+  const seenToasts = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    const rawNotifs = (state.notifications || []).filter((n: any) => !n.read);
-    if (rawNotifs.length > 1) {
-      // Identify newly added notifications regardless of whether caller prepended or appended
-      const newlyAdded = rawNotifs.filter((n: any) => n.id && !prevIdsRef.current.has(n.id));
-      const latest = newlyAdded.length > 0
-        ? newlyAdded[newlyAdded.length - 1]
-        : rawNotifs[rawNotifs.length - 1];
-      prevIdsRef.current = new Set(latest?.id ? [latest.id] : []);
-      if (latest) {
-        useGameStore.getState().updateState({
-          notifications: [latest]
+    toasts.forEach(toast => {
+      if (toast.type === 'success' && !seenToasts.current.has(toast.id)) {
+        seenToasts.current.add(toast.id);
+        
+        const msg = toast.message.toLowerCase();
+        let particleColors = ['#38bdf8', '#0284c7', '#34d399', '#ffffff'];
+        let count = 45;
+        let spread = 60;
+        
+        if (msg.includes('champion') || msg.includes('meister') || msg.includes('trophy') || msg.includes('pokal') || msg.includes('cup') || msg.includes('world cup')) {
+          particleColors = ['#fbbf24', '#f59e0b', '#d97706', '#fef08a', '#ffffff'];
+          count = 100;
+          spread = 90;
+        } else if (msg.includes('runner-up') || msg.includes('vizemeister')) {
+          particleColors = ['#38bdf8', '#e0e7ff', '#94a3b8', '#ffffff', '#60a5fa'];
+          count = 85;
+          spread = 85;
+        } else if (msg.includes('promoted') || msg.includes('aufstieg')) {
+          particleColors = ['#38bdf8', '#0284c7', '#60a5fa', '#ffffff'];
+          count = 75;
+          spread = 75;
+        }
+
+        confetti({
+          particleCount: count,
+          spread,
+          origin: { y: 0.05 },
+          colors: particleColors,
+          disableForReducedMotion: true,
+          zIndex: 999999,
+          ticks: 150,
+          gravity: 0.8,
+          scalar: 0.85
         });
+      } else if (!seenToasts.current.has(toast.id)) {
+        seenToasts.current.add(toast.id);
       }
-    } else {
-      prevIdsRef.current = new Set(rawNotifs.map((n: any) => n.id).filter(Boolean));
-    }
-  }, [state.notifications]);
+    });
+  }, [toasts]);
 
-  // Pick the single newest active notification (latest incoming)
-  const activeNotif = unreadNotifs.length > 0 ? unreadNotifs[unreadNotifs.length - 1] : null;
-  const visibleNotifs = activeNotif ? [activeNotif] : [];
+  if (toasts.length === 0) return null;
 
-  // Confetti triggers synchronously for celebrations and cancels immediately if replaced
-  useEffect(() => {
-    if (activeNotif?.type === 'celebration') {
-      setCelebrating(true);
-      const t = setTimeout(() => setCelebrating(false), 2800);
-      return () => clearTimeout(t);
-    } else {
-      setCelebrating(false);
-    }
-  }, [activeNotif?.id, activeNotif?.type]);
+  const cleanMessage = (raw: string) => {
+    // Strip leading gaming emojis and clean up whitespace
+    return raw.replace(/^[\s🏆🥈🚀👑⭐✨🔥💥⚡🎉👏🎖️\-–—]+/u, '').trim();
+  };
 
-  // Fast 2.8s auto-close timer on active notification (resets and cancels instantly if a new popup arrives)
-  useEffect(() => {
-    if (activeNotif && !isHovered) {
-      const timer = setTimeout(() => {
-        useGameStore.getState().dismissNotification(activeNotif.id);
-      }, 2800);
-      return () => clearTimeout(timer);
-    }
-  }, [activeNotif?.id, isHovered]);
-  
+  const renderFormattedMessage = (msg: string) => {
+    const cleaned = cleanMessage(msg);
+    // Regex to capture OVR/GES boosts or losses, money gains or losses
+    const parts = cleaned.split(/([+-]\s*€?\s*[\d.,]*\d(?:\s*(?:Mio\.|[MKkB]\b))?(?:\s*(?:OVR|GES|Budget|Fans|Einnahmen|Reputation|Rep|Ansehen|MP|Siegchance|Win|Lose|Loss|Sieg|Niederlage|Verlust|Plaetze|Seats|Kapazitaet|Capacity|Zuschauer|Morale|Moral|Youth|Jugend|Squad|Team))?)/gi);
+
+    return parts.map((part, i) => {
+      if (/^\+\s*€?\s*[\d.,]/i.test(part)) {
+        return (
+          <span key={i} className="text-emerald-400 font-semibold tracking-tight">
+            {part}
+          </span>
+        );
+      }
+      if (/^-\s*€?\s*[\d.,]/i.test(part)) {
+        return (
+          <span key={i} className="text-rose-400 font-semibold tracking-tight">
+            {part}
+          </span>
+        );
+      }
+      return <React.Fragment key={i}>{part}</React.Fragment>;
+    });
+  };
+
   return (
-    <>
-      {celebrating && (
-        <Confetti 
-          width={width} 
-          height={height} 
-          numberOfPieces={160} 
-          recycle={false} 
-          gravity={0.22} 
-          style={{ position: 'fixed', top: 0, left: 0, zIndex: 1000010, pointerEvents: 'none' }} 
-        />
-      )}
-      <div className="fixed top-[max(0.75rem,env(safe-area-inset-top))] sm:top-5 left-1/2 -translate-x-1/2 z-[1000005] flex flex-col gap-2 pointer-events-none w-[calc(100%-1.25rem)] max-w-sm sm:max-w-md px-0.5">
-        <AnimatePresence mode="popLayout">
-          {visibleNotifs.map((notif: any, nIdx: number) => {
-            const isSuccess = notif.type === 'success';
-            const isCelebration = notif.type === 'celebration';
-            const isError = notif.type === 'danger' || notif.type === 'error';
-            const isWarning = notif.type === 'warning';
-            const isInfo = notif.type === 'info';
+    <div className="fixed top-3 sm:top-6 pt-safe left-1/2 -translate-x-1/2 z-[99999] pointer-events-none grid place-items-center w-full px-3 sm:px-4">
+      {toasts.map((toast, index) => {
+        const revIndex = toasts.length - 1 - index;
+        const msg = toast.message;
+        const lower = msg.toLowerCase();
 
-            let iconClass = 'fa-bell';
-            let topHairline = 'via-sky-400/60';
-            let iconBoxStyle = 'bg-sky-500/10 text-sky-400 border-sky-500/20';
-            let pulseDotColor = 'bg-sky-400';
-            let categoryLabel = 'OFFICIAL · WIRE';
+        // Specific toast classifications for winning a league or getting promoted as runner-up
+        const isLeagueChampion = lower.includes('champion') || lower.includes('meister') || lower.includes('league title');
+        const isRunnerUpPromotion = lower.includes('runner-up') || lower.includes('vizemeister');
+        const isGeneralPromotion = !isLeagueChampion && !isRunnerUpPromotion && (lower.includes('promoted') || lower.includes('aufstieg'));
 
-            if (isCelebration) {
-              iconClass = 'fa-trophy';
-              topHairline = 'via-amber-400/70';
-              iconBoxStyle = 'bg-amber-500/10 text-amber-300 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.15)]';
-              pulseDotColor = 'bg-amber-400';
-              categoryLabel = 'DECISION DAY · TRIUMPH';
-            } else if (isSuccess) {
-              iconClass = 'fa-check';
-              topHairline = 'via-emerald-400/65';
-              iconBoxStyle = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]';
-              pulseDotColor = 'bg-emerald-400';
-              categoryLabel = 'DISPATCH · CONFIRMED';
-            } else if (isError) {
-              iconClass = 'fa-triangle-exclamation';
-              topHairline = 'via-rose-500/70';
-              iconBoxStyle = 'bg-rose-500/10 text-rose-400 border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.15)]';
-              pulseDotColor = 'bg-rose-400';
-              categoryLabel = 'CRITICAL · ALERT';
-            } else if (isWarning) {
-              iconClass = 'fa-bolt';
-              topHairline = 'via-amber-400/65';
-              iconBoxStyle = 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.12)]';
-              pulseDotColor = 'bg-amber-400';
-              categoryLabel = 'BOARDROOM · NOTICE';
-            } else if (isInfo) {
-              iconClass = 'fa-newspaper';
-              topHairline = 'via-sky-400/60';
-              iconBoxStyle = 'bg-sky-500/10 text-sky-400 border-sky-500/20 shadow-[0_0_15px_rgba(56,189,248,0.12)]';
-              pulseDotColor = 'bg-sky-400';
-              categoryLabel = 'BROADCAST · FEED';
-            }
+        let icon = 'fa-circle-info text-sky-400';
+        let badgeBg = 'bg-sky-500/10 border-sky-400/20 text-sky-400';
+        let containerBorder = 'border-white/[0.08]';
+        let containerBg = 'bg-[#12141c]/85';
+        let containerGlow = 'shadow-[0_20px_50px_rgba(0,0,0,0.6)]';
+        let kicker: string | null = null;
+        let kickerClass = 'text-sky-400/90';
 
-            let progressBarColor = 'bg-sky-400/80';
-            if (isCelebration) progressBarColor = 'bg-amber-400/90';
-            else if (isSuccess) progressBarColor = 'bg-emerald-400/90';
-            else if (isError) progressBarColor = 'bg-rose-400/90';
-            else if (isWarning) progressBarColor = 'bg-amber-400/85';
+        if (isLeagueChampion) {
+          icon = 'fa-trophy text-amber-300';
+          badgeBg = 'bg-amber-400/10 border-amber-400/30 text-amber-300';
+          containerBorder = 'border-amber-400/35';
+          containerBg = 'bg-gradient-to-r from-amber-500/[0.08] via-[#12141c]/90 to-sky-500/[0.06]';
+          containerGlow = 'shadow-[0_20px_60px_rgba(245,158,11,0.22)]';
+          kicker = 'League Champions · Domestic Crown';
+          kickerClass = 'text-amber-300/90';
+        } else if (isRunnerUpPromotion) {
+          icon = 'fa-medal text-sky-300';
+          badgeBg = 'bg-sky-400/10 border-sky-400/30 text-sky-300';
+          containerBorder = 'border-sky-400/35';
+          containerBg = 'bg-gradient-to-r from-sky-500/[0.1] via-[#12141c]/90 to-sky-400/[0.05]';
+          containerGlow = 'shadow-[0_20px_60px_rgba(56,189,248,0.22)]';
+          kicker = 'Runner-Up Promotion · Top 2 Ascent';
+          kickerClass = 'text-sky-400';
+        } else if (isGeneralPromotion) {
+          icon = 'fa-arrow-trend-up text-sky-300';
+          badgeBg = 'bg-sky-400/10 border-sky-400/25 text-sky-300';
+          containerBorder = 'border-sky-400/25';
+          containerBg = 'bg-gradient-to-r from-sky-500/[0.08] via-[#12141c]/90 to-emerald-500/[0.05]';
+          containerGlow = 'shadow-[0_20px_50px_rgba(56,189,248,0.18)]';
+          kicker = 'Promotion Secured · Division Ascent';
+          kickerClass = 'text-sky-300/90';
+        } else if (toast.type === 'success') {
+          icon = 'fa-check text-emerald-400';
+          badgeBg = 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300';
+          containerBorder = 'border-emerald-500/40';
+          containerBg = 'bg-gradient-to-r from-emerald-950/80 via-[#12141c]/95 to-emerald-950/60';
+          containerGlow = 'shadow-[0_20px_50px_rgba(16,185,129,0.25)]';
+        } else if (toast.type === 'error') {
+          icon = 'fa-xmark text-rose-400';
+          badgeBg = 'bg-rose-500/20 border-rose-400/40 text-rose-300';
+          containerBorder = 'border-rose-500/40';
+          containerBg = 'bg-gradient-to-r from-rose-950/80 via-[#12141c]/95 to-rose-950/60';
+          containerGlow = 'shadow-[0_20px_50px_rgba(244,63,94,0.25)]';
+        } else if (toast.type === 'warning') {
+          icon = 'fa-exclamation text-amber-400';
+          badgeBg = 'bg-amber-500/10 border-amber-400/20 text-amber-400';
+          containerBorder = 'border-amber-400/25';
+        }
 
-            return (
-              <motion.div
-                key={`toast-${notif.id || 'notif'}-${nIdx}`} 
-                layout
-                initial={{ opacity: 0, y: -24, scale: 0.94 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -16, scale: 0.95, transition: { duration: 0.12 } }}
-                transition={{ type: 'spring', damping: 26, stiffness: 360 }}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                className="pointer-events-auto relative overflow-hidden flex items-center gap-3 px-3.5 sm:px-4 py-3 sm:py-3.5 rounded-2xl bg-[#14151e]/95 backdrop-blur-2xl border border-white/[0.08] shadow-[0_20px_50px_rgba(0,0,0,0.85)] text-white group touch-manipulation"
-              >
-                {/* Decision Day / Broadcast ambient glowing hairline */}
-                <div className={`absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent ${topHairline} to-transparent pointer-events-none`} />
+        return (
+          <div
+            key={toast.id}
+            style={{ 
+              transform: `translateY(${revIndex * 8}px) scale(${1 - revIndex * 0.035})`, 
+              zIndex: toasts.length - index,
+              opacity: revIndex > 2 ? 0 : 1
+            }}
+            className={`row-start-1 col-start-1 flex items-center gap-3.5 px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl sm:rounded-[24px] ${containerBg} backdrop-blur-2xl border ${containerBorder} ${containerGlow} toast-enter pointer-events-auto w-[92vw] sm:w-auto max-w-[95vw] sm:max-w-lg mx-auto transition-all duration-300 ease-out`}
+          >
+            {/* Frosted Icon Badge */}
+            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl ${badgeBg} border flex items-center justify-center shrink-0 shadow-inner`}>
+              <i className={`fas ${icon} text-sm sm:text-base`}></i>
+            </div>
 
-                {/* Auto-close Progress Bar (2.8s linear countdown) */}
-                <motion.div
-                  key={`progress-${notif.id}`}
-                  initial={{ scaleX: 1 }}
-                  animate={{ scaleX: 0 }}
-                  transition={{ duration: 2.8, ease: 'linear' }}
-                  style={{ transformOrigin: 'left' }}
-                  className={`absolute bottom-0 left-0 right-0 h-[2px] ${progressBarColor} pointer-events-none opacity-80`}
-                />
-
-                {/* Status Icon Pillar with Trophy Vector design for Silverware / Celebrations */}
-                <div className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center border text-xs relative z-10 transition-transform group-hover:scale-105 ${iconBoxStyle}`}>
-                  {isCelebration ? (
-                    <svg width="20" height="22" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_2px_8px_rgba(245,158,11,0.4)]">
-                      <defs>
-                        <linearGradient id={`toast-cup-${notif.id}`} x1="20" y1="15" x2="80" y2="75" gradientUnits="userSpaceOnUse">
-                          <stop offset="0%" stopColor="#fef08a" />
-                          <stop offset="40%" stopColor="#facc15" />
-                          <stop offset="75%" stopColor="#eab308" />
-                          <stop offset="100%" stopColor="#ca8a04" />
-                        </linearGradient>
-                        <linearGradient id={`toast-base-${notif.id}`} x1="25" y1="85" x2="75" y2="115" gradientUnits="userSpaceOnUse">
-                          <stop offset="0%" stopColor="#fde047" />
-                          <stop offset="100%" stopColor="#854d0e" />
-                        </linearGradient>
-                      </defs>
-                      <path d="M32 24 C14 24 10 42 16 56 C21 68 33 68 36 67 C34 62 26 59 23 51 C20 42 22 32 32 30 Z" fill={`url(#toast-cup-${notif.id})`} stroke="#ca8a04" strokeWidth="1.5" />
-                      <path d="M68 24 C86 24 90 42 84 56 C79 68 67 68 64 67 C66 62 74 59 77 51 C80 42 78 32 68 30 Z" fill={`url(#toast-cup-${notif.id})`} stroke="#ca8a04" strokeWidth="1.5" />
-                      <path d="M28 16 H72 L66 64 C64 74 57 82 50 82 C43 82 36 74 34 64 Z" fill={`url(#toast-cup-${notif.id})`} stroke="#ca8a04" strokeWidth="1.5" />
-                      <ellipse cx="50" cy="16" rx="22" ry="4.5" fill="#fef08a" stroke="#ca8a04" strokeWidth="1" />
-                      <path d="M46 82 H54 V95 H46 Z" fill={`url(#toast-cup-${notif.id})`} />
-                      <path d="M36 95 H64 L67 106 H33 Z" fill={`url(#toast-base-${notif.id})`} />
-                      <rect x="30" y="106" width="40" height="7" rx="2" fill="#ca8a04" />
-                    </svg>
-                  ) : (
-                    <i className={`fas ${iconClass}`} />
-                  )}
-                </div>
-                
-                {/* Content */}
-                <div className="flex-1 flex flex-col justify-center min-w-0 pr-1 relative z-10">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="flex items-center gap-1.5 text-[9px] font-mono font-medium uppercase tracking-wider text-zinc-400">
-                      <span className={`w-1.5 h-1.5 rounded-full ${pulseDotColor} animate-pulse shrink-0`} />
-                      {notif.title ? notif.title.toUpperCase() : categoryLabel}
-                    </span>
-                  </div>
-                  <div className="text-xs sm:text-[13px] font-medium text-white/95 leading-snug tracking-tight line-clamp-2">
-                    {notif.message}
-                  </div>
-                  {notif.subtitle && (
-                    <div className="text-[11px] text-zinc-300 font-normal leading-snug tracking-tight line-clamp-1 sm:line-clamp-2 mt-0.5">
-                      {notif.subtitle}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Dismiss button with comfortable mobile touch target */}
-                <button 
-                  onClick={() => useGameStore.getState().dismissNotification(notif.id)}
-                  className="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] text-zinc-300 hover:text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer active:scale-90 relative z-10 touch-manipulation"
-                  title="Close"
-                  aria-label="Dismiss notification"
-                >
-                  <i className="fas fa-xmark text-xs" />
-                </button>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-    </>
+            {/* Content Text */}
+            <div className="flex flex-col min-w-0 flex-1">
+              {kicker && (
+                <span className={`text-[10px] font-semibold uppercase tracking-wider ${kickerClass} mb-0.5 break-words`}>
+                  {kicker}
+                </span>
+              )}
+              <span className="text-xs sm:text-[13px] font-medium text-white/95 tracking-tight leading-snug break-words">
+                {renderFormattedMessage(toast.message)}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 };

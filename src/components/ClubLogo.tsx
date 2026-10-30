@@ -1,437 +1,627 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { getInitials, getMonogramHex, isReserveClub } from '../data/gameConstants';
-import { isRealDataModActive, getCustomDb, getActiveClubs } from '../utils/modManager';
-import { getLocalAssetPath, hasVerifiedLocalAsset } from '../data/teams';
-import { ALL_CLUBS } from '../data/clubsData';
-import { REAL_WORLD_LOGOS } from '../data/realWorldLogos';
+import { TEAMS } from '../mod-data/teams';
+import { REAL_CLUB_ALIASES, simplifyClubName } from '../engine/moddingEngine';
+import {
+  getClubLogoKey,
+  getCachedLogo,
+  isUrlLoadedInMemory,
+  markUrlLoaded,
+  setCachedWorkingUrl,
+  cacheLogoBlob
+} from '../utils/logoCache';
+
+interface ModLogoEntry {
+  logo?: string;
+  fallbackLogo?: string;
+}
+
+// Pre-index mod logos by exact name, clean name, real aliases, and canonical IDs for instant O(1) fallback resolution
+const modLogoMap = new Map<string, ModLogoEntry>();
+const idToModEntry = new Map<number, ModLogoEntry>();
+
+for (let i = 0; i < TEAMS.length; i++) {
+  const t = TEAMS[i];
+  if (t.name) {
+    const entry: ModLogoEntry = { logo: t.logo, fallbackLogo: t.fallbackLogo };
+    modLogoMap.set(t.name.toLowerCase().trim(), entry);
+    
+    const clean = t.name.replace(/\s+II$/, '').replace(/\s+\(?B\)?$/, '').replace(/\s+Castilla$/, '').replace(/\s+B$/, '').replace(/\s+2$/, '').trim();
+    if (clean && !modLogoMap.has(clean.toLowerCase())) {
+      modLogoMap.set(clean.toLowerCase(), entry);
+    }
+    const unaccented = t.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (!modLogoMap.has(unaccented)) {
+      modLogoMap.set(unaccented, entry);
+    }
+    const unaccentedNoDe = unaccented.replace(/\bde\b\s*/g, '').replace(/\s+/g, ' ').trim();
+    if (!modLogoMap.has(unaccentedNoDe)) {
+      modLogoMap.set(unaccentedNoDe, entry);
+    }
+    const simp = simplifyClubName(t.name);
+    if (simp && !modLogoMap.has(simp)) {
+      modLogoMap.set(simp, entry);
+    }
+    const simpUnaccented = simplifyClubName(unaccented);
+    if (simpUnaccented && !modLogoMap.has(simpUnaccented)) {
+      modLogoMap.set(simpUnaccented, entry);
+    }
+  }
+}
+
+// Map canonical ALL_CLUBS IDs to their verified real-world TEAMS crest entries
+for (const [alias, clubId] of Object.entries(REAL_CLUB_ALIASES)) {
+  const lowerAlias = alias.toLowerCase().trim();
+  const cleanAlias = lowerAlias.replace(/\s+ii$/, '').replace(/\s+\(?b\)?$/, '').replace(/\s+b$/, '').replace(/\s+2$/, '').trim();
+  const team = TEAMS.find(t => 
+    t.name.toLowerCase().trim() === lowerAlias ||
+    simplifyClubName(t.name) === simplifyClubName(alias)
+  ) || TEAMS.find(t =>
+    t.name.toLowerCase().trim() === cleanAlias ||
+    simplifyClubName(t.name) === simplifyClubName(cleanAlias)
+  );
+  if (team && !idToModEntry.has(clubId)) {
+    idToModEntry.set(clubId, { logo: team.logo, fallbackLogo: team.fallbackLogo });
+  }
+}
+
+// Map default unmodded aliases (e.g. "bavaria münchen" -> Bayern München logos, "kleeblatt fürth" -> Fürth)
+for (const [alias, clubId] of Object.entries(REAL_CLUB_ALIASES)) {
+  const entry = idToModEntry.get(clubId);
+  if (entry) {
+    const lowerAlias = alias.toLowerCase().trim();
+    if (!modLogoMap.has(lowerAlias)) {
+      modLogoMap.set(lowerAlias, entry);
+    }
+    const unaccAlias = alias.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (!modLogoMap.has(unaccAlias)) {
+      modLogoMap.set(unaccAlias, entry);
+    }
+    const simpAlias = simplifyClubName(alias);
+    if (simpAlias && !modLogoMap.has(simpAlias)) {
+      modLogoMap.set(simpAlias, entry);
+    }
+  }
+}
 
 interface ClubLogoProps {
   name?: string;
-  clubName?: string;
-  clubId?: number;
+  club?: { name?: string; id?: number; color?: string; logo?: string; fallbackLogo?: string };
+  size?: number;
+  id?: number;
   color?: string;
-  color2?: string;
   logo?: string | string[];
   fallbackLogo?: string;
   className?: string;
   fallbackClassName?: string;
   alt?: string;
+  isModActive?: boolean;
+  showReserveBadge?: boolean;
 }
 
 // Deterministic hash function for shapes and patterns
 const hashCode = (str: string) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return Math.abs(hash);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash);
 };
 
-// Check brightness for accessible text color
+// Check uebrightness for accessible text color
 const getTextColor = (hex: string) => {
-  const h = hex.startsWith('#') ? hex.substring(1) : hex;
-  const cleanHex = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
-  const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
-  const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
-  const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
-  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-  return yiq >= 140 ? '#0f172a' : '#ffffff';
+    const h = hex.startsWith('#') ? hex.substr(1) : hex;
+    const r = parseInt(h.substr(0, 2), 16) || 0;
+    const g = parseInt(h.substr(2, 2), 16) || 0;
+    const b = parseInt(h.substr(4, 2), 16) || 0;
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return yiq >= 128 ? '#000000' : '#ffffff';
 };
 
-const isLightHex = (hex: string) => {
-  if (!hex) return false;
-  const h = hex.startsWith('#') ? hex.substring(1) : hex;
-  const cleanHex = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
-  const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
-  const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
-  const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
-  return ((r * 299) + (g * 587) + (b * 114)) / 1000 >= 170;
+const getShapeStyle = (shape: string): React.CSSProperties => {
+    switch(shape) {
+      case 'circle': return { borderRadius: '50%' };
+      case 'rounded': return { borderRadius: '25%' };
+      case 'rounded-sm': return { borderRadius: '12%' };
+      case 'shield': return { clipPath: 'polygon(0 0, 100% 0, 100% 75%, 50% 100%, 0 75%)' };
+      case 'shield-round': return { clipPath: 'polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%)', borderRadius: '12% 12% 0 0' };
+      case 'shield-modern': return { clipPath: 'polygon(6% 0, 94% 0, 100% 15%, 100% 70%, 50% 100%, 0 70%, 0 15%)' };
+      case 'hexagon': return { clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' };
+      default: return { borderRadius: '50%' };
+    }
 };
 
-const getShapeStyles = (hash: number, _color: string) => {
-  const shapes = [
-    'rounded-full', // Circle
-    'rounded-[25%]', // Squircle
-    'rounded-[10px_20px_10px_20px]', // Alternating corners
-    'rounded-tl-3xl rounded-br-3xl rounded-tr-sm rounded-bl-sm', // Leaf/Shield
-    'rounded-t-[30%] rounded-b-md', // Shield-like
-    'rounded-sm rotate-45', // Diamond (needs inner counter-rotation)
-    'rounded-[15%_35%_50%_25%]', // Asymmetrical Abstract
-    'rounded-[50%_50%_10%_10%]', // Arch shape
-  ];
-  return shapes[hash % shapes.length];
+const getPatternBackground = (pattern: string, p: string, s: string) => {
+    switch(pattern) {
+      case 'solid': return p;
+      case 'stripes-v': return `repeating-linear-gradient(to right, ${p}, ${p} 25%, ${s} 25%, ${s} 50%)`;
+      case 'stripes-h': return `repeating-linear-gradient(to bottom, ${p}, ${p} 25%, ${s} 25%, ${s} 50%)`;
+      case 'stripes-thin-v': return `repeating-linear-gradient(to right, ${p}, ${p} 10%, ${s} 10%, ${s} 20%)`;
+      case 'stripes-thin-h': return `repeating-linear-gradient(to bottom, ${p}, ${p} 10%, ${s} 10%, ${s} 20%)`;
+      case 'halves-v': return `linear-gradient(to right, ${p} 50%, ${s} 50%)`;
+      case 'halves-h': return `linear-gradient(to bottom, ${p} 50%, ${s} 50%)`;
+      case 'sash-diag': return `linear-gradient(135deg, ${p} 35%, ${s} 35%, ${s} 65%, ${p} 65%)`;
+      case 'sash-diag-reverse': return `linear-gradient(225deg, ${p} 35%, ${s} 35%, ${s} 65%, ${p} 65%)`;
+      case 'quarters': return `conic-gradient(${p} 90deg, ${s} 90deg 180deg, ${p} 180deg 270deg, ${s} 270deg)`;
+      case 'cross': return `linear-gradient(to right, transparent 40%, ${s} 40%, ${s} 60%, transparent 60%), linear-gradient(to bottom, ${p} 40%, ${s} 40%, ${s} 60%, ${p} 60%)`;
+      case 'diamond-check': return `repeating-linear-gradient(45deg, ${p}, ${p} 10px, ${s} 10px, ${s} 20px)`;
+      case 'center-stripe-h': return `linear-gradient(to bottom, ${p} 33%, ${s} 33%, ${s} 66%, ${p} 66%)`;
+      case 'center-stripe-v': return `linear-gradient(to right, ${p} 33%, ${s} 33%, ${s} 66%, ${p} 66%)`;
+      case 'checks': return `conic-gradient(${p} 90deg, ${s} 90deg 180deg, ${p} 180deg 270deg, ${s} 270deg) 0 0 / 50% 50%`;
+      default: return p;
+    }
 };
 
-const getPatternStyles = (hash: number, color: string, color2?: string) => {
-  const darken = (hex: string, amount: number) => {
-    let h = hex.replace('#', '');
-    if (h.length === 3) h = h.split('').map(c => c + c).join('');
-    const num = parseInt(h, 16);
-    const r = Math.max(0, (num >> 16) - amount);
-    const g = Math.max(0, ((num >> 8) & 0x00FF) - amount);
-    const b = Math.max(0, (num & 0x0000FF) - amount);
-    return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
-  };
-  
-  let secondaryColor = color2;
-  if (secondaryColor && !secondaryColor.startsWith('#')) {
-    secondaryColor = '#' + secondaryColor;
-  }
-  if (!secondaryColor) {
-    secondaryColor = darken(color, 40);
-  }
-  
-  const patterns = [
-    `linear-gradient(135deg, ${color} 0%, ${secondaryColor} 100%)`,
-    `repeating-linear-gradient(45deg, ${color}, ${color} 10px, ${secondaryColor} 10px, ${secondaryColor} 20px)`,
-    `radial-gradient(circle at center, ${color} 0%, ${secondaryColor} 100%)`,
-    `conic-gradient(from 0deg, ${color} 0% 50%, ${secondaryColor} 50% 100%)`,
-    `linear-gradient(to bottom, ${color} 0% 33%, ${secondaryColor} 33% 66%, ${color} 66% 100%)`,
-    `linear-gradient(to right, ${color} 0% 50%, ${secondaryColor} 50% 100%)`,
-  ];
-  return patterns[hash % patterns.length];
+const getLookalikeConfig = (baseName: string, primaryFallback: string) => {
+    const lookalikes = [
+      { keys: ['Magdeburg'], shape: 'shield', pattern: 'halves-v', sColor: '#ffffff', inner: false, pColor: '#0054a6' },
+      { keys: ['São Paulo'], shape: 'shield', pattern: 'stripes-v', sColor: '#000000', inner: true, pColor: '#ff0000' },
+      { keys: ['Flamengo', 'Rio Red-Black'], shape: 'shield', pattern: 'stripes-h', sColor: '#000000', inner: true, pColor: '#c9141d' },
+      { keys: ['Boca', 'Buenos Aires Blue-Gold'], shape: 'shield', pattern: 'center-stripe-h', sColor: '#ffb000', inner: true, pColor: '#004791' },
+      { keys: ['River', 'Buenos Aires Red-White'], shape: 'shield', pattern: 'sash-diag', sColor: '#ff0000', inner: true, pColor: '#ffffff' },
+      { keys: ['Celtic', 'Glasgow Green'], shape: 'circle', pattern: 'stripes-h', sColor: '#ffffff', inner: true, pColor: '#018749' },
+      { keys: ['Rangers', 'Glasgow Blue'], shape: 'circle', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#1b458f' },
+      { keys: ['Legia', 'Warsaw White'], shape: 'shield', pattern: 'sash-diag', sColor: '#000000', inner: true, pColor: '#ffffff' },
+      { keys: ['Salzburg'], shape: 'circle', pattern: 'halves-v', sColor: '#ffffff', inner: true, pColor: '#de002a' },
+      { keys: ['Basel', 'Basel Red-Blue'], shape: 'shield', pattern: 'halves-v', sColor: '#003882', inner: true, pColor: '#db001b' },
+      { keys: ['Sydney'], shape: 'circle', pattern: 'solid', sColor: '#000080', inner: true, pColor: '#6cabdd' },
+      { keys: ['Melbourne City'], shape: 'circle', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#6cabdd' },
+      { keys: ['Nacional', 'Medellin Green'], shape: 'shield', pattern: 'stripes-v', sColor: '#ffffff', inner: true, pColor: '#006a36' },
+      { keys: ['America', 'Mexico City Yellow-Blue'], shape: 'circle', pattern: 'solid', sColor: '#00005a', inner: true, pColor: '#fbeb00' },
+      { keys: ['Cruz Azul', 'Mexico City Blue'], shape: 'cross', pattern: 'cross', sColor: '#ffffff', inner: true, pColor: '#003db3' },
+      { keys: ['Toronto'], shape: 'shield', pattern: 'halves-v', sColor: '#303e48', inner: true, pColor: '#e31837' },
+      { keys: ['Munich Red', 'Muenchen'], shape: 'circle', pattern: 'diamond-check', sColor: '#ffffff', inner: true, pColor: '#dc052d' },
+      { keys: ['Dortmund Yellow', 'Dortmund'], shape: 'circle', pattern: 'solid', sColor: '#000000', inner: true, pColor: '#fde100' },
+      { keys: ['Leverkusen Red-Black', 'Leverkusen'], shape: 'circle', pattern: 'halves-v', sColor: '#000000', inner: false, pColor: '#e32219' },
+      { keys: ['Leipzig Yellow'], shape: 'shield', pattern: 'stripes-v', sColor: '#0054a6', inner: true, pColor: '#eab308' },
+      { keys: ['Leipzig Green'], shape: 'shield', pattern: 'halves-v', sColor: '#ffffff', inner: true, pColor: '#15803d' },
+      { keys: ['Leipzig Rasen', 'Leipzig Red', 'Leipzig'], shape: 'shield', pattern: 'halves-v', sColor: '#dd011d', inner: true, pColor: '#ffffff' },
+      { keys: ['Stuttgart'], shape: 'shield', pattern: 'center-stripe-h', sColor: '#ffffff', inner: false, pColor: '#e32219' },
+      { keys: ['Gladbach'], shape: 'diamond', pattern: 'stripes-v', sColor: '#000000', inner: true, pColor: '#ffffff' },
+      { keys: ['Koln'], shape: 'circle', pattern: 'halves-v', sColor: '#ffffff', inner: true, pColor: '#ed1c24' },
+      { keys: ['Frankfurt Eagle', 'Frankfurt'], shape: 'shield', pattern: 'stripes-v', sColor: '#e1000f', inner: true, pColor: '#000000' },
+      { keys: ['Bremen'], shape: 'diamond', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#1d8438' },
+      { keys: ['Gelsenkirchen', 'Schalke'], shape: 'circle', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#004d9d' },
+      { keys: ['Madrid White'], shape: 'circle', pattern: 'sash-diag', sColor: '#00529f', inner: true, pColor: '#ffffff' },
+      { keys: ['Madrid Red', 'Madrid Rojo y Blanco', 'Madrid Rojiblanco', 'Madrid Rojo', 'Atletico', 'Atlético'], shape: 'shield', pattern: 'stripes-v', sColor: '#ffffff', inner: true, pColor: '#cb3524' },
+      { keys: ['Barcelona', 'Catalunya'], shape: 'shield', pattern: 'stripes-v', sColor: '#a50044', inner: true, pColor: '#004d98' },
+      { keys: ['Valencia'], shape: 'shield', pattern: 'stripes-v', sColor: '#ffffff', inner: true, pColor: '#000000' },
+      { keys: ['Sevilla'], shape: 'shield', pattern: 'halves-v', sColor: '#d11515', inner: false, pColor: '#ffffff' },
+      { keys: ['Man Red'], shape: 'shield', pattern: 'halves-v', sColor: '#fbe122', inner: true, pColor: '#da291c' },
+      { keys: ['Man Blue'], shape: 'circle', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#6cabdd' },
+      { keys: ['North London'], shape: 'shield', pattern: 'halves-v', sColor: '#ffffff', inner: true, pColor: '#ef0107' },
+      { keys: ['West London'], shape: 'circle', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#034694' },
+      { keys: ['Merseyside Red'], shape: 'shield', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#c8102E' },
+      { keys: ['Milan (R)', 'AC Milan', 'Milan'], shape: 'oval', pattern: 'stripes-v', sColor: '#000000', inner: true, pColor: '#fb090b' },
+      { keys: ['Milan (B)', 'Inter'], shape: 'circle', pattern: 'stripes-v', sColor: '#000000', inner: true, pColor: '#010E80' },
+      { keys: ['Juventus', 'Turin'], shape: 'oval', pattern: 'stripes-v', sColor: '#000000', inner: true, pColor: '#ffffff' },
+      { keys: ['Rome', 'Roma'], shape: 'shield', pattern: 'halves-v', sColor: '#f0bc42', inner: false, pColor: '#8e1f2f' },
+      { keys: ['Napoli', 'Naples'], shape: 'circle', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#003cb2' },
+      { keys: ['Paris'], shape: 'circle', pattern: 'center-stripe-v', sColor: '#da291c', inner: true, pColor: '#004170' },
+      { keys: ['Marseille'], shape: 'circle', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#2faee0' },
+      { keys: ['Lyon'], shape: 'shield', pattern: 'halves-v', sColor: '#da291c', inner: true, pColor: '#ffffff' },
+      { keys: ['Lisbon (B)', 'Benfica'], shape: 'shield', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#ed1c24' },
+      { keys: ['Porto'], shape: 'shield', pattern: 'stripes-v', sColor: '#ffffff', inner: true, pColor: '#00428c' },
+      { keys: ['Lisbon (S)', 'Sporting'], shape: 'circle', pattern: 'stripes-h', sColor: '#ffffff', inner: true, pColor: '#008040' },
+      { keys: ['Ajax', 'Amsterdam'], shape: 'shield', pattern: 'center-stripe-v', sColor: '#d2122b', inner: false, pColor: '#ffffff' },
+      { keys: ['Celtic'], shape: 'circle', pattern: 'stripes-h', sColor: '#ffffff', inner: true, pColor: '#018749' },
+      { keys: ['Belém OS', 'Belenenses', 'Belem'], shape: 'shield-round', pattern: 'solid', sColor: '#ffffff', inner: true, pColor: '#008057' }
+    ];
+
+    const clean = (baseName || '').replace(/\s+\(?B\)?$/, '').trim();
+    for (const l of lookalikes) {
+       for (const key of l.keys) {
+          if (clean === key || (clean && clean.startsWith(key))) {
+             return { ...l, pColor: l.pColor || primaryFallback };
+          }
+       }
+    }
+
+    // Deterministic Generic Fallback
+    const h = hashCode(clean || 'FC');
+    const SHAPES = ['shield', 'shield-round', 'shield-modern', 'circle', 'rounded', 'rounded-sm', 'hexagon'];
+    const PATTERNS = ['solid', 'stripes-v', 'stripes-h', 'stripes-thin-v', 'stripes-thin-h', 'halves-v', 'halves-h', 'sash-diag', 'sash-diag-reverse', 'quarters', 'cross', 'diamond-check', 'center-stripe-h', 'center-stripe-v', 'checks'];
+        // STRICT OFFICIAL COLOR CONTRAST (Never invent random secondary colors like yellow unless it's their actual primary)
+    // Most real clubs just pair their primary color with white or black.
+    const getContrastSecondary = (hex: string = '#ffffff') => {
+       const rawHex = hex || '#ffffff';
+       const h = rawHex.startsWith('#') ? rawHex.substr(1) : rawHex;
+       const r = parseInt(h.substr(0, 2), 16) || 0;
+       const g = parseInt(h.substr(2, 2), 16) || 0;
+       const b = parseInt(h.substr(4, 2), 16) || 0;
+       const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+       // If primary is very light (like yellow or white), use black. Otherwise use white.
+       return yiq >= 180 ? '#000000' : '#ffffff';
+    };
+
+    const TEXT_STYLES = ['initials', 'initials', 'single', 'single', 'icon'];
+    const ICONS = ['fa-shield-halved', 'fa-futbol', 'fa-crown', 'fa-star', 'fa-bolt', 'fa-anchor', 'fa-leaf'];
+    
+    return {
+        shape: SHAPES[h % SHAPES.length],
+        pattern: PATTERNS[(h >> 2) % PATTERNS.length],
+        sColor: getContrastSecondary(primaryFallback),
+        pColor: primaryFallback,
+        inner: (h % 2) === 0,
+        textStyle: TEXT_STYLES[(h >> 3) % TEXT_STYLES.length],
+        icon: ICONS[(h >> 4) % ICONS.length]
+    };
 };
 
-export const ClubLogo: React.FC<ClubLogoProps & { club?: any; clubName?: string; name?: string; size?: string | number }> = ({ 
+
+export const ClubLogo: React.FC<ClubLogoProps> = ({
+  name: nameProp,
   club,
-  clubId: propClubId,
-  name: rawPropName,
-  clubName: rawClubName,
-  color: propColor,
-  color2: propColor2,
-  logo: propLogo,
-  fallbackLogo,
-  className = '',
-  fallbackClassName = '',
-  alt: propAlt,
-  _size = 'sm'
-}: any) => {
-  const propName = rawPropName || rawClubName;
-  const name = propName || club?.name || 'Club';
-  const color = propColor || club?.color || '#1c1c1e';
-  const alt = propAlt !== undefined ? propAlt : '';
-  const isReserve = (propName || club?.name) ? isReserveClub(propName || club?.name) : false;
+  size,
+  id: idProp,
+  color: colorProp,
+  logo: logoProp,
+  fallbackLogo: fallbackLogoProp,
+  className = "w-8 h-8 object-contain shrink-0 drop-shadow-md",
+  fallbackClassName,
+  alt,
+  isModActive: isModActiveProp,
+  showReserveBadge = false
+}) => {
+  const name = (nameProp || club?.name || alt || '').trim();
+  const id = idProp ?? club?.id;
+  const color = colorProp || club?.color;
+  const logo = logoProp || club?.logo;
+  const fallbackLogo = fallbackLogoProp || club?.fallbackLogo;
 
-  // Mod state listener
-  const [modActive, setModActive] = useState<boolean>(() => {
-    try {
-      return isRealDataModActive() || Boolean(getCustomDb());
-    } catch {
-      return true;
-    }
-  });
-  const [modVersion, setModVersion] = useState(0);
+  const clubKey = getClubLogoKey(id, name);
 
-  useEffect(() => {
-    const handleModChange = () => {
-      setModActive(isRealDataModActive() || Boolean(getCustomDb()));
-      setModVersion(v => v + 1);
-    };
-    window.addEventListener('storage', handleModChange);
-    window.addEventListener('mod-state-change', handleModChange);
-    return () => {
-      window.removeEventListener('storage', handleModChange);
-      window.removeEventListener('mod-state-change', handleModChange);
-    };
-  }, []);
+  // Determine if the community mod is active (via prop or fallback to localStorage)
+  const isModActive = isModActiveProp !== undefined
+    ? isModActiveProp
+    : (typeof window !== 'undefined' && localStorage.getItem('fms_real_mod_active') === 'true');
 
-  // Match club in verified registry with exact, normalized, and flexible alias matching
-  const matchedClub = useMemo(() => {
-    let registryClubs: any[] = [];
-    try {
-      registryClubs = getActiveClubs() || [];
-    } catch {
-      registryClubs = [];
-    }
-    const combinedClubs = registryClubs.length > 0 ? registryClubs : ALL_CLUBS;
+  const isReserve = isReserveClub(name);
+  const showReserve = showReserveBadge && isReserve;
 
-    const targetId = propClubId || club?.id;
-    if (targetId !== undefined && targetId !== null && targetId !== '') {
-      const byCombinedId = combinedClubs.find(c => String(c.id) === String(targetId) || Number(c.id) === Number(targetId));
-      if (byCombinedId) return byCombinedId;
-      const byAllClubsId = ALL_CLUBS.find(c => String(c.id) === String(targetId) || Number(c.id) === Number(targetId));
-      if (byAllClubsId) return byAllClubsId;
-    }
-    const clean = (propName || club?.name || '').trim().toLowerCase();
-    if (!clean) return undefined;
+  // Strip reserve suffixes so they share identical badges
+  const cleanName = (name || '')
+    .replace(/\s+Res\.?$/i, '')
+    .replace(/\s+Reserve$/i, '')
+    .replace(/\s+II$/, '')
+    .replace(/\s+\(?B\)?$/, '')
+    .replace(/\s+Castilla$/, '')
+    .replace(/\s+B$/, '')
+    .replace(/\s+2$/, '')
+    .replace(/\s+Res\.?$/i, '')
+    .trim();
 
-    // 1. Exact match
-    const exact = combinedClubs.find(c => c.name.toLowerCase() === clean) || ALL_CLUBS.find(c => c.name.toLowerCase() === clean);
-    if (exact) return exact;
-
-    // 1b. Normalized match (stripping periods, hyphens, and whitespace: e.g. "1.fc köln" vs "1. fc köln")
-    const normClean = clean.replace(/[\.\s\-]/g, '');
-    const normMatch = combinedClubs.find(c => (c.name || '').toLowerCase().replace(/[\.\s\-]/g, '') === normClean) ||
-      ALL_CLUBS.find(c => (c.name || '').toLowerCase().replace(/[\.\s\-]/g, '') === normClean);
-    if (normMatch) return normMatch;
-
-    // 2. Specific known multi-sport / handball team aliases
-    if (clean.includes('porto')) {
-      const p = combinedClubs.find(c => c.id === 202 || c.name.toLowerCase().includes('porto')) ||
-        ALL_CLUBS.find(c => c.id === 202 || c.name.toLowerCase().includes('porto'));
-      if (p) return p;
-    }
-    if (clean.includes('sporting')) {
-      const sp = combinedClubs.find(c => c.id === 201 || c.name.toLowerCase().includes('sporting')) ||
-        ALL_CLUBS.find(c => c.id === 201 || c.name.toLowerCase().includes('sporting'));
-      if (sp) return sp;
-    }
-    if (clean.includes('benfica')) {
-      const b = combinedClubs.find(c => c.id === 203 || c.name.toLowerCase().includes('benfica')) ||
-        ALL_CLUBS.find(c => c.id === 203 || c.name.toLowerCase().includes('benfica'));
-      if (b) return b;
-    }
-    if (clean.includes('köln') || clean.includes('koeln') || clean.includes('cologne')) {
-      const k = ALL_CLUBS.find(c => c.id === 152 || String(c.id) === '152');
-      if (k) return k;
-    }
-    if (clean.includes('paderborn')) {
-      const p = ALL_CLUBS.find(c => c.id === 174 || String(c.id) === '174');
-      if (p) return p;
-    }
-    if (clean.includes('dortmund')) {
-      const d = ALL_CLUBS.find(c => c.id === 160 || String(c.id) === '160');
-      if (d) return d;
-    }
-    if (clean.includes('bayern')) {
-      const b = ALL_CLUBS.find(c => c.id === 183 || String(c.id) === '183');
-      if (b) return b;
-    }
-    if (clean.includes('wiesbaden')) {
-      const w = ALL_CLUBS.find(c => c.id === 171 || String(c.id) === '171');
-      if (w) return w;
-    }
-    if (clean.includes('toulouse')) {
-      const t = ALL_CLUBS.find(c => c.id === 406 || c.name.includes('Toulouse'));
-      if (t) return t;
-    }
-    if (clean.includes('chambéry') || clean.includes('chambery')) {
-      const ch = ALL_CLUBS.find(c => c.id === 405);
-      if (ch) return ch;
-    }
-    if (clean.includes('nîmes') || clean.includes('nimes')) {
-      const n = ALL_CLUBS.find(c => c.id === 404);
-      if (n) return n;
-    }
-    if (clean.includes('granollers')) {
-      const g = ALL_CLUBS.find(c => c.id === 304);
-      if (g) return g;
-    }
-    if (clean.includes('melsungen')) {
-      const m = ALL_CLUBS.find(c => c.id === 105);
-      if (m) return m;
-    }
-    if (clean.includes('magdeburg')) {
-      const mg = ALL_CLUBS.find(c => c.id === 101);
-      if (mg) return mg;
-    }
-    if (clean.includes('flensburg')) {
-      const fl = ALL_CLUBS.find(c => c.id === 103);
-      if (fl) return fl;
-    }
-    if (clean.includes('kiel') && !clean.includes('kielce')) {
-      const k = ALL_CLUBS.find(c => c.id === 104);
-      if (k) return k;
-    }
-
-    // 3. Substring matching
-    return ALL_CLUBS.find(c => {
-      const cLow = c.name.toLowerCase();
-      return cLow.includes(clean) || clean.includes(cLow);
-    });
-  }, [propClubId, club?.id, propName, club?.name, modActive, modVersion]);
-
-  const candidateLogos = useMemo(() => {
-    if (!modActive) return [];
-    const candidates: string[] = [];
-    const rawClubId = propClubId || club?.id || matchedClub?.id;
-    const clubId = rawClubId !== undefined && rawClubId !== null ? Number(rawClubId) : undefined;
-
-    // 1. Explicit prop or club object logo takes first priority (especially custom or edited logos)
-    const explicitLogo = propLogo || club?.logo;
-    if (explicitLogo) {
-      const arr = Array.isArray(explicitLogo) ? explicitLogo : [explicitLogo];
-      arr.forEach((l) => {
-        if (l && typeof l === 'string' && !candidates.includes(l)) {
-          candidates.push(l);
-        }
-      });
-    }
-
-    // 2. Verified local asset (guaranteed on disk)
-    if (clubId !== undefined && !isNaN(clubId) && hasVerifiedLocalAsset(clubId)) {
-      const localPath = getLocalAssetPath(clubId);
-      if (localPath && !candidates.includes(localPath)) {
-        candidates.push(localPath);
+  // Helper to sanitize Wikipedia File / Datei links and trim URLs
+  const sanitizeLogoUrl = (url: string): string => {
+    if (!url || typeof url !== 'string') return '';
+    const trimmed = url.trim();
+    if (trimmed.includes('wikipedia.org/wiki/File:') || trimmed.includes('wikipedia.org/wiki/Datei:')) {
+      const fileName = trimmed.split(/wiki\/(?:File|Datei):/)[1]?.split(/[?#]/)[0];
+      if (fileName) {
+        return `https://commons.wikimedia.org/wiki/Special:FilePath/${fileName}`;
       }
     }
-
-    // 2b. Specific priority for multi-sport football crests and regional verified clubs
-    const cleanName = (propName || club?.name || matchedClub?.name || '').toLowerCase();
-    if (clubId === 202 || cleanName.includes('porto')) {
-      if (!candidates.includes('/assets/logos/club_202.svg')) candidates.unshift('/assets/logos/club_202.svg');
-      if (!candidates.includes('/assets/logos/club_202.png')) candidates.push('/assets/logos/club_202.png');
-    }
-    if (clubId === 201 || cleanName.includes('sporting')) {
-      if (!candidates.includes('/assets/logos/club_201.svg')) candidates.unshift('/assets/logos/club_201.svg');
-    }
-    if (clubId === 203 || cleanName.includes('benfica')) {
-      if (!candidates.includes('/assets/logos/club_203.svg')) candidates.unshift('/assets/logos/club_203.svg');
-    }
-    if (clubId === 174 || cleanName.includes('paderborn')) {
-      if (!candidates.includes('/assets/logos/club_174.svg')) candidates.unshift('/assets/logos/club_174.svg');
-    }
-    if (clubId === 152 || cleanName.includes('köln') || cleanName.includes('koeln') || cleanName.includes('cologne')) {
-      if (!candidates.includes('/assets/logos/club_152.svg')) candidates.unshift('/assets/logos/club_152.svg');
-    }
-    if (clubId === 171 || cleanName.includes('wiesbaden')) {
-      if (!candidates.includes('/assets/logos/club_171.svg')) candidates.unshift('/assets/logos/club_171.svg');
-    }
-
-    // 2c. Matched club logo fallback
-    if (matchedClub?.logo && matchedClub.logo !== explicitLogo) {
-      const arr = Array.isArray(matchedClub.logo) ? matchedClub.logo : [matchedClub.logo];
-      arr.forEach((l) => {
-        if (l && typeof l === 'string' && !candidates.includes(l)) {
-          candidates.push(l);
-        }
-      });
-    }
-
-    // 3. Verified real-world official CDN
-    if (clubId !== undefined && !isNaN(clubId) && REAL_WORLD_LOGOS[clubId]) {
-      const direct = REAL_WORLD_LOGOS[clubId];
-      if (!candidates.includes(direct)) candidates.push(direct);
-
-      const cleanUrl = direct.replace(/^https?:\/\//, '');
-      const mirror = `https://images.weserv.nl/?url=${encodeURIComponent(cleanUrl)}&w=160&output=png`;
-      if (!candidates.includes(mirror)) candidates.push(mirror);
-    }
-
-    // 4. Fallback logo from prop / club
-    let fb = fallbackLogo || matchedClub?.fallbackLogo || club?.fallbackLogo;
-    if (fb && typeof fb === 'string') {
-      if (fb.startsWith('/assets/logos/') && !candidates.includes(fb)) {
-        candidates.unshift(fb);
-      } else if (!fb.includes('Fenix_Toulouse_Handball_Logo.svg') && !candidates.includes(fb)) {
-        candidates.push(fb);
-      }
-    }
-
-    return candidates.filter((c): c is string => typeof c === 'string' && c.length > 0);
-  }, [modActive, modVersion, propClubId, matchedClub, club?.id, propLogo, club?.logo, fallbackLogo, propName, club?.name]);
-
-  const [imgError, setImgError] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState<string | undefined>(() => candidateLogos.length > 0 ? candidateLogos[0] : undefined);
-
-  useEffect(() => {
-    if (candidateLogos.length > 0) {
-      setCurrentSrc(candidateLogos[0]);
-      setImgError(false);
-    } else {
-      setCurrentSrc(undefined);
-      setImgError(true);
-    }
-  }, [candidateLogos]);
-
-  const handleError = () => {
-    if (candidateLogos.length > 0 && currentSrc) {
-      const currentIndex = candidateLogos.indexOf(currentSrc);
-      if (currentIndex > -1 && currentIndex < candidateLogos.length - 1) {
-        setCurrentSrc(candidateLogos[currentIndex + 1]);
-      } else {
-        setImgError(true);
-      }
-    } else {
-      setImgError(true);
-    }
+    return trimmed;
   };
 
-  const baseClassName = "flex-shrink-0 object-contain";
-  const displayClass = className || "w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12";
-  const fallbackDisplayClass = fallbackClassName || displayClass;
+  // Compute all candidate logo sources
+  const sources = useMemo(() => {
+    // STRICT CHECK: If mod is OFF (fallback/unmodded clubs mode), NEVER load official crests,
+    // mod assets, or cached mod URLs!
+    // Only manual user custom uploads (data:image/ or blob:) from club customization are permitted.
+    if (!isModActive) {
+      if (typeof logo === 'string' && (logo.startsWith('data:image/') || logo.startsWith('blob:'))) {
+        return [logo];
+      }
+      return [];
+    }
 
-  let finalColor = color || getMonogramHex(color) || '#3f3f46';
-  if (finalColor && !finalColor.startsWith('#')) {
-    finalColor = '#' + finalColor;
+    const list: string[] = [];
+
+    // Check localStorage cache only when community mod is active
+    const cached = getCachedLogo(clubKey);
+    // 1. If we have an offline base64 Data URL cached in localStorage, place it first!
+    if (cached.dataUrl && !list.includes(cached.dataUrl)) {
+      list.push(cached.dataUrl);
+    }
+    // 2. If we have a verified working URL from localStorage, place it next!
+    if (cached.workingUrl && !list.includes(cached.workingUrl)) {
+      list.push(cached.workingUrl);
+    }
+
+    const addUrl = (u?: string) => {
+      if (!u || typeof u !== 'string') return;
+      const clean = sanitizeLogoUrl(u);
+      if (!clean) return;
+
+      // For Wikimedia / Wikipedia SVG assets, prioritize high-res pre-rendered PNG thumbnails via Special:FilePath
+      // to ensure 100% browser decoding compatibility across all desktop and mobile browsers
+      if (clean.includes('wikimedia.org') || clean.includes('wikipedia.org')) {
+        let fileName = '';
+        let wikiDomain = clean.includes('/wikipedia/en/') ? 'en.wikipedia.org' : 'commons.wikimedia.org';
+        if (clean.includes('/wiki/Special:FilePath/')) {
+          fileName = clean.split('/wiki/Special:FilePath/')[1]?.split(/[?#]/)[0];
+          if (clean.includes('en.wikipedia.org')) wikiDomain = 'en.wikipedia.org';
+        } else if (clean.includes('/wikipedia/commons/')) {
+          const parts = clean.split('/');
+          fileName = parts[parts.length - 1]?.split(/[?#]/)[0];
+          wikiDomain = 'commons.wikimedia.org';
+        } else if (clean.includes('/wikipedia/en/')) {
+          const parts = clean.split('/');
+          fileName = parts[parts.length - 1]?.split(/[?#]/)[0];
+          wikiDomain = 'en.wikipedia.org';
+        }
+        if (fileName) {
+          try {
+            const decoded = decodeURIComponent(fileName);
+            const pngThumb = `https://${wikiDomain}/wiki/Special:FilePath/${encodeURIComponent(decoded)}?width=240`;
+            if (!list.includes(pngThumb)) list.push(pngThumb);
+          } catch {
+            const pngThumb = `https://${wikiDomain}/wiki/Special:FilePath/${fileName}?width=240`;
+            if (!list.includes(pngThumb)) list.push(pngThumb);
+          }
+        }
+      }
+
+      if (!list.includes(clean)) list.push(clean);
+
+      if (clean && clean.includes('upload.wikimedia.org/wikipedia/')) {
+        const parts = clean.split('/');
+        const fileName = parts[parts.length - 1];
+        const wikiDomain = clean.includes('/wikipedia/en/') ? 'en.wikipedia.org' : 'commons.wikimedia.org';
+        if (fileName) {
+          try {
+            const decoded = decodeURIComponent(fileName);
+            const filePath = `https://${wikiDomain}/wiki/Special:FilePath/${encodeURIComponent(decoded)}`;
+            if (!list.includes(filePath)) list.push(filePath);
+          } catch {
+            const filePath = `https://${wikiDomain}/wiki/Special:FilePath/${fileName}`;
+            if (!list.includes(filePath)) list.push(filePath);
+          }
+        }
+      }
+    };
+
+    const lowerName = (name || '').toLowerCase().trim();
+    const lowerClean = (cleanName || '').toLowerCase().trim();
+    const lowerNoRes = lowerName ? lowerName.replace(/\s+res\.?$/i, '').trim() : '';
+    const simp = name ? simplifyClubName(name) : '';
+    const simpClean = cleanName ? simplifyClubName(cleanName) : '';
+
+    // Look up in order of precision:
+    // 1. Exact name match in mod database or alias dictionary
+    // 2. Name without "Res."
+    // 3. Clean parent name match (crucial for reserve teams sharing parent crest)
+    // 4. Simplified name match
+    // 5. Clean simplified name match
+    // 6. Canonical ID lookup (only if verified or name is empty)
+    let idEntry: ModLogoEntry | undefined = undefined;
+    if (id != null && idToModEntry.has(id)) {
+      if (!name || name.trim() === '' || REAL_CLUB_ALIASES[lowerName] === id || REAL_CLUB_ALIASES[lowerClean] === id || REAL_CLUB_ALIASES[lowerNoRes] === id) {
+        idEntry = idToModEntry.get(id);
+      }
+    }
+
+    const modded = modLogoMap.get(lowerName) ||
+                   modLogoMap.get(lowerNoRes) ||
+                   modLogoMap.get(lowerClean) ||
+                   (simp ? modLogoMap.get(simp) : undefined) ||
+                   (simpClean ? modLogoMap.get(simpClean) : undefined) ||
+                   idEntry;
+
+    const isCustomUpload = (u: any) => typeof u === 'string' && (u.startsWith('data:image/') || u.startsWith('blob:'));
+
+    // 1. Manual user custom image uploads have absolute top priority
+    if (Array.isArray(logo)) {
+      logo.filter(isCustomUpload).forEach(addUrl);
+    } else if (isCustomUpload(logo)) {
+      addUrl(logo as string);
+    }
+
+    // 2. When mod is active, verified authentic mod crest takes priority over stale/corrupted external URLs from saves
+    if (isModActive && modded) {
+      if (modded.logo) addUrl(modded.logo);
+      if (modded.fallbackLogo) addUrl(modded.fallbackLogo);
+    }
+
+    // 3. External HTTP/HTTPS URLs from props
+    if (Array.isArray(logo)) {
+      logo.filter(u => !isCustomUpload(u)).forEach(addUrl);
+    } else if (logo && typeof logo === 'string' && !isCustomUpload(logo)) {
+      addUrl(logo);
+    }
+    if (fallbackLogo && typeof fallbackLogo === 'string' && !isCustomUpload(fallbackLogo)) {
+      addUrl(fallbackLogo);
+    }
+
+    // 4. Fallback mod logo if mod was inactive
+    if (!isModActive && modded) {
+      if (modded.logo) addUrl(modded.logo);
+      if (modded.fallbackLogo) addUrl(modded.fallbackLogo);
+    }
+
+    return list.filter(Boolean);
+  }, [logo, fallbackLogo, name, cleanName, id, isModActive, clubKey]);
+
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const [imgError, setImgError] = useState(false);
+
+  const currentSrc = sources[sourceIndex];
+
+  // Synchronously initialize isLoaded if the image has already loaded in memory (zero-flicker on remount)
+  const [isLoaded, setIsLoaded] = useState(() => (sources[0] ? isUrlLoadedInMemory(sources[0]) : false));
+
+  useEffect(() => {
+    setSourceIndex(0);
+    setImgError(false);
+    if (sources[0] && isUrlLoadedInMemory(sources[0])) {
+      setIsLoaded(true);
+    } else {
+      setIsLoaded(false);
+    }
+  }, [logo, fallbackLogo, cleanName, id, isModActive, sources]);
+
+  useEffect(() => {
+    if (currentSrc && isUrlLoadedInMemory(currentSrc)) {
+      setIsLoaded(true);
+    }
+  }, [currentSrc]);
+  
+  // GENERATE GENERIC MODDED MONOGRAM
+  const sizeStyle = size ? { width: `${size}px`, height: `${size}px`, minWidth: `${size}px`, minHeight: `${size}px` } : undefined;
+  const primaryFallback = color || getMonogramHex(cleanName || name || 'FC');
+  let pColor = primaryFallback;
+  if (!pColor.startsWith('#')) pColor = '#' + pColor;
+  
+  const config = getLookalikeConfig(cleanName || name || 'FC', pColor);
+  const displayInitials = getInitials(cleanName || name || 'FC');
+  
+  const displayColor = (config.pattern === 'solid' && pColor === '#ffffff') ? '#000000' : pColor; // Adjust if pure white solid
+  const pBg = getPatternBackground(config.pattern, config.pColor, config.sColor);
+
+  const outerStyle = getShapeStyle(config.shape);
+  const innerShapeStyle = getShapeStyle(config.shape === 'oval' || config.shape === 'flag' ? 'circle' : config.shape);
+
+  const tStyle = (config as any).textStyle || 'initials';
+  const cIcon = (config as any).icon || 'fa-shield-halved';
+  
+  let innerContent = null;
+  const tColor = getTextColor(config.inner ? config.pColor : config.pColor); // Technically outer text might need different color based on pattern, but pColor is safe fallback
+  
+  if (tStyle === 'initials') {
+      innerContent = <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" fill={tColor} fontSize={displayInitials.length > 2 ? "36" : "44"} fontWeight="900" fontFamily="ui-sans-serif, system-ui, sans-serif" letterSpacing="-0.02em" stroke={tColor === '#ffffff' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)'} strokeWidth="1.5" strokeLinejoin="round">{displayInitials}</text>;
+  } else if (tStyle === 'single') {
+      innerContent = <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" fill={tColor} fontSize="58" fontWeight="900" fontFamily="ui-sans-serif, system-ui, sans-serif" stroke={tColor === '#ffffff' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)'} strokeWidth="2" strokeLinejoin="round">{displayInitials.charAt(0)}</text>;
+  } else if (tStyle === 'icon') {
+      // Use foreignObject to render fontawesome inside SVG, or just render it outside SVG
   }
-  const isLight = isLightHex(finalColor) || Boolean(color && ['ffffff', 'fff', '#ffffff', '#fff'].includes(color.toLowerCase()));
-  const isWiesbaden = name.toLowerCase().includes('wiesbaden') || (propClubId === 171) || (club?.id === 171) || (matchedClub?.id === 171);
-  const needsContrastContainer = isLight || isWiesbaden;
 
-  // Real logo display (active when mod is active and valid crest asset is available)
-  if (modActive && currentSrc && !imgError) {
-    const isFull = displayClass.includes('w-full') || displayClass.includes('h-full');
+  const renderContent = () => {
+     if (tStyle === 'none') return null;
+     if (tStyle === 'icon') {
+         return <i className={`fas ${cIcon} absolute z-10 drop-shadow-md`} style={{ color: tColor, fontSize: '45%' }}></i>;
+     }
+     return (
+        <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full drop-shadow-md pointer-events-none" style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.8))' }}>
+            {innerContent}
+        </svg>
+     );
+  };
+
+  const isClipped = Boolean((outerStyle as any)?.clipPath);
+
+  // Render complete monogram artwork filling 100% of its square container
+  const monogramInner = (
+    <div 
+      className={`w-full h-full relative flex items-center justify-center font-bold overflow-hidden ${fallbackClassName || ''}`}
+      style={{
+        background: pBg,
+        ...outerStyle,
+        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))',
+        ...(!isClipped ? { border: '1px solid rgba(255,255,255,0.2)' } : {})
+      }}
+      title={name}
+    >
+      {/* Inner overlay for shadow/highlights */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-black/30 pointer-events-none mix-blend-overlay"></div>
+      {!isClipped && <div className="absolute inset-0 border border-white/20 pointer-events-none rounded-[inherit]"></div>}
+      
+      {config.inner ? (
+        <div 
+          className="absolute flex items-center justify-center" 
+          style={{
+            width: '65%', height: '65%', 
+            backgroundColor: config.pColor,
+            ...innerShapeStyle,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none rounded-[inherit]"></div>
+          {renderContent()}
+        </div>
+      ) : (
+        renderContent()
+      )}
+    </div>
+  );
+
+  const isImageValid = Boolean(
+    currentSrc &&
+    !imgError &&
+    (
+      currentSrc.startsWith('http://') ||
+      currentSrc.startsWith('https://') ||
+      currentSrc.startsWith('//') ||
+      currentSrc.startsWith('data:image/') ||
+      currentSrc.startsWith('blob:') ||
+      currentSrc.startsWith('/') ||
+      currentSrc.startsWith('./') ||
+      /\.(png|jpe?g|svg|webp|gif|ico)(\?.*)?$/i.test(currentSrc)
+    )
+  );
+
+  if (isImageValid) {
     return (
       <div 
-        className={`relative inline-flex items-center justify-center shrink-0 select-none ${isFull ? 'w-full h-full' : ''} ${
-          needsContrastContainer ? 'bg-[#0e1017]/90 rounded-lg p-0.5 border border-white/10 shadow-sm' : ''
-        }`} 
-        aria-hidden={alt === '' ? true : undefined}
+        style={sizeStyle}
+        className={`relative inline-flex items-center justify-center aspect-square shrink-0 overflow-hidden select-none [contain:paint_layout] ${className}`}
       >
+        {/* Solid crisp placeholder monogram with zero layout shift while image settles */}
+        {!isLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            {monogramInner}
+          </div>
+        )}
         <img
+          ref={(imgNode) => {
+            if (imgNode && imgNode.complete && imgNode.naturalWidth > 0) {
+              if (currentSrc) {
+                markUrlLoaded(currentSrc);
+                setCachedWorkingUrl(clubKey, currentSrc);
+              }
+              if (!isLoaded) {
+                setIsLoaded(true);
+              }
+            }
+          }}
           src={currentSrc}
-          alt={alt}
-          aria-hidden={alt === '' ? true : undefined}
-          className={`${baseClassName} ${displayClass}`}
-          onError={handleError}
+          referrerPolicy="no-referrer"
           decoding="async"
           loading="eager"
+          alt={alt || name}
+          onLoad={() => {
+            if (currentSrc) {
+              markUrlLoaded(currentSrc);
+              setCachedWorkingUrl(clubKey, currentSrc);
+              if (isModActive && currentSrc.startsWith('http')) {
+                cacheLogoBlob(clubKey, currentSrc);
+              }
+            }
+            setIsLoaded(true);
+          }}
+          className={`relative z-10 w-full h-full max-w-full max-h-full object-contain drop-shadow-md ${
+            isLoaded ? 'opacity-100' : 'opacity-0'
+          }`}
+          onError={() => {
+            setIsLoaded(false);
+            if (sourceIndex < sources.length - 1) {
+              setSourceIndex(prev => prev + 1);
+            } else {
+              setImgError(true);
+            }
+          }}
         />
-        {isReserve && (
-          <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[8px] sm:text-[9px] font-black px-1 rounded shadow-sm border border-black z-10 select-none" title="Reserve Team">
-            II
-          </span>
-        )}
       </div>
     );
   }
 
-  // Procedural Monogram Generation (used when mod is inactive or no crest asset is available)
-  // User confirmed: "In mod, the real club logo first. If not subtle dark badge container with club accent border"
-  const hash = hashCode(name);
-  const textColor = isLight ? '#fbbf24' : getTextColor(finalColor);
-  const initials = getInitials(name);
-  
-  let sizeClass = 'text-xs';
-  if (fallbackDisplayClass.includes('w-12') || fallbackDisplayClass.includes('w-14') || fallbackDisplayClass.includes('w-16')) sizeClass = 'text-lg';
-  if (fallbackDisplayClass.includes('w-20') || fallbackDisplayClass.includes('w-24') || fallbackDisplayClass.includes('w-32')) sizeClass = 'text-3xl';
-  if (fallbackDisplayClass.includes('w-48') || fallbackDisplayClass.includes('w-64')) sizeClass = 'text-5xl';
-  
-  const fontStyles = ['font-sans font-black tracking-tighter', 'font-serif font-bold tracking-widest', 'font-mono font-bold'];
-  const fontStyle = fontStyles[hash % fontStyles.length];
-  
-  const resolvedColor2 = propColor2 || club?.color2 || matchedClub?.color2;
-  const shapeClass = getShapeStyles(hash, finalColor);
-  const patternStyle = isLight 
-    ? { background: 'linear-gradient(135deg, #181922 0%, #0d0e13 100%)' }
-    : { background: getPatternStyles(hash, finalColor, resolvedColor2) };
-  
-  const isDiamond = shapeClass.includes('rotate-45');
-  const borderClass = isLight ? 'border border-amber-400/50 shadow-md' : 'border border-white/20';
-
   return (
-    <div className="relative inline-block shrink-0 select-none" aria-hidden={alt === '' ? true : undefined}>
-      <div
-        className={`flex items-center justify-center shrink-0 shadow-inner ${fallbackDisplayClass} ${shapeClass} overflow-hidden ${borderClass} relative group`}
-        style={patternStyle}
-      >
-        <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/20 pointer-events-none" />
-        <span 
-          className={`${fontStyle} ${sizeClass} uppercase z-10 drop-shadow-md transition-transform group-hover:scale-110`}
-          style={{ 
-            color: textColor,
-            transform: isDiamond ? 'rotate(-45deg)' : 'none' 
-          }}
-        >
-          {initials}
-        </span>
-      </div>
-      {isReserve && (
-        <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[8px] sm:text-[9px] font-black px-1 rounded shadow-sm border border-black z-20" title="Reserve Team">
-          II
-        </span>
-      )}
+    <div 
+      style={sizeStyle}
+      className={`relative inline-flex items-center justify-center aspect-square shrink-0 overflow-hidden select-none [contain:paint_layout] ${className}`}
+    >
+      {monogramInner}
     </div>
   );
 };

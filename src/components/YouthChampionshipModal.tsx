@@ -1,726 +1,683 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GameState, calculateCohortRating } from '../types';
+import confetti from 'canvas-confetti';
+import { GameState, Language, Club } from '../types';
+import { t as tr } from '../data/translations';
 import { ALL_CLUBS } from '../data/clubsData';
-import { getActiveClubs, isAnyModActive, mergeClubWithWorldState } from '../utils/modManager';
-import { useModalDismiss } from '../utils/modalUtils';
 import { ClubLogo } from './ClubLogo';
-import { triggerRealisticConfetti } from '../utils/confettiHelper';
+import { isReserveClub, formatMoney, getLeagueScaledVal } from '../data/gameConstants';
 
-interface Match {
-    id: string;
-    home: string;
-    away: string;
-    homeScore: number | null;
-    awayScore: number | null;
-    homeOvr: number;
-    awayOvr: number;
-    winner?: string;
-    isPlayerMatch: boolean;
+interface Props {
+  state: GameState;
+  lang: Language;
+  clubsDb?: Club[];
+  isModActive?: boolean;
+  onClose: (won: boolean) => void;
+  onTournamentStart?: () => void;
+  onTournamentVictory?: (prizeMoney: number, cohortBoost: number) => void;
 }
 
-interface YouthChampionshipModalProps {
-    state: GameState;
-    onClose: () => void;
-    onComplete: (wonTitle: boolean) => void;
+interface YouthTeam {
+  id: number;
+  name: string;
+  baseName: string;
+  ovr: number;
+  color?: string;
+  logo?: string;
+  fallbackLogo?: string;
+  isPlayer: boolean;
+  country: string;
 }
 
-export const YouthChampionshipModal: React.FC<YouthChampionshipModalProps> = ({ state, onClose, onComplete }) => {
-    const t = (en: string, _de?: string) => en;
-    
-    const [intro, setIntro] = useState(true);
-    const [round, setRound] = useState<0 | 1 | 2 | 3>(0); // 0: Init, 1: QF done, 2: SF done, 3: Final done
-    const [qfMatches, setQfMatches] = useState<Match[]>([]);
-    const [sfMatches, setSfMatches] = useState<Match[]>([]);
-    const [finalMatch, setFinalMatch] = useState<Match | null>(null);
-    const [champion, setChampion] = useState<string | null>(null);
-    const [isSimulating, setIsSimulating] = useState(false);
-    const hasCompletedRef = useRef(false);
+interface YouthMatch {
+  t1: YouthTeam;
+  t2: YouthTeam;
+  t1Score: number;
+  t2Score: number;
+  t1PenScore?: number;
+  t2PenScore?: number;
+  isPenalties?: boolean;
+  winner: YouthTeam;
+  locationText: string;
+  dramaText?: string;
+  att: number;
+}
 
-    const handleCloseModal = () => {
-        if (!hasCompletedRef.current && round >= 1) {
-            hasCompletedRef.current = true;
-            onComplete(false);
-        }
-        onClose();
-    };
-    useModalDismiss(handleCloseModal);
+// Expanded dictionary to capture base game + global mod database countries
+const COUNTRY_EMOJIS: Record<string, string> = {
+  GER: '🇩🇪', ENG: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ITA: '🇮🇹', ESP: '🇪🇸', FRA: '🇫🇷',
+  USA: '🇺🇸', BRA: '🇧🇷', ARG: '🇦🇷', JPN: '🇯🇵', SCO: '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+  POR: '🇵🇹', WAL: '🏴󠁧󠁢󠁷󠁬󠁳󠁿', POL: '🇵🇱', AUT: '🇦🇹', SUI: '🇨🇭',
+  AUS: '🇦🇺', COL: '🇨🇴', MEX: '🇲🇽', ECU: '🇪🇨', CAN: '🇨🇦',
+  IDN: '🇮🇩', IND: '🇮🇳', KOR: '🇰🇷', KSA: '🇸🇦', RSA: '🇿🇦',
+  NGA: '🇳🇬', TUR: '🇹🇷', NED: '🇳🇱', DEN: '🇩🇰', NOR: '🇳🇴', 
+  SWE: '🇸🇪', CRO: '🇭🇷', GRE: '🇬🇷', SVK: '🇸🇰', PER: '🇵🇪', 
+  BOL: '🇧🇴', PAR: '🇵🇾', CHI: '🇨🇱'
+};
 
-    const pipelineCount = (state.youthPipeline || []).filter(p => !p.isLoanedOut).length;
-    const academyLvl = state.club.academyLevel || state.club.youthAcademy || 1;
-    const playerOvr = calculateCohortRating(
-        state.club.baseOvr || 70,
-        academyLvl,
-        state.youthPipeline || []
-    );
+// Authentic FIFA penalty shootout simulator (Best-of-5 with early mathematical elimination check + sudden death)
+const simulateFifaShootout = (t1Advantage: number = 0): { t1Pens: number; t2Pens: number; t1Wins: boolean } => {
+  const clampedAdv = Math.max(-4, Math.min(4, t1Advantage));
+  const p1Prob = Math.max(0.67, Math.min(0.83, 0.75 + clampedAdv * 0.015));
+  const p2Prob = Math.max(0.67, Math.min(0.83, 0.75 - clampedAdv * 0.015));
 
-    useEffect(() => {
-        if (pipelineCount < 6) return;
-        const country = (state.club.country || 'GER').trim().toUpperCase();
-        const mergedClubs = getActiveClubs(country).map(c => mergeClubWithWorldState(c, state.worldClubs?.[c.id]));
-        let aiClubs = mergedClubs.filter(c => (c.country || 'GER').trim().toUpperCase() === country && c.id !== state.club.id && !/\s(II|B)$/i.test(c.name))
-            .sort((a,b) => a.tier - b.tier)
-            .slice(0, 7)
-            .map(c => {
-                const aiSeniorOvr = c.baseOvr || 65;
-                // AI U19 rating logically scaled to youth level (senior * ~0.74 + variance)
-                const aiU19Ovr = Math.max(50, Math.min(aiSeniorOvr - 2, Math.round(aiSeniorOvr * 0.74 + Math.floor(Math.random() * 8))));
-                return { name: c.name + ' U19', ovr: aiU19Ovr, isPlayer: false };
-            });
-        
-        if (aiClubs.length < 7) {
-            const extraClubs = mergedClubs.filter(c => c.id !== state.club.id && !aiClubs.some(ac => ac.name.startsWith(c.name)))
-                .slice(0, 7 - aiClubs.length)
-                .map(c => {
-                    const aiSeniorOvr = c.baseOvr || 65;
-                    const aiU19Ovr = Math.max(50, Math.min(aiSeniorOvr - 2, Math.round(aiSeniorOvr * 0.74 + Math.floor(Math.random() * 8))));
-                    return { name: c.name + ' U19', ovr: aiU19Ovr, isPlayer: false };
-                });
-            aiClubs = [...aiClubs, ...extraClubs];
-        }
+  let s1 = 0;
+  let s2 = 0;
 
-        const playerTeam = { name: state.club.name + ' U19', ovr: playerOvr, isPlayer: true };
-        const allBracket = [playerTeam, ...aiClubs].sort(() => Math.random() - 0.5);
-
-        const matches: Match[] = [];
-        for(let i=0; i<4; i++) {
-            matches.push({
-                id: `qf-${i}`,
-                home: allBracket[i*2].name,
-                away: allBracket[i*2+1].name,
-                homeOvr: allBracket[i*2].ovr,
-                awayOvr: allBracket[i*2+1].ovr,
-                homeScore: null,
-                awayScore: null,
-                isPlayerMatch: allBracket[i*2].isPlayer || allBracket[i*2+1].isPlayer
-            });
-        }
-        setQfMatches(matches);
-    }, [pipelineCount]);
-
-    if (pipelineCount < 6) {
-        return (
-            <div 
-                onClick={onClose}
-                className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-2xl cursor-pointer"
-            >
-                <div 
-                    onClick={(e) => e.stopPropagation()}
-                    className="bg-[#14151e] border border-white/[0.04] rounded-2xl p-6 max-w-sm w-full text-center flex flex-col items-center gap-4 shadow-[0_25px_70px_rgba(0,0,0,0.85)] cursor-default"
-                >
-                    <div className="w-14 h-14 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xl">
-                        <i className="fas fa-lock" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                        <h3 className="text-lg font-semibold text-white">{t('Full 6-Prospect Cohort Required', 'Vollständiger 6er U19-Kader erforderlich')}</h3>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
-                            {t(
-                                `You must have a full youth cohort of at least 6 prospects to enter the National Youth Championship. Currently you have ${pipelineCount}/6.`,
-                                `Für die Teilnahme an der nationalen U19-Meisterschaft wird ein vollständiger Kader von mindestens 6 Talenten benötigt. Aktuell hast du ${pipelineCount}/6.`
-                            )}
-                        </p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="w-full py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.04] text-white font-medium text-xs transition cursor-pointer"
-                    >
-                        {t('Back to Academy', 'Zurück zur Akademie')}
-                    </button>
-                </div>
-            </div>
-        );
+  // Best of 5 kicks
+  for (let round = 1; round <= 5; round++) {
+    // Team 1 takes kick
+    if (Math.random() < p1Prob) s1++;
+    const rem2After1 = 5 - (round - 1);
+    const rem1After1 = 5 - round;
+    if (s1 > s2 + rem2After1) {
+      return { t1Pens: s1, t2Pens: s2, t1Wins: true };
+    }
+    if (s2 > s1 + rem1After1) {
+      return { t1Pens: s1, t2Pens: s2, t1Wins: false };
     }
 
-    const simulateMatch = (m: Match): Match => {
-        const diff = m.homeOvr - m.awayOvr;
-        const absDiff = Math.abs(diff);
+    // Team 2 takes kick
+    if (Math.random() < p2Prob) s2++;
+    const rem1After2 = 5 - round;
+    const rem2After2 = 5 - round;
+    if (s1 > s2 + rem2After2) {
+      return { t1Pens: s1, t2Pens: s2, t1Wins: true };
+    }
+    if (s2 > s1 + rem1After2) {
+      return { t1Pens: s1, t2Pens: s2, t1Wins: false };
+    }
+  }
 
-        // Multi-tempo handball pace archetypes
-        const paceRoll = Math.random();
-        let baseGoals = 26;
-        if (paceRoll < 0.20) {
-            baseGoals = 20 + Math.floor(Math.random() * 5); // 20-24 defensive battle
-        } else if (paceRoll < 0.75) {
-            baseGoals = 25 + Math.floor(Math.random() * 6); // 25-30 standard pace
-        } else {
-            baseGoals = 31 + Math.floor(Math.random() * 5); // 31-35 shootout
-        }
+  // Sudden death if tied after 5 kicks
+  for (let sd = 6; sd <= 12; sd++) {
+    const k1 = Math.random() < p1Prob;
+    const k2 = Math.random() < p2Prob;
+    if (k1) s1++;
+    if (k2) s2++;
+    if (s1 !== s2) {
+      return { t1Pens: s1, t2Pens: s2, t1Wins: s1 > s2 };
+    }
+  }
 
-        // Multi-tiered goal spread distribution
-        let targetSpread = 1;
-        const spreadRoll = Math.random();
-        if (absDiff <= 3) {
-            if (spreadRoll < 0.50) targetSpread = 1;
-            else if (spreadRoll < 0.85) targetSpread = 2;
-            else targetSpread = 3 + (Math.random() < 0.5 ? 0 : 1);
-        } else if (absDiff <= 7) {
-            if (spreadRoll < 0.25) targetSpread = 1 + Math.floor(Math.random() * 2);
-            else if (spreadRoll < 0.75) targetSpread = 3 + Math.floor(Math.random() * 4);
-            else targetSpread = 7 + Math.floor(Math.random() * 2);
-        } else if (absDiff <= 13) {
-            if (spreadRoll < 0.15) targetSpread = 2 + Math.floor(Math.random() * 3);
-            else if (spreadRoll < 0.60) targetSpread = 5 + Math.floor(Math.random() * 5);
-            else targetSpread = 10 + Math.floor(Math.random() * 5);
-        } else {
-            if (spreadRoll < 0.10) targetSpread = 5 + Math.floor(Math.random() * 4);
-            else if (spreadRoll < 0.60) targetSpread = 10 + Math.floor(Math.random() * 5);
-            else targetSpread = 15 + Math.floor(Math.random() * 4);
-        }
+  // Decisive tiebreak fallback if still tied after 12 rounds
+  s1++;
+  return { t1Pens: s1, t2Pens: s2, t1Wins: true };
+};
 
-        const winProb = Math.max(0.1, Math.min(0.9, 0.5 + diff * 0.03));
-        const homeWins = Math.random() < winProb;
+export const YouthChampionshipModal: React.FC<Props> = ({ state, lang, clubsDb, isModActive, onClose, onTournamentStart, onTournamentVictory }) => {
+  const t = (en: string, de?: string) => tr(lang, en, de);
 
-        let winnerScore = Math.round(baseGoals + targetSpread / 2);
-        let loserScore = winnerScore - targetSpread;
+  const [phase, setPhase] = useState<'intro' | 'qf' | 'sf' | 'final' | 'result'>('intro');
+  const [matches, setMatches] = useState<YouthMatch[]>([]);
+  const [teams, setTeams] = useState<YouthTeam[]>([]);
+  const [tournamentWon, setTournamentWon] = useState<boolean>(false);
+  const [reachedFinal, setReachedFinal] = useState<boolean>(false);
+  const rewardsClaimedRef = React.useRef(false);
 
-        if (loserScore < 18) {
-            const adj = 18 - loserScore;
-            loserScore = 18;
-            winnerScore += adj;
-        }
-        if (winnerScore > 38) {
-            const excess = winnerScore - 38;
-            winnerScore = 38;
-            loserScore = Math.max(18, loserScore - excess);
-        }
+  // Scaled tournament prize purse (250k baseline in Tier 1 -> 125k in USA at 0.50x)
+  const prizeMoney = getLeagueScaledVal(state.club.tier || 1, 250, state.club.country || 'GER');
+  const academyLvl = Math.max(1, Math.min(5, state.club.academyLevel || 1));
+  const facilityBonus = (academyLvl - 1) * 6;
 
-        const homeGoals = homeWins ? winnerScore : loserScore;
-        const awayGoals = homeWins ? loserScore : winnerScore;
+  const claimRewardsIfNeeded = (won: boolean) => {
+    if (won && !rewardsClaimedRef.current && onTournamentVictory) {
+      rewardsClaimedRef.current = true;
+      onTournamentVictory(prizeMoney, 2);
+    }
+  };
 
-        return { ...m, homeScore: homeGoals, awayScore: awayGoals, winner: homeGoals > awayGoals ? m.home : m.away };
+  useEffect(() => {
+    // Only initialize tournament bracket once to prevent bracket scramble during tournament play
+    if (teams.length > 0) return;
+
+    // Dynamic database resolution: Respect user choice (custom mod, community mod, or default clubs)
+    const activeDb = (clubsDb && clubsDb.length > 0) ? clubsDb : ALL_CLUBS;
+
+    // Calculate player's U19 OVR: Higher level of youth academy = higher chance of winning the youth title
+    const avgProspectBoost = state.youthPipeline && state.youthPipeline.length > 0
+      ? state.youthPipeline.reduce((sum, p) => sum + (p.boost || 1), 0) / state.youthPipeline.length
+      : 1;
+    const talentBonus = Math.round(avgProspectBoost * 2.5);
+    
+    // Level 1: ~55-58 OVR (Underdogs)
+    // Level 2: ~61-64 OVR
+    // Level 3: ~67-70 OVR (Competitive)
+    // Level 4: ~73-76 OVR
+    // Level 5: ~79-85 OVR (Elite tournament contenders)
+    const finalPlayerOvr = Math.max(48, Math.min(86, 52 + facilityBonus + Math.max(-4, Math.min(10, talentBonus))));
+
+    const countryStr = state.club.country || 'GER';
+    const playerTeam: YouthTeam = { 
+      id: state.club.id, 
+      name: `${state.club.name} U19`, 
+      baseName: state.club.name,
+      ovr: finalPlayerOvr, 
+      color: state.club.color,
+      logo: state.club.logo,
+      fallbackLogo: state.club.fallbackLogo,
+      isPlayer: true,
+      country: countryStr,
     };
 
-    const playNextRound = () => {
-        if (isSimulating) return;
-        setIsSimulating(true);
+    // Filter available clubs from the user's active database (excluding player club & reserve squads)
+    const isPlayerClub = (c: Club) => 
+      c.id === state.club.id || 
+      String(c.id) === String(state.club.id) ||
+      c.name.toLowerCase().trim() === state.club.name.toLowerCase().trim();
 
-        setTimeout(() => {
-            if (round === 0) {
-                const played = qfMatches.map(simulateMatch);
-                setQfMatches(played);
-                
-                const nextSf = [
-                    { id: 'sf-0', home: played[0].winner!, away: played[1].winner!, homeOvr: played[0].homeScore! > played[0].awayScore! ? played[0].homeOvr : played[0].awayOvr, awayOvr: played[1].homeScore! > played[1].awayScore! ? played[1].homeOvr : played[1].awayOvr, homeScore: null, awayScore: null, isPlayerMatch: played[0].winner === state.club.name + ' U19' || played[1].winner === state.club.name + ' U19' },
-                    { id: 'sf-1', home: played[2].winner!, away: played[3].winner!, homeOvr: played[2].homeScore! > played[2].awayScore! ? played[2].homeOvr : played[2].awayOvr, awayOvr: played[3].homeScore! > played[3].awayScore! ? played[3].homeOvr : played[3].awayOvr, homeScore: null, awayScore: null, isPlayerMatch: played[2].winner === state.club.name + ' U19' || played[3].winner === state.club.name + ' U19' }
-                ];
-                setSfMatches(nextSf);
-                if (!nextSf.some(m => m.isPlayerMatch) && !hasCompletedRef.current) {
-                    hasCompletedRef.current = true;
-                    onComplete(false);
-                }
-                setRound(1);
-            } else if (round === 1) {
-                const played = sfMatches.map(simulateMatch);
-                setSfMatches(played);
-                
-                const nextFinal = {
-                    id: 'fin-0', home: played[0].winner!, away: played[1].winner!, homeOvr: played[0].homeScore! > played[0].awayScore! ? played[0].homeOvr : played[0].awayOvr, awayOvr: played[1].homeScore! > played[1].awayScore! ? played[1].homeOvr : played[1].awayOvr, homeScore: null, awayScore: null, isPlayerMatch: played[0].winner === state.club.name + ' U19' || played[1].winner === state.club.name + ' U19'
-                };
-                setFinalMatch(nextFinal);
-                if (!nextFinal.isPlayerMatch && !hasCompletedRef.current) {
-                    hasCompletedRef.current = true;
-                    onComplete(false);
-                }
-                setRound(2);
-            } else if (round === 2) {
-                const played = simulateMatch(finalMatch!);
-                setFinalMatch(played);
-                setChampion(played.winner!);
-                setRound(3);
-                const wonTitle = played.winner === state.club.name + ' U19';
-                if (wonTitle) {
-                    try {
-                        triggerRealisticConfetti();
-                        setTimeout(triggerRealisticConfetti, 400);
-                    } catch (err) {
-                        console.error('Confetti trigger error:', err);
-                    }
-                    hasCompletedRef.current = true;
-                    onComplete(true);
-                } else if (!hasCompletedRef.current) {
-                    hasCompletedRef.current = true;
-                    onComplete(false);
-                }
-            }
-            setIsSimulating(false);
-        }, 320);
-    };
-
-    const getClubForTeam = (teamU19Name: string) => {
-        const isPlayer = teamU19Name === state.club.name + ' U19' || teamU19Name.toLowerCase().startsWith(state.club.name.toLowerCase());
-        if (isPlayer) {
-            return {
-                name: state.club.name,
-                logo: state.club.logo,
-                fallbackLogo: state.club.fallbackLogo,
-                color: state.club.color,
-                isPlayer: true
-            };
-        }
-        const cleanName = teamU19Name.replace(/\s+U19$/i, '').trim();
-        const activeClubs = getActiveClubs(state.club?.country);
-        const modActive = isAnyModActive();
-        const matched = activeClubs.find(c => c.name.toLowerCase() === cleanName.toLowerCase()) ||
-                        activeClubs.find(c => c.name.toLowerCase().includes(cleanName.toLowerCase()) || cleanName.toLowerCase().includes(c.name.toLowerCase())) ||
-                        ALL_CLUBS.find(c => c.name.toLowerCase() === cleanName.toLowerCase()) ||
-                        ALL_CLUBS.find(c => c.name.toLowerCase().includes(cleanName.toLowerCase()) || cleanName.toLowerCase().includes(c.name.toLowerCase()));
-        return {
-            name: cleanName,
-            logo: modActive ? matched?.logo : undefined,
-            fallbackLogo: modActive ? matched?.fallbackLogo : undefined,
-            color: matched?.color,
-            isPlayer: false
-        };
-    };
-
-    const renderMatch = (m: Match, idx: number, stage: 'qf' | 'sf' | 'final') => {
-        const homeClub = getClubForTeam(m.home);
-        const awayClub = getClubForTeam(m.away);
-        const isHomePlayer = m.home === state.club.name + ' U19';
-        const isAwayPlayer = m.away === state.club.name + ' U19';
-        const hasPlayed = m.homeScore !== null && m.awayScore !== null;
-        const homeWon = hasPlayed && m.homeScore! > m.awayScore!;
-        const awayWon = hasPlayed && m.awayScore! > m.homeScore!;
-
-        return (
-            <motion.div 
-                key={`yc-match-${m.id}-${m.home}-${m.away}`}
-                initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.28, delay: idx * 0.05 }}
-                className={`relative overflow-hidden rounded-xl transition-all duration-300 border ${
-                    m.isPlayerMatch 
-                        ? 'border-amber-400/30 shadow-[0_0_18px_rgba(251,191,36,0.12)] bg-amber-500/[0.04]'
-                        : 'border-white/[0.04] bg-[#181924] hover:border-white/[0.08]'
-                }`}
-            >
-                {/* Glowing Golden Top Accent on Player Match */}
-                {m.isPlayerMatch && (
-                    <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
-                )}
-
-                {/* Match Eyebrow / Tag */}
-                <div className="flex items-center justify-between px-3 py-1 bg-white/[0.02] border-b border-white/[0.04] text-[9px] font-medium uppercase tracking-wider">
-                    <span className="text-zinc-500">
-                        {stage === 'qf' ? `Quarter-Final ${idx + 1}` : stage === 'sf' ? `Semi-Final ${idx + 1}` : 'Championship Grand Final'}
-                    </span>
-                    {m.isPlayerMatch ? (
-                        <span className="text-amber-400 flex items-center gap-1 font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                            <span>YOUR FIXTURE</span>
-                        </span>
-                    ) : hasPlayed ? (
-                        <span className="text-zinc-500">FT</span>
-                    ) : (
-                        <span className="text-zinc-600">Upcoming</span>
-                    )}
-                </div>
-
-                {/* Broadcast Bracket Rows */}
-                <div className="p-2 sm:p-2.5 flex flex-col gap-1.5">
-                    {/* Home Team Row */}
-                    <div className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg transition ${
-                        homeWon ? 'bg-white/[0.03]' : ''
-                    }`}>
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <ClubLogo
-                                name={homeClub.name}
-                                logo={homeClub.logo}
-                                fallbackLogo={homeClub.fallbackLogo}
-                                color={homeClub.color}
-                                className="w-4 h-4 object-contain shrink-0"
-                                fallbackClassName="w-4 h-4 text-[7px] rounded border border-white/10 flex items-center justify-center font-medium text-white shrink-0"
-                            />
-                            <span className={`text-xs truncate tracking-tight ${
-                                isHomePlayer 
-                                    ? 'text-amber-400 font-medium' 
-                                    : homeWon 
-                                        ? 'text-white font-medium' 
-                                        : 'text-zinc-300 font-normal'
-                            }`}>
-                                {m.home}
-                            </span>
-                            {isHomePlayer && (
-                                <span className="text-[8px] font-medium px-1.5 py-0.2 rounded bg-amber-400/10 text-amber-300 border border-amber-400/20 uppercase shrink-0">
-                                    YOU
-                                </span>
-                            )}
-                        </div>
-                        <div className={`w-8 h-7 rounded flex items-center justify-center font-medium tabular-nums text-sm shrink-0 border ${
-                            homeWon
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : hasPlayed
-                                    ? 'bg-black/20 text-zinc-500 border-white/[0.04]'
-                                    : 'bg-white/[0.02] text-zinc-600 border-transparent'
-                        }`}>
-                            {hasPlayed ? (
-                                <motion.span initial={{ scale: 1.35, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 14 }}>
-                                    {m.homeScore}
-                                </motion.span>
-                            ) : '-'}
-                        </div>
-                    </div>
-
-                    {/* Away Team Row */}
-                    <div className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg transition ${
-                        awayWon ? 'bg-white/[0.03]' : ''
-                    }`}>
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <ClubLogo
-                                name={awayClub.name}
-                                logo={awayClub.logo}
-                                fallbackLogo={awayClub.fallbackLogo}
-                                color={awayClub.color}
-                                className="w-4 h-4 object-contain shrink-0"
-                                fallbackClassName="w-4 h-4 text-[7px] rounded border border-white/10 flex items-center justify-center font-medium text-white shrink-0"
-                            />
-                            <span className={`text-xs truncate tracking-tight ${
-                                isAwayPlayer 
-                                    ? 'text-amber-400 font-medium' 
-                                    : awayWon 
-                                        ? 'text-white font-medium' 
-                                        : 'text-zinc-300 font-normal'
-                            }`}>
-                                {m.away}
-                            </span>
-                            {isAwayPlayer && (
-                                <span className="text-[8px] font-medium px-1.5 py-0.2 rounded bg-amber-400/10 text-amber-300 border border-amber-400/20 uppercase shrink-0">
-                                    YOU
-                                </span>
-                            )}
-                        </div>
-                        <div className={`w-8 h-7 rounded flex items-center justify-center font-medium tabular-nums text-sm shrink-0 border ${
-                            awayWon
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : hasPlayed
-                                    ? 'bg-black/20 text-zinc-500 border-white/[0.04]'
-                                    : 'bg-white/[0.02] text-zinc-600 border-transparent'
-                        }`}>
-                            {hasPlayed ? (
-                                <motion.span initial={{ scale: 1.35, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 14 }}>
-                                    {m.awayScore}
-                                </motion.span>
-                            ) : '-'}
-                        </div>
-                    </div>
-                </div>
-            </motion.div>
-        );
-    };
-
-    return (
-        <div 
-            onClick={handleCloseModal}
-            className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-2xl cursor-pointer overflow-y-auto"
-        >
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                transition={{ type: 'spring', damping: 26, stiffness: 340 }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-2xl lg:max-w-3xl bg-[#14151e] rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col h-auto max-h-[92vh] my-auto relative cursor-default"
-            >
-                {/* Top Ambient Glow */}
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-400/30 to-transparent pointer-events-none" />
-
-                {intro ? (
-                    <div className="flex flex-col h-full overflow-y-auto custom-scrollbar">
-                        {/* Invitation Header Banner */}
-                        <div className="p-5 sm:p-7 text-center flex flex-col items-center gap-3 border-b border-white/[0.04] bg-white/[0.01]">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] font-medium uppercase tracking-widest shadow-sm">
-                                <i className="fas fa-envelope-open-text text-amber-400 text-xs" />
-                                <span>Official Tournament Invitation</span>
-                            </div>
-                            
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-amber-500/10 rounded-2xl flex items-center justify-center border border-amber-500/20 text-amber-400 text-2xl sm:text-3xl my-1">
-                                <i className="fas fa-trophy drop-shadow" />
-                            </div>
-                            
-                            <div className="flex flex-col">
-                                <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight leading-tight">
-                                    {t('National Youth Championship', 'Nationale U19-Meisterschaft')}
-                                </h2>
-                                <span className="text-xs text-zinc-400 mt-1">
-                                    {t('Premier U19 Academy Showpiece Tournament', 'Spitzen-Akademieturnier für U19-Nachwuchs')}
-                                </span>
-                            </div>
-                            
-                            <p className="text-xs sm:text-[13px] text-zinc-300 leading-relaxed max-w-md">
-                                {t(
-                                    `Your complete academy cohort at ${state.club.name} has qualified for the premier national knockout tournament. Eight elite academies will battle for the coveted National U19 Crown.`,
-                                    `Deine Nachwuchsakademie von ${state.club.name} hat sich für das wichtigste nationale U19-K.o.-Turnier qualifiziert. Acht Top-Akademien kämpfen um die nationale U19-Krone.`
-                                )}
-                            </p>
-                        </div>
-
-                        {/* Bento Boxes: Tournament Rules & Academy Readiness */}
-                        <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4 flex-1">
-                            {/* Bento 1: Tournament Rules */}
-                            <div className="bg-[#181924] border border-white/[0.04] rounded-2xl p-4 flex flex-col justify-between gap-3">
-                                <div>
-                                    <div className="flex items-center gap-2 text-sky-400 text-[10px] font-medium uppercase tracking-wider mb-2">
-                                        <i className="fas fa-scale-balanced" />
-                                        <span>Tournament Rules</span>
-                                    </div>
-                                    <div className="text-sm font-semibold text-white tracking-tight mb-2">
-                                        Single-Leg Knockout Format
-                                    </div>
-                                    <ul className="text-xs text-zinc-300 space-y-2">
-                                        <li className="flex items-start gap-2">
-                                            <i className="fas fa-check-circle text-sky-400 text-[11px] mt-0.5 shrink-0" />
-                                            <span>3 Knockout Rounds: Quarter-Finals, Semi-Finals, Grand Final.</span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <i className="fas fa-trophy text-amber-400 text-[11px] mt-0.5 shrink-0" />
-                                            <span>Champions secure a permanent <strong>U19 National Trophy</strong> in the club cabinet.</span>
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                            <i className="fas fa-arrow-trend-up text-emerald-400 text-[11px] mt-0.5 shrink-0" />
-                                            <span>Winning title boosts senior team morale (+15) and team development (+1 OVR).</span>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-
-                            {/* Bento 2: Academy Standing */}
-                            <div className="bg-[#181924] border border-white/[0.04] rounded-2xl p-4 flex flex-col justify-between gap-3">
-                                <div>
-                                    <div className="flex items-center gap-2 text-amber-400 text-[10px] font-medium uppercase tracking-wider mb-2">
-                                        <i className="fas fa-graduation-cap" />
-                                        <span>Academy Readiness</span>
-                                    </div>
-                                    <div className="text-sm font-semibold text-white tracking-tight mb-2">
-                                        {state.club.name} U19 Roster
-                                    </div>
-                                    <div className="flex flex-col gap-2 text-xs">
-                                        <div className="flex justify-between items-center bg-[#14151e] rounded-xl p-2 border border-white/[0.04]">
-                                            <span className="text-zinc-400">Prospects Enrolled:</span>
-                                            <span className="text-emerald-400 font-medium tabular-nums flex items-center gap-1">
-                                                <i className="fas fa-check text-[10px]" />
-                                                <span>{pipelineCount}/6 (Full Cohort)</span>
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-center bg-[#14151e] rounded-xl p-2 border border-white/[0.04]">
-                                            <span className="text-zinc-400">Cohort Rating:</span>
-                                            <span className="text-sky-300 font-medium tabular-nums">{playerOvr} OVR</span>
-                                        </div>
-                                        <div className="flex justify-between items-center bg-[#14151e] rounded-xl p-2 border border-white/[0.04]">
-                                            <span className="text-zinc-400">Academy Facility:</span>
-                                            <span className="text-sky-300 font-medium tabular-nums">Level {academyLvl}/5</span>
-                                        </div>
-                                        <div className="flex justify-between items-center bg-[#14151e] rounded-xl p-2 border border-white/[0.04]">
-                                            <span className="text-zinc-400">Current U19 Cabinet:</span>
-                                            <span className="text-amber-300 font-medium tabular-nums">{state.youthTitlesWon || 0} Titles Won</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* Action CTA */}
-                        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#14151e] flex items-center gap-3 shrink-0">
-                            <button
-                                onClick={onClose}
-                                className="w-1/3 py-3 rounded-2xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04] transition active:scale-[0.99] cursor-pointer"
-                            >
-                                {t('Decline', 'Ablehnen')}
-                            </button>
-                            <button
-                                onClick={() => setIntro(false)}
-                                className="w-2/3 py-3 px-5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.06] text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition active:scale-[0.99] cursor-pointer"
-                            >
-                                <i className="fas fa-play text-xs text-amber-400" />
-                                <span>{t('Enter Tournament Bracket', 'Turnier starten')}</span>
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                    {/* Top Broadcast Bar */}
-                    <div className="p-4 sm:p-5 border-b border-white/[0.04] flex items-center justify-between shrink-0 bg-white/[0.01]">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-base border border-amber-500/20 shadow-sm">
-                                <i className="fas fa-trophy" />
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <h2 className="text-base sm:text-lg font-semibold text-white tracking-tight leading-tight">
-                                        {t('National Youth Championship', 'U19-Meisterschaft')}
-                                    </h2>
-                                    <span className="text-[10px] font-medium uppercase px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/20">
-                                        {round === 0 ? 'Quarter-Finals' : round === 1 ? 'Semi-Finals' : round === 2 ? 'Grand Final' : 'Final Standings'}
-                                    </span>
-                                </div>
-                                <span className="text-[11px] text-zinc-400">
-                                    {t('Knockout Bracket · Elite U19 Academies', 'K.o.-Runde · Elite U19-Akademien')}
-                                </span>
-                            </div>
-                        </div>
-                        <button 
-                            aria-label="Close modal"
-                            onClick={handleCloseModal}
-                            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
-                        >
-                            <i className="fas fa-xmark text-sm" />
-                        </button>
-                    </div>
-
-                    {/* Stage Progress Indicator */}
-                    <div className="px-4 py-2 border-b border-white/[0.04] bg-black/20 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-zinc-500 shrink-0">
-                        <span className={round >= 0 ? 'text-sky-400 flex items-center gap-1' : ''}>
-                            <i className={`fas ${round > 0 ? 'fa-check text-emerald-400' : 'fa-circle-dot'}`} /> 1. Quarter-Finals
-                        </span>
-                        <i className="fas fa-chevron-right text-[8px] opacity-40" />
-                        <span className={round >= 1 ? 'text-sky-400 flex items-center gap-1' : ''}>
-                            <i className={`fas ${round > 1 ? 'fa-check text-emerald-400' : round === 1 ? 'fa-circle-dot' : 'fa-circle'}`} /> 2. Semi-Finals
-                        </span>
-                        <i className="fas fa-chevron-right text-[8px] opacity-40" />
-                        <span className={round >= 2 ? 'text-amber-400 flex items-center gap-1' : ''}>
-                            <i className={`fas ${round === 3 ? 'fa-trophy text-amber-400' : round === 2 ? 'fa-circle-dot' : 'fa-circle'}`} /> 3. Championship Final
-                        </span>
-                    </div>
-                    
-                    {/* Bracket Content Body */}
-                    <div className="p-4 sm:p-5 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
-                        {/* Quarter-Finals */}
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-400">
-                                    Quarter-Finals (Single Leg)
-                                </span>
-                                <span className="text-[10px] text-zinc-500 tabular-nums">8 Teams</span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                {qfMatches.map((m, idx) => renderMatch(m, idx, 'qf'))}
-                            </div>
-                        </div>
-
-                        {/* Semi-Finals */}
-                        {round >= 1 && (
-                            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-400">
-                                        Semi-Finals
-                                    </span>
-                                    <span className="text-[10px] text-zinc-500 tabular-nums">4 Teams</span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                    {sfMatches.map((m, idx) => renderMatch(m, idx, 'sf'))}
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {/* Grand Final */}
-                        {round >= 2 && finalMatch && (
-                            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] font-medium uppercase tracking-widest text-amber-400 flex items-center gap-1">
-                                        <i className="fas fa-trophy text-[9px]" />
-                                        <span>Grand Final</span>
-                                    </span>
-                                    <span className="text-[10px] text-zinc-500">Championship Match</span>
-                                </div>
-                                <div className="max-w-md mx-auto">
-                                    {renderMatch(finalMatch, 0, 'final')}
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {/* Grand Final & Champion Reveal */}
-                        {round === 3 && champion && (
-                            champion === state.club.name + ' U19' ? (
-                                <motion.div 
-                                    initial={{ scale: 0.9, opacity: 0, y: 16 }} 
-                                    animate={{ scale: 1, opacity: 1, y: 0 }} 
-                                    transition={{ type: 'spring', damping: 20, stiffness: 280 }}
-                                    className="text-center pt-2"
-                                >
-                                    <div className="bg-[#181924] border border-amber-500/20 shadow-[0_10px_40px_rgba(245,158,11,0.1)] rounded-2xl p-6 sm:p-7 relative overflow-hidden flex flex-col items-center">
-                                        <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-2xl mb-3 shadow-sm">
-                                            🏆
-                                        </div>
-                                        
-                                        <div className="flex items-center gap-1.5 mb-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                                            <span className="text-[10px] font-medium uppercase tracking-widest text-amber-400">
-                                                U19 NATIONAL CHAMPIONS
-                                            </span>
-                                        </div>
-                                        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight mb-2 text-white">
-                                            {champion}
-                                        </h2>
-                                        <div className="text-xs font-medium uppercase tracking-wider text-zinc-200 mt-1 flex items-center gap-1.5 bg-white/[0.04] px-3.5 py-1 rounded-full border border-white/[0.06]">
-                                            <i className="fas fa-sparkles text-amber-400 text-xs" />
-                                            <span>Golden Generation Unlocked</span>
-                                        </div>
-                                        <p className="text-xs text-zinc-400 font-normal max-w-sm mt-3 leading-relaxed">
-                                            Permanent U19 Silverware captured! +1 OVR development boost awarded across the squad & +15 Morale.
-                                        </p>
-                                    </div>
-                                </motion.div>
-                            ) : (
-                                <motion.div 
-                                    initial={{ scale: 0.95, opacity: 0, y: 10 }} 
-                                    animate={{ scale: 1, opacity: 1, y: 0 }} 
-                                    className="text-center pt-2"
-                                >
-                                    <div className="bg-[#181924] border border-white/[0.04] text-zinc-100 rounded-2xl p-5 shadow-xl flex flex-col items-center">
-                                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-400 mb-1">
-                                            🏆 U19 NATIONAL CHAMPIONS
-                                        </span>
-                                        <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-white mb-1">
-                                            {champion}
-                                        </h2>
-                                        <span className="text-xs text-zinc-400 font-normal">
-                                            {finalMatch?.isPlayerMatch
-                                                ? 'Runners-Up · Valuable elite tournament experience gained'
-                                                : sfMatches.some(m => m.isPlayerMatch)
-                                                ? 'Semi-Finalists · Valuable elite tournament experience gained'
-                                                : 'Quarter-Finalists · Valuable elite tournament experience gained'}
-                                        </span>
-                                    </div>
-                                </motion.div>
-                            )
-                        )}
-                    </div>
-
-                    {/* Action Footer */}
-                    <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#14151e] shrink-0">
-                        {round < 3 ? (
-                            <button
-                                onClick={playNextRound}
-                                disabled={isSimulating}
-                                className="w-full py-3.5 px-5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-50 border border-white/[0.06] text-white font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition active:scale-[0.99] cursor-pointer"
-                            >
-                                {isSimulating ? (
-                                    <>
-                                        <i className="fas fa-spinner fa-spin text-sm" />
-                                        <span>Simulating Matches...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="fas fa-play text-xs text-amber-400" />
-                                        <span>
-                                            {round === 0 ? t('Simulate Quarter-Finals', 'Viertelfinale simulieren') :
-                                             round === 1 ? t('Simulate Semi-Finals', 'Halbfinale simulieren') :
-                                             t('Simulate Championship Final', 'U19-Finale simulieren')}
-                                        </span>
-                                    </>
-                                )}
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleCloseModal}
-                                className="w-full py-3.5 px-5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] text-white border border-white/[0.06] font-medium text-xs sm:text-sm transition active:scale-[0.99] cursor-pointer"
-                            >
-                                {t('Return to Youth Academy', 'Zurück zur Jugendakademie')}
-                            </button>
-                        )}
-                    </div>
-                    </>
-                )}
-            </motion.div>
-        </div>
+    const candidateClubs = activeDb.filter(c => 
+      !isPlayerClub(c) && 
+      !isReserveClub(c.name) &&
+      (c.country || 'GER') === countryStr
     );
+
+    // Prioritize tier 1 clubs, shuffled randomly so each season is different
+    const tier1Candidates = candidateClubs
+      .filter(c => c.tier === 1)
+      .sort(() => Math.random() - 0.5);
+
+    const selectedClubs: Club[] = [];
+    const usedIds = new Set<number>([state.club.id]);
+
+    for (const c of tier1Candidates) {
+      if (selectedClubs.length >= 7) break;
+      if (!usedIds.has(c.id)) {
+        selectedClubs.push(c);
+        usedIds.add(c.id);
+      }
+    }
+
+    // If fewer than 7 tier 1 clubs, backfill with tier 2 or lower from the same country
+    if (selectedClubs.length < 7) {
+      const lowerTierCandidates = candidateClubs
+        .filter(c => c.tier > 1 && !usedIds.has(c.id))
+        .sort(() => Math.random() - 0.5);
+
+      for (const c of lowerTierCandidates) {
+        if (selectedClubs.length >= 7) break;
+        selectedClubs.push(c);
+        usedIds.add(c.id);
+      }
+    }
+
+    // Ultimate fallback if country has very few total clubs: pick from active database
+    if (selectedClubs.length < 7) {
+      const generalFallback = activeDb
+        .filter(c => !usedIds.has(c.id) && !isReserveClub(c.name))
+        .sort(() => Math.random() - 0.5);
+
+      for (const c of generalFallback) {
+        if (selectedClubs.length >= 7) break;
+        selectedClubs.push(c);
+        usedIds.add(c.id);
+      }
+    }
+
+    // Normalize the 7 qualified AI academies onto the National U19 Elite 8 scale (58-85 OVR)
+    // so clubs in all leagues (e.g. India, USA, Germany) field authentic top-flight youth academies
+    // and Level 4-5 player academies face genuine powerhouse rivals in the Semi-Finals and Final.
+    const sortedAiClubs = [...selectedClubs].sort((a, b) => (b.baseOvr || 65) - (a.baseOvr || 65));
+    const maxAiClubOvr = Math.max(62, ...sortedAiClubs.map(c => c.baseOvr || 65));
+
+    const aiTeams: YouthTeam[] = sortedAiClubs.map((c, idx) => {
+      const statureOffset = Math.max(-12, Math.min(0, (c.baseOvr || 65) - maxAiClubOvr));
+      const rankBaseOvr = idx === 0 ? 78 : idx === 1 ? 75 : idx <= 3 ? 71 : idx <= 5 ? 67 : 63;
+      const topRivalParityBoost =
+        idx === 0 && academyLvl >= 4
+          ? Math.max(0, Math.round((finalPlayerOvr - rankBaseOvr) * 0.8))
+          : idx === 1 && academyLvl >= 4
+          ? Math.max(0, Math.round((finalPlayerOvr - rankBaseOvr) * 0.6))
+          : idx === 2 && academyLvl === 5
+          ? Math.max(0, Math.round((finalPlayerOvr - rankBaseOvr) * 0.45))
+          : 0;
+      const jitter = Math.floor(Math.random() * 5) - 2;
+      const computedOvr = Math.max(56, Math.min(86, rankBaseOvr + Math.round(statureOffset * 0.3) + topRivalParityBoost + jitter));
+      return {
+        id: c.id,
+        name: `${c.name} U19`,
+        baseName: c.name,
+        ovr: computedOvr,
+        color: c.color,
+        logo: c.logo,
+        fallbackLogo: c.fallbackLogo,
+        isPlayer: false,
+        country: c.country || countryStr,
+      };
+    });
+
+    // Seed bracket so the #1 AI Youth Powerhouse is placed on the opposite half of the bracket from the player,
+    // setting up a high-stakes Semi-Final and Championship Final rather than eliminating all top seeds in QF.
+    const topRival = aiTeams[0];
+    const remainingAi = aiTeams.slice(1).sort(() => Math.random() - 0.5);
+    const halfA = [playerTeam, ...remainingAi.slice(0, 3)].sort(() => Math.random() - 0.5);
+    const halfB = (topRival ? [topRival, ...remainingAi.slice(3)] : remainingAi.slice(3)).sort(() => Math.random() - 0.5);
+    const allTeams = Math.random() < 0.5 ? [...halfA, ...halfB] : [...halfB, ...halfA];
+    setTeams(allTeams);
+  }, [state, clubsDb]);
+
+  const simulateRound = (currentTeams: YouthTeam[], currentPhase: string) => {
+    const results: YouthMatch[] = [];
+    const winners: YouthTeam[] = [];
+    const isFinalRound = currentPhase === 'sf';
+    const isSemiRound = currentPhase === 'qf';
+    
+    for (let i = 0; i < currentTeams.length; i += 2) {
+      const t1 = currentTeams[i];
+      const t2 = currentTeams[i + 1];
+      const diff = t1.ovr - t2.ovr;
+      // Knockout tension scaling: tighter margins in Semi-Finals and Final so even Level 5 academies face real jeopardy
+      const mult = isFinalRound ? 1.25 : isSemiRound ? 1.55 : 1.8;
+      const minWinCap = isFinalRound ? 32 : isSemiRound ? 24 : 18;
+      const maxWinCap = isFinalRound ? 68 : isSemiRound ? 76 : 82;
+      const t1Chance = Math.max(minWinCap, Math.min(maxWinCap, 50 + diff * mult));
+      const drawShootoutProb = isFinalRound ? 0.32 : isSemiRound ? 0.27 : 0.24;
+      
+      let t1Score = 0;
+      let t2Score = 0;
+      let isPenalties = false;
+      let t1PenScore = 0;
+      let t2PenScore = 0;
+      let dramaText = '';
+      let winner: YouthTeam;
+
+      if (Math.random() < drawShootoutProb) { 
+        // Drawn match going to Penalties
+        t1Score = Math.floor(Math.random() * 3) + 1;
+        t2Score = t1Score;
+        isPenalties = true;
+        const shootout = simulateFifaShootout(diff);
+        t1PenScore = shootout.t1Pens;
+        t2PenScore = shootout.t2Pens;
+        winner = shootout.t1Wins ? t1 : t2;
+        dramaText = `${winner.baseName} wins on penalties (${t1PenScore} – ${t2PenScore})!`;
+        winners.push(winner);
+      } else {
+        // Standard win in 90 minutes
+        if (Math.random() * 100 < t1Chance) {
+          t1Score = Math.floor(Math.random() * 3) + 1;
+          t2Score = Math.floor(Math.random() * t1Score);
+          winner = t1;
+          winners.push(t1);
+          if (t1Score - t2Score === 1 && Math.random() < 0.45) dramaText = "90+3' Late Winner!";
+          if (t1Score >= 3 && t2Score === 0) dramaText = "Absolute Demolition!";
+        } else {
+          t2Score = Math.floor(Math.random() * 3) + 1;
+          t1Score = Math.floor(Math.random() * t2Score);
+          winner = t2;
+          winners.push(t2);
+          if (t2Score - t1Score === 1 && Math.random() < 0.45) dramaText = "89' Late Drama!";
+          if (t2Score >= 3 && t1Score === 0) dramaText = "Tactical Masterclass!";
+        }
+      }
+      
+      const locEmoji = COUNTRY_EMOJIS[t1.country] || '⚽';
+      let att = 0;
+      if (currentPhase === 'intro') {
+        att = Math.floor(Math.random() * 200) + 300;
+      } else if (currentPhase === 'qf') {
+        att = Math.floor(Math.random() * 400) + 1200;
+      } else if (currentPhase === 'sf' || currentPhase === 'final') {
+        att = Math.floor(Math.random() * 800) + 4000;
+      }
+      
+      const locationText = `${t1.baseName} ${locEmoji}`;
+      results.push({ t1, t2, t1Score, t2Score, t1PenScore, t2PenScore, isPenalties, winner, locationText, dramaText, att });
+    }
+    return { results, winners };
+  };
+
+  const handleNextPhase = () => {
+    if (phase === 'intro') {
+      if (onTournamentStart) {
+        onTournamentStart();
+      }
+      const { results, winners } = simulateRound(teams, phase);
+      setMatches(results);
+      setTeams(winners);
+      setPhase('qf');
+    } else if (phase === 'qf') {
+      const { results, winners } = simulateRound(teams, phase);
+      setMatches(results);
+      setTeams(winners);
+      setPhase('sf');
+    } else if (phase === 'sf') {
+      if (teams.some(t => t.isPlayer)) {
+        setReachedFinal(true);
+      }
+      const { results, winners } = simulateRound(teams, phase);
+      setMatches(results);
+      setTeams(winners);
+      setPhase('final');
+    } else if (phase === 'final') {
+      const won = teams[0]?.isPlayer || false;
+      setTournamentWon(won);
+      setPhase('result');
+      if (won) {
+        confetti({
+          particleCount: 150,
+          spread: 100,
+          origin: { y: 0.6 },
+          colors: ['#f59e0b', '#10b981', '#38bdf8']
+        });
+      }
+    } else if (phase === 'result') {
+      claimRewardsIfNeeded(tournamentWon);
+      onClose(tournamentWon);
+    }
+  };
+
+  const playerStillIn = teams.some(t => t.isPlayer);
+  const playerMatch = matches.find(m => m.t1.isPlayer || m.t2.isPlayer);
+  const otherMatches = matches.filter(m => !m.t1.isPlayer && !m.t2.isPlayer);
+  const phaseTitle = phase === 'intro' ? t('Youth Championship', 'Jugendmeisterschaft') : phase === 'qf' ? t('Quarter-Finals', 'Viertelfinale') : phase === 'sf' ? t('Semi-Finals', 'Halbfinale') : phase === 'final' ? t('Final', 'Finale') : t('Tournament Over', 'Turnier Beendet');
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.1, ease: 'linear' }}
+      className="fixed inset-0 bg-black/80 backdrop-blur-2xl z-[60] flex flex-col items-center justify-center p-2.5 sm:p-4 text-left overflow-y-auto overscroll-contain"
+    >
+      <motion.div 
+        initial={{ scale: 0.98, opacity: 0, y: 20 }} 
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.98, opacity: 0, y: 20 }}
+        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+        className="bg-[#12141c]/95 backdrop-blur-3xl border border-white/[0.08] w-full max-w-2xl rounded-[28px] sm:rounded-[32px] shadow-[0_32px_96px_rgba(0,0,0,0.8)] flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shrink-0 overflow-hidden relative"
+      >
+        {/* Subtle Ambient Stadium Glow */}
+        <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-amber-500/[0.03] blur-[80px] pointer-events-none"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50vw] h-[50vw] rounded-full bg-emerald-500/[0.03] blur-[80px] pointer-events-none"></div>
+
+        {/* Frosted Header */}
+        <div className="p-5 sm:p-6 border-b border-white/[0.06] bg-white/[0.02] flex items-center justify-between shrink-0 relative z-10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500/20 to-yellow-500/10 border border-amber-400/30 flex items-center justify-center text-amber-400 text-lg shadow-inner shrink-0">
+              <i className="fas fa-trophy"></i>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 mb-0.5">
+                {t('National U19 Championship', 'Nationale U19 Meisterschaft')}
+              </div>
+              <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight leading-tight">
+                {phaseTitle}
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Minimalist Phase Progression */}
+            <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-500">
+              <span className={phase === 'qf' ? 'text-amber-400' : phase === 'sf' || phase === 'final' || phase === 'result' ? 'text-zinc-300' : ''}>QF</span>
+              <span>·</span>
+              <span className={phase === 'sf' ? 'text-amber-400' : phase === 'final' || phase === 'result' ? 'text-zinc-300' : ''}>SF</span>
+              <span>·</span>
+              <span className={phase === 'final' ? 'text-amber-400' : phase === 'result' ? 'text-zinc-300' : ''}>Final</span>
+            </div>
+
+            <button 
+              aria-label="Close modal" 
+              onClick={() => { claimRewardsIfNeeded(tournamentWon); onClose(tournamentWon); }} 
+              className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center transition border border-white/[0.08] cursor-pointer shrink-0"
+            >
+              <i className="fas fa-xmark text-xs"></i>
+            </button>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain custom-scrollbar flex-1 min-h-0 relative z-10">
+          
+          <AnimatePresence mode="wait">
+            {phase === 'intro' && (
+              <motion.div key="intro" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center pt-2 pb-6 text-center">
+                <h3 className="text-xl font-black text-white tracking-tight mb-1.5 uppercase">
+                  {t('The Elite 8 Academies', 'Die Elite 8 Akademien')}
+                </h3>
+                <p className="text-xs text-zinc-400 font-normal leading-relaxed max-w-md mb-6">
+                  {t("The national U19 title is on the line. Here are the 8 qualified academies competing in this year's knockout tournament.", 'Der nationale U19-Titel steht auf dem Spiel. Hier sind die qualifizierten Mannschaften des diesjährigen Turniers.')}
+                </p>
+
+                {/* Grid of 8 Teams */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full mb-6">
+                  {teams.map((t, idx) => (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }} 
+                      animate={{ opacity: 1, scale: 1 }} 
+                      transition={{ delay: idx * 0.05 }}
+                      key={t.id} 
+                      className={`p-3 rounded-2xl border flex flex-col items-center justify-center text-center gap-2 ${t.isPlayer ? 'bg-emerald-500/[0.08] border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-white/[0.02] border-white/[0.06]'}`}
+                    >
+                      <ClubLogo name={t.baseName} id={t.id} color={t.color} logo={t.logo} fallbackLogo={t.fallbackLogo} isModActive={isModActive} className="w-10 h-10 object-contain drop-shadow-sm" fallbackClassName="w-10 h-10 text-xs rounded-xl flex items-center justify-center font-bold text-white shrink-0" />
+                      <div>
+                        <div className={`text-[11px] font-bold leading-tight truncate w-full max-w-[80px] ${t.isPlayer ? 'text-emerald-400' : 'text-zinc-200'}`}>{t.name}</div>
+                        <div className="text-[10px] text-zinc-500 font-mono mt-0.5">{t.ovr} OVR</div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Tournament Stakes & Prize Grid */}
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <div className="bg-white/[0.02] backdrop-blur-md rounded-2xl p-4 border border-white/[0.06] text-left">
+                    <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">
+                      <i className="fas fa-coins text-amber-400"></i>
+                      <span>{t('Prize Purse', 'Prämie')}</span>
+                    </div>
+                    <div className="text-base font-black font-mono text-emerald-400">+{formatMoney(prizeMoney)}</div>
+                  </div>
+
+                  <div className="bg-white/[0.02] backdrop-blur-md rounded-2xl p-4 border border-white/[0.06] text-left">
+                    <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-1">
+                      <i className="fas fa-bolt text-sky-400"></i>
+                      <span>{t('Cohort Leap', 'Talent-Sprung')}</span>
+                    </div>
+                    <div className="text-base font-black font-mono text-sky-400">+2 OVR</div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {(phase === 'qf' || phase === 'sf' || phase === 'final') && (
+              <motion.div key={phase} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                
+                {/* HERO CARD: Player Match */}
+                {playerMatch && (
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5 px-1 justify-center sm:justify-start">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      {t('Your Fixture', 'Dein Spiel')}
+                    </div>
+                    <div className={`relative overflow-hidden rounded-[24px] border ${playerMatch.winner.isPlayer ? 'bg-gradient-to-br from-emerald-500/10 via-black/40 to-black/40 border-emerald-500/30' : 'bg-gradient-to-br from-rose-500/10 via-black/40 to-black/40 border-rose-500/30'}`}>
+                      <div className="p-5 sm:p-6 flex flex-col gap-4 relative z-10">
+                        <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                          <span>{playerMatch.locationText}</span>
+                          <span>{playerMatch.att.toLocaleString()} Fans</span>
+                        </div>
+
+                        <div className="flex items-center justify-between w-full">
+                          {/* Player T1 */}
+                          <div className="flex-1 flex flex-col items-center gap-2">
+                            <ClubLogo name={playerMatch.t1.baseName} id={playerMatch.t1.id} color={playerMatch.t1.color} logo={playerMatch.t1.logo} fallbackLogo={playerMatch.t1.fallbackLogo} isModActive={isModActive} className="w-12 h-12 sm:w-16 sm:h-16 object-contain drop-shadow-lg" fallbackClassName="w-12 h-12 sm:w-16 sm:h-16 text-sm rounded-2xl flex items-center justify-center font-bold text-white" />
+                            <div className={`text-xs sm:text-sm font-bold truncate max-w-[100px] sm:max-w-[140px] text-center ${playerMatch.t1.isPlayer ? 'text-emerald-400' : 'text-white'}`}>{playerMatch.t1.name}</div>
+                          </div>
+
+                          {/* Scoreboard */}
+                          <div className="shrink-0 flex flex-col items-center justify-center min-w-[90px]">
+                            <div className="bg-black/50 border border-white/10 rounded-2xl px-4 py-2 flex items-center justify-center gap-2 shadow-inner">
+                              <span className={`text-2xl sm:text-3xl font-black tabular-nums tracking-tight ${playerMatch.winner.id === playerMatch.t1.id ? 'text-white' : 'text-zinc-500'}`}>{playerMatch.t1Score}</span>
+                              <span className="text-zinc-600 font-bold text-lg leading-none">–</span>
+                              <span className={`text-2xl sm:text-3xl font-black tabular-nums tracking-tight ${playerMatch.winner.id === playerMatch.t2.id ? 'text-white' : 'text-zinc-500'}`}>{playerMatch.t2Score}</span>
+                            </div>
+                            {playerMatch.isPenalties && (
+                              <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
+                                {playerMatch.t1PenScore} - {playerMatch.t2PenScore} Pens
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Player T2 */}
+                          <div className="flex-1 flex flex-col items-center gap-2">
+                            <ClubLogo name={playerMatch.t2.baseName} id={playerMatch.t2.id} color={playerMatch.t2.color} logo={playerMatch.t2.logo} fallbackLogo={playerMatch.t2.fallbackLogo} isModActive={isModActive} className="w-12 h-12 sm:w-16 sm:h-16 object-contain drop-shadow-lg" fallbackClassName="w-12 h-12 sm:w-16 sm:h-16 text-sm rounded-2xl flex items-center justify-center font-bold text-white" />
+                            <div className={`text-xs sm:text-sm font-bold truncate max-w-[100px] sm:max-w-[140px] text-center ${playerMatch.t2.isPlayer ? 'text-emerald-400' : 'text-white'}`}>{playerMatch.t2.name}</div>
+                          </div>
+                        </div>
+
+                        {playerMatch.dramaText && (
+                          <div className="text-center mt-2 pt-3 border-t border-white/[0.06] text-xs font-bold text-amber-300">
+                            <i className="fa-solid fa-fire mr-1.5 text-amber-400"></i> {playerMatch.dramaText}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* OTHER FIXTURES GRID */}
+                {otherMatches.length > 0 && (
+                  <div className="space-y-2 flex flex-col items-center sm:items-stretch">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 px-1 w-full text-center sm:text-left">
+                      {t('Other Fixtures', 'Weitere Begegnungen')}
+                    </div>
+                    <div className={`grid gap-3 w-full ${otherMatches.length === 1 ? 'grid-cols-1 place-items-center' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                      {otherMatches.map((m, i) => (
+                        <div key={i} className={`bg-white/[0.02] border border-white/[0.04] rounded-[20px] p-3.5 flex flex-col justify-center w-full ${otherMatches.length === 1 ? 'max-w-md' : ''}`}>
+                          <div className="flex justify-between items-center w-full">
+                            <div className="flex-1 flex items-center gap-2 min-w-0">
+                              <ClubLogo name={m.t1.baseName} id={m.t1.id} color={m.t1.color} logo={m.t1.logo} fallbackLogo={m.t1.fallbackLogo} isModActive={isModActive} className="w-5 h-5 object-contain shrink-0" fallbackClassName="w-5 h-5 text-[8px] rounded-md flex items-center justify-center font-bold text-white shrink-0" />
+                              <span className={`text-[11px] font-bold truncate ${m.winner.id === m.t1.id ? 'text-white' : 'text-zinc-500'}`}>{m.t1.name}</span>
+                            </div>
+                            <div className="px-2 font-mono text-[11px] font-bold text-zinc-300 shrink-0">{m.t1Score}</div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center w-full mt-1.5">
+                            <div className="flex-1 flex items-center gap-2 min-w-0">
+                              <ClubLogo name={m.t2.baseName} id={m.t2.id} color={m.t2.color} logo={m.t2.logo} fallbackLogo={m.t2.fallbackLogo} isModActive={isModActive} className="w-5 h-5 object-contain shrink-0" fallbackClassName="w-5 h-5 text-[8px] rounded-md flex items-center justify-center font-bold text-white shrink-0" />
+                              <span className={`text-[11px] font-bold truncate ${m.winner.id === m.t2.id ? 'text-white' : 'text-zinc-500'}`}>{m.t2.name}</span>
+                            </div>
+                            <div className="px-2 font-mono text-[11px] font-bold text-zinc-300 shrink-0">{m.t2Score}</div>
+                          </div>
+
+                          {m.isPenalties && (
+                            <div className="text-[9px] text-amber-500/80 font-bold uppercase tracking-wider mt-2 pt-2 border-t border-white/[0.02]">
+                              {m.winner.baseName} wins on pens ({m.t1PenScore}-{m.t2PenScore})
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {phase === 'result' && (
+              <motion.div key="result" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-6 text-center">
+                {tournamentWon ? (
+                  <>
+                    <div className="w-20 h-20 rounded-[24px] bg-gradient-to-br from-amber-500/20 to-yellow-500/10 border border-amber-400/40 flex items-center justify-center text-amber-400 text-3xl shadow-[0_0_30px_rgba(245,158,11,0.2)] mb-4">
+                      <i className="fas fa-trophy"></i>
+                    </div>
+                    <h3 className="text-2xl font-black text-white tracking-tight uppercase mb-1">
+                      {t('National Champions!', 'Deutscher Meister!')}
+                    </h3>
+                    <p className="text-xs text-zinc-400 max-w-sm mb-6">
+                      {t('Your youth academy has conquered the nation! The squad celebrates with pride and glory.', 'Deine Jugendakademie hat den nationalen Titel geholt! Der gesamte Verein feiert diesen historischen Erfolg.')}
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-3 w-full max-w-sm mb-2">
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3.5 text-center">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/80 mb-0.5">{t('Prize Awarded', 'Prämie')}</div>
+                        <div className="text-lg font-black font-mono text-emerald-400">+{formatMoney(prizeMoney)}</div>
+                      </div>
+                      <div className="bg-sky-500/10 border border-sky-500/30 rounded-2xl p-3.5 text-center">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-sky-400/80 mb-0.5">{t('Cohort Boost', 'Talent-Sprung')}</div>
+                        <div className="text-lg font-black font-mono text-sky-400">+2 OVR</div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-20 h-20 rounded-[24px] bg-gradient-to-br from-zinc-500/20 to-zinc-500/10 border border-zinc-500/30 flex items-center justify-center text-zinc-400 text-3xl mb-4">
+                      <i className="fas fa-shield-halved"></i>
+                    </div>
+                    <h3 className="text-2xl font-black text-white tracking-tight uppercase mb-1">
+                      {reachedFinal ? t('National Runner-Up!', 'Deutscher Vizemeister!') : t('Tournament Concluded', 'Turnier Beendet')}
+                    </h3>
+                    <p className="text-xs text-zinc-400 max-w-sm">
+                      {reachedFinal 
+                        ? t('A valiant effort in the national final! Your academy players took silver medals and gained priceless tournament experience.', 'Ein beherzter Auftritt im nationalen Finale! Deine Talente sicherten sich die Silbermedaille und wertvolle Erfahrung.')
+                        : playerStillIn 
+                        ? t('A valiant effort on the national stage. Your academy players gained valuable tournament experience.', 'Ein beherzter Auftritt auf nationaler Bühne. Deine Talente konnten wertvolle Erfahrung sammeln.')
+                        : t('Eliminated from the championship. The youth academy will return stronger next year.', 'Ausgeschieden aus der Meisterschaft. Im nächsten Jahr greifen deine Talente erneut an.')}
+                    </p>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="p-4 sm:p-5 border-t border-white/[0.06] bg-white/[0.01] flex items-center justify-between sm:justify-end gap-3 shrink-0 relative z-10">
+          {phase !== 'intro' && (
+            <div className="text-[11px] font-medium text-zinc-500">
+              {phase === 'result' ? (tournamentWon ? t('Championship Title Won', 'Meistertitel errungen') : t('Tournament finished', 'Turnier abgeschlossen')) : t('Round simulation complete', 'Runde simuliert')}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            {phase === 'intro' ? (
+              <button
+                type="button"
+                onClick={handleNextPhase}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs uppercase tracking-wider transition shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center gap-2 cursor-pointer"
+              >
+                <span>{t('Kick Off Tournament', 'Turnier starten')}</span>
+                <i className="fas fa-arrow-right text-[11px]"></i>
+              </button>
+            ) : phase === 'qf' ? (
+              <button
+                type="button"
+                onClick={handleNextPhase}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs uppercase tracking-wider transition shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center gap-2 cursor-pointer"
+              >
+                <span>{t('Play Semi-Finals', 'Zum Halbfinale')}</span>
+                <i className="fas fa-arrow-right text-[11px]"></i>
+              </button>
+            ) : phase === 'sf' ? (
+              <button
+                type="button"
+                onClick={handleNextPhase}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs uppercase tracking-wider transition shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center gap-2 cursor-pointer"
+              >
+                <span>{t('Play Championship Final', 'Zum Finale')}</span>
+                <i className="fas fa-trophy text-[11px]"></i>
+              </button>
+            ) : phase === 'final' ? (
+              <button
+                type="button"
+                onClick={handleNextPhase}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs uppercase tracking-wider transition shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center gap-2 cursor-pointer"
+              >
+                <span>{t('View Tournament Result', 'Zum Ergebnis')}</span>
+                <i className="fas fa-arrow-right text-[11px]"></i>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleNextPhase}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-black font-black text-xs uppercase tracking-wider transition shadow-[0_0_20px_rgba(16,185,129,0.25)] flex items-center gap-2 cursor-pointer"
+              >
+                <span>{tournamentWon ? t('Claim Trophy & Rewards', 'Trophäe entgegennehmen') : t('Complete & Return', 'Zurück zur Akademie')}</span>
+                <i className="fas fa-check text-[11px]"></i>
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
 };

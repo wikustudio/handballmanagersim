@@ -1,31 +1,22 @@
 import { AnimatePresence, motion } from 'motion/react';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Club, GameMode, Language } from '../types';
-import {
-  COUNTRIES,
-  LEAGUES,
-  getLeagueInfo,
-  PHILOSOPHIES,
-  TACTICS,
-  isReserveClub,
-  getMaxTier,
-  getClubHistoricContext,
-  getStartingBudget,
-  formatMoney,
-  formatNum,
-  getClubHomeArena,
-} from '../data/gameConstants';
+import { Club, GameMode, Language, Coach } from '../types';
+import { COUNTRIES, LEAGUES, COUNTRY_LEAGUES, getLeagueInfo, PHILOSOPHIES, TACTICS, getMonogramHex, getInitials, isReserveClub, getMaxTier, getClubHistoricContext, formatMoney, getStartingBudget, MOD_ONLY_COUNTRIES, BASE_GAME_COUNTRIES, isCanadianMLSClub, isTacticalSynergy } from '../data/gameConstants';
+import { UEFA_COUNTRIES, CONMEBOL_COUNTRIES, CONCACAF_COUNTRIES, AFC_COUNTRIES } from '../utils/regionHelpers';
 import { ClubLogo } from './ClubLogo';
+import { prewarmClubsLogos } from '../utils/logoCache';
+import { ModModal } from './ModModal';
+import { generateCoachMarket, getCoachArchetypeConfig } from '../engine/coachEngine';
+import { CoachDossierModal } from './CoachDossierModal';
 import { t as tr } from '../data/translations';
 import { ALL_CLUBS } from '../data/clubsData';
-import { HandballSimLogo } from './HandballSimLogo';
-import { ModSelectionModal } from './ModSelectionModal';
-import { isRealDataModActive, getCustomDb, REALDATA_MOD_NAME } from '../utils/modManager';
-import { generateBoardRoadmap } from '../utils/roadmapManager';
+import { parseAndNormalizeModBudget } from '../engine/moddingEngine';
 
 interface OnboardingProps {
   lang: Language;
   clubsDb: Club[];
+  isModActive?: boolean;
+  onToggleMod?: (active: boolean, customClubs?: Club[]) => void;
   setClubsDb?: (db: Club[]) => void;
   showToast?: (msg: string, type: string) => void;
   onStartGame: (params: {
@@ -35,35 +26,209 @@ interface OnboardingProps {
     tactic: string;
     nationality: string;
     mode: GameMode;
+    archetype: 'legend' | 'finance' | 'scout' | 'balanced';
+    coach?: Coach;
   }) => void;
   onShowLeaderboard: () => void;
+  onShowAbout?: () => void;
 }
 
-const getGoalCategoryMeta = (targetType: string) => {
-  switch (targetType) {
-    case 'championship_dominance':
-      return { label: 'Championship Directive', icon: 'fa-trophy text-amber-400' };
-    case 'european_glory':
-      return { label: 'Continental Glory', icon: 'fa-star text-amber-400' };
-    case 'promotion_tier':
-      return { label: 'Promotion Mandate', icon: 'fa-arrow-trend-up text-emerald-400' };
-    case 'top_four':
-      return { label: 'High Table Target', icon: 'fa-medal text-sky-400' };
-    case 'solidify_tier':
-      return { label: 'League Retention', icon: 'fa-shield-halved text-sky-400' };
-    case 'arena_expansion':
-      return { label: 'Arena Expansion', icon: 'fa-building text-purple-400' };
-    case 'academy_growth':
-      return { label: 'Youth Academy', icon: 'fa-graduation-cap text-emerald-400' };
-    case 'medical_growth':
-      return { label: 'Medical Center', icon: 'fa-heart-pulse text-rose-400' };
-    case 'fanbase_growth':
-      return { label: 'Community Growth', icon: 'fa-users text-amber-400' };
-    case 'financial_surplus':
-      return { label: 'Fiscal Governance', icon: 'fa-vault text-emerald-400' };
-    default:
-      return { label: 'Board Directive', icon: 'fa-bullseye text-amber-400' };
+
+import { normalizeAndValidateCustomDb, CustomDbValidationResult } from '../engine/moddingEngine';
+export type { CustomDbValidationResult };
+export { normalizeAndValidateCustomDb };
+
+
+
+const getStyleColor = (style: string) => {
+  if (style === 'Total Football') return 'text-orange-500';
+  if (style === 'Gegenpressing') return 'text-yellow-400';
+  if (style === 'Tiki-Taka') return 'text-blue-500';
+  if (style === 'Defensive' || style === 'Catenaccio' || style === 'Park the Bus') return 'text-emerald-400';
+  if (style === 'Direct Counter' || style === 'Wing Play') return 'text-cyan-400';
+  return 'text-zinc-400'; // Default / Survival
+};
+
+const getCoachQuote = (ovrBoost: number, isDe: boolean, coachId: string) => {
+  const hash = coachId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  
+  const quotes3 = isDe 
+    ? ["Ein visionärer Trainer, der den Verein transformieren wird.", "Ein taktisches Genie. Der Vorstand liebt diese Wahl.", "Weltklasse-Format. Erwarte sofortige Ergebnisse."]
+    : ["An absolute visionary. Will transform the club.", "A tactical genius. The board loves this appointment.", "World-class pedigree. Expect immediate results."];
+    
+  const quotes2 = isDe
+    ? ["Sehr gefragt. Ein massiver Coup für uns.", "Ein aufsteigender Stern in der Trainerwelt.", "Spannende Philosophie. Die Fans werden begeistert sein.", "Garant für Erfolge über den Erwartungen."]
+    : ["Highly sought after. A massive coup for us.", "A rising star in the sporting director world.", "Exciting philosophy. The fans will be thrilled.", "Proven track record of overachieving."];
+    
+  const quotes1 = isDe
+    ? ["Solide Grundlagen. Eine sichere Wahl.", "Kennt die Liga gut. Eine pragmatische Entscheidung.", "Eine ruhige Präsenz, um die Kabine zu stabilisieren.", "Respektabler Taktiker. Wird seinen Job machen.", "Guter Menschenfänger mit ordentlichem Lebenslauf."]
+    : ["Solid fundamentals. A safe pair of hands.", "Knows the league well. A pragmatic choice.", "A steady presence to stabilize the dressing room.", "Respectable tactician. Will get the job done.", "Good man-manager (coach) with a decent resume."];
+    
+  const quotes0 = isDe
+    ? ["Sofort verfügbar und günstig im Unterhalt.", "Braucht eine Chance, sich auf diesem Niveau zu beweisen.", "Eine risikoarme Wahl für unser aktuelles Budget.", "Hatte zuletzt Probleme, ist aber heiß auf einen Neustart."]
+    : ["Affordable and available immediately.", "Needs a chance to prove himself at this level.", "A low-risk appointment for our current budget.", "Struggled previously, but eager for a fresh start."];
+    
+  const quotesMinus = isDe
+    ? ["Eine riskante Wahl, aber er passt ins Budget.", "Verzweifelte Zeiten erfordern verzweifelte Maßnahmen.", "Berüchtigt für Kabinen-Probleme. Vorsicht geboten."]
+    : ["A controversial choice, but fits the budget.", "Desperate times call for desperate measures.", "Known for losing the dressing room. Proceed with caution."];
+
+  if (ovrBoost >= 3) return quotes3[hash % quotes3.length];
+  if (ovrBoost === 2) return quotes2[hash % quotes2.length];
+  if (ovrBoost === 1) return quotes1[hash % quotes1.length];
+  if (ovrBoost === 0) return quotes0[hash % quotes0.length];
+  return quotesMinus[hash % quotesMinus.length];
+};
+
+const getQuickChips = (country: string, modActive: boolean): string[] => {
+  if (country === 'GER') {
+    return modActive
+      ? ['Bayern', 'Dortmund', 'Leverkusen', 'Leipzig', 'St. Pauli', 'Schalke', 'HSV']
+      : ['Bavaria', 'Prussia', 'Leverkusen', 'Leipzig', 'St. Pauli', 'Hamburg'];
   }
+  if (country === 'ENG') {
+    return modActive
+      ? ['Man City', 'Arsenal', 'Liverpool', 'Man United', 'Chelsea', 'Richmond']
+      : ['Manchester Blue', 'Liverpool Red', 'Arsenal', 'London Blue', 'Richmond'];
+  }
+  if (country === 'ESP') {
+    return modActive
+      ? ['Real Madrid', 'Barcelona', 'Atlético', 'Sevilla', 'Athletic Club']
+      : ['Madrid White', 'Barcelona Blue', 'Madrid Red', 'Sevilla'];
+  }
+  if (country === 'ITA') {
+    return modActive
+      ? ['Inter', 'Juventus', 'Milan', 'Roma', 'Napoli']
+      : ['Milano Black', 'Piedmont Black', 'Milano Red', 'Rome Yellow'];
+  }
+  if (country === 'FRA') {
+    return modActive
+      ? ['PSG', 'Marseille', 'Monaco', 'Lyon', 'Lille']
+      : ['Paris Capital', 'Marseille Port', 'Monaco Rock'];
+  }
+  if (country === 'USA') {
+    return ['Inter Miami', 'LA Galaxy', 'LAFC', 'NYCFC', 'Atlanta United'];
+  }
+  if (country === 'POR') {
+    return modActive ? ['Benfica', 'Sporting', 'Porto', 'Braga'] : ['Lisbon Eagle', 'Lisbon Lion', 'Porto Dragon'];
+  }
+  return modActive
+    ? ['Bayern', 'Real Madrid', 'Man City', 'Barcelona', 'PSG', 'Richmond']
+    : ['Bavaria', 'Madrid White', 'Manchester Blue', 'Richmond'];
+};
+
+const RANDOM_NAMES = [
+  'Alex Ferguson', 'Pep Guardiola', 'Jürgen Klopp', 'Carlo Ancelotti',
+  'José Mourinho', 'Arsène Wenger', 'Zinedine Zidane', 'Diego Simeone',
+  'Marcelo Bielsa', 'Julian Nagelsmann', 'Xabi Alonso', 'Roberto De Zerbi',
+  'Hansi Flick', 'Unai Emery', 'Antonio Conte', 'Ralf Rangnick',
+  'Louis van Gaal', 'Luciano Spalletti', 'Gian Piero Gasperini', 'Rúben Amorim',
+  'Thomas Tuchel', 'Erik ten Hag'
+];
+
+interface TacticVisualInfo {
+  theme: {
+    gradient: string;
+    activeBorder: string;
+    ring: string;
+    glow: string;
+    badgeBg: string;
+    iconBg: string;
+    accentText: string;
+  };
+  shortEthos: string;
+  shortPerk: string;
+  gf: string;
+  ga: string;
+  isGfPos: boolean;
+  isGaPos: boolean;
+}
+
+const TACTIC_DETAILS: Record<string, TacticVisualInfo> = {
+  'Total Football': {
+    theme: {
+      gradient: 'from-sky-500/[0.08] to-transparent',
+      activeBorder: 'border-sky-400/50',
+      ring: 'ring-sky-400/25',
+      glow: 'shadow-[0_8px_30px_rgba(56,189,248,0.14),inset_0_1px_0_0_rgba(125,211,252,0.2)]',
+      badgeBg: 'bg-sky-500/15 text-sky-200 border-sky-400/25',
+      iconBg: 'bg-sky-500/20 text-sky-300 border-sky-400/30',
+      accentText: 'text-sky-300',
+    },
+    shortEthos: 'Fluid Attack & Dynamic Play',
+    shortPerk: '+12% Fans · +1 Home OVR',
+    gf: '+18%',
+    ga: '+10%',
+    isGfPos: true,
+    isGaPos: false,
+  },
+  'Gegenpressing': {
+    theme: {
+      gradient: 'from-sky-500/[0.08] to-transparent',
+      activeBorder: 'border-sky-400/50',
+      ring: 'ring-sky-400/25',
+      glow: 'shadow-[0_8px_30px_rgba(56,189,248,0.14),inset_0_1px_0_0_rgba(125,211,252,0.2)]',
+      badgeBg: 'bg-sky-500/15 text-sky-200 border-sky-400/25',
+      iconBg: 'bg-sky-500/20 text-sky-300 border-sky-400/30',
+      accentText: 'text-sky-300',
+    },
+    shortEthos: 'High-Intensity Press & Chaos',
+    shortPerk: 'Giant-Killer +3 OVR in Cups',
+    gf: '+28%',
+    ga: '+22%',
+    isGfPos: true,
+    isGaPos: false,
+  },
+  'Tiki-Taka': {
+    theme: {
+      gradient: 'from-sky-500/[0.08] to-transparent',
+      activeBorder: 'border-sky-400/50',
+      ring: 'ring-sky-400/25',
+      glow: 'shadow-[0_8px_30px_rgba(56,189,248,0.14),inset_0_1px_0_0_rgba(125,211,252,0.2)]',
+      badgeBg: 'bg-sky-500/15 text-sky-200 border-sky-400/25',
+      iconBg: 'bg-sky-500/20 text-sky-300 border-sky-400/30',
+      accentText: 'text-sky-300',
+    },
+    shortEthos: 'Positional Possession & Control',
+    shortPerk: '+15% Sponsors · Dominance',
+    gf: '-12%',
+    ga: '-28%',
+    isGfPos: false,
+    isGaPos: true,
+  },
+  'Defensive': {
+    theme: {
+      gradient: 'from-sky-500/[0.08] to-transparent',
+      activeBorder: 'border-sky-400/50',
+      ring: 'ring-sky-400/25',
+      glow: 'shadow-[0_8px_30px_rgba(56,189,248,0.14),inset_0_1px_0_0_rgba(125,211,252,0.2)]',
+      badgeBg: 'bg-sky-500/15 text-sky-200 border-sky-400/25',
+      iconBg: 'bg-sky-500/20 text-sky-300 border-sky-400/30',
+      accentText: 'text-sky-300',
+    },
+    shortEthos: 'Low-Block Fortress & Survival',
+    shortPerk: '-40% Goal Damage · Safe',
+    gf: '-38%',
+    ga: '-48%',
+    isGfPos: false,
+    isGaPos: true,
+  },
+  'Direct Counter': {
+    theme: {
+      gradient: 'from-sky-500/[0.08] to-transparent',
+      activeBorder: 'border-sky-400/50',
+      ring: 'ring-sky-400/25',
+      glow: 'shadow-[0_8px_30px_rgba(56,189,248,0.14),inset_0_1px_0_0_rgba(125,211,252,0.2)]',
+      badgeBg: 'bg-sky-500/15 text-sky-200 border-sky-400/25',
+      iconBg: 'bg-sky-500/20 text-sky-300 border-sky-400/30',
+      accentText: 'text-sky-300',
+    },
+    shortEthos: 'Rapid Vertical Counter-Attack',
+    shortPerk: '+2 Away OVR · Squad Savings',
+    gf: '+5%',
+    ga: '-12%',
+    isGfPos: true,
+    isGaPos: true,
+  },
 };
 
 export const Onboarding: React.FC<OnboardingProps> = ({
@@ -71,134 +236,140 @@ export const Onboarding: React.FC<OnboardingProps> = ({
   showToast,
   lang,
   clubsDb,
+  isModActive = false,
+  onToggleMod,
   onStartGame,
   onShowLeaderboard,
+  onShowAbout,
 }) => {
-  const isDe = false;
+  const isDe = lang === 'de';
 
   const [step, setStep] = useState<number>(1);
+  const [coachMarket, setCoachMarket] = useState<Coach[]>([]);
+  const [selectedCoach, setSelectedCoach] = useState<Coach | null>(null);
   const [mode, setMode] = useState<GameMode>('realistic');
+  const [archetype, setArchetype] = useState<'legend' | 'finance' | 'scout' | 'balanced'>('balanced');
+  const [selectedClubForArchetype, setSelectedClubForArchetype] = useState<Club | null>(null);
   const [managerName, setManagerName] = useState<string>('');
   const [nameError, setNameError] = useState<boolean>(false);
-  const [startYear, setStartYear] = useState<number>(2026);
+  const currentYear = new Date().getFullYear();
+  const [startYear, setStartYear] = useState<number>(currentYear);
   const [showModModal, setShowModModal] = useState<boolean>(false);
-  const [modModalTab, setModModalTab] = useState<'changelog' | 'mods'>('changelog');
-  const [nationality, setNationality] = useState<string>('ALL');
-  const [tactic, setTactic] = useState<string>('Fast Break');
-  const [tierFilter, setTierFilter] = useState<number | 'all'>('all');
-  const [continentFilter, setContinentFilter] = useState<'ALL' | 'EUROPE'>('ALL');
+  const [nationality, setNationality] = useState<string>('GER');
+  const [tactic, setTactic] = useState<string>('Total Football');
+  const [tierFilter, setTierFilter] = useState<number | 'all'>(1);
+  const [showAllClubs, setShowAllClubs] = useState<boolean>(false);
+  const [showCustomTactics, setShowCustomTactics] = useState<boolean>(false);
+  const [continentFilter, setContinentFilter] = useState<'ALL' | 'EUROPE' | 'AMERICAS' | 'APAC'>('ALL');
+  const [countrySearch, setCountrySearch] = useState<string>('');
+  const [subStep2, setSubStep2] = useState<'2A' | '2B'>('2A');
   const [startingOffers, setStartingOffers] = useState<Club[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedClub, setSelectedClub] = useState<Club | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const [modVersion, setModVersion] = useState(0);
 
+  const t = (en: string, de?: string, _ignoredEs?: string) => tr(lang, en, de);
+
+  const [dossierCoach, setDossierCoach] = useState<Coach | null>(null);
+
+  React.useEffect(() => {
+    if (step === 4 && selectedClubForArchetype) {
+      const tier = selectedClubForArchetype.tier;
+      const country = selectedClubForArchetype.country || 'GER';
+      let initRep = 50;
+      if (archetype === 'legend') initRep += 50;
+      if (archetype === 'scout') initRep -= 30;
+      const pool = generateCoachMarket(tier, country, initRep, 0);
+      // Guarantee at least one coach matches the selected director tactic
+      if (!pool.some(c => isTacticalSynergy(c.style, tactic))) {
+        if (pool[0]) pool[0].style = tactic;
+      }
+      setCoachMarket(pool);
+    }
+  }, [step, selectedClubForArchetype, archetype, tactic]);
+
+  // Keep selected club and starting offers updated if clubsDb changes (e.g. mod loaded or toggled)
   useEffect(() => {
-    const onModChange = () => setModVersion((v) => v + 1);
-    window.addEventListener('mod-state-change', onModChange);
-    window.addEventListener('storage', onModChange);
-    return () => {
-      window.removeEventListener('mod-state-change', onModChange);
-      window.removeEventListener('storage', onModChange);
-    };
-  }, []);
-
-  const t = (en: string, _de?: string) => en;
+    if (selectedClubForArchetype) {
+      const match = clubsDb.find(c => c.id === selectedClubForArchetype.id);
+      if (match && (match.name !== selectedClubForArchetype.name || match.logo !== selectedClubForArchetype.logo)) {
+        setSelectedClubForArchetype(match);
+      }
+    }
+    if (startingOffers.length > 0) {
+      setStartingOffers(prev => prev.map(offer => {
+        const match = clubsDb.find(c => c.id === offer.id);
+        return match || offer;
+      }));
+    }
+  }, [clubsDb, selectedClubForArchetype?.id]);
 
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
   };
 
-  useEffect(() => {
-    const maxT = getMaxTier(nationality);
+  // Validate tierFilter whenever nationality changes, and reset to 'GER' if selected nation is mod-only while mod is inactive
+  React.useEffect(() => {
+    if (!isModActive && MOD_ONLY_COUNTRIES.includes(nationality)) {
+      setNationality('GER');
+      setTierFilter('all');
+    }
+    const maxT = getMaxTier(nationality, clubsDb);
     if (tierFilter !== 'all' && typeof tierFilter === 'number' && tierFilter > maxT) {
       setTierFilter('all');
     }
-  }, [nationality, tierFilter]);
+  }, [nationality, tierFilter, clubsDb, isModActive]);
 
-  const availableCountries = useMemo(() => {
-    const countsByCountry: Record<string, number> = {};
-    clubsDb.forEach((c) => {
-      const code = (c.country || 'GER').trim().toUpperCase();
-      countsByCountry[code] = (countsByCountry[code] || 0) + 1;
-    });
-
+  const activeCountriesForContinent = useMemo(() => {
     return Object.keys(COUNTRIES).filter((k) => {
-      const count = countsByCountry[k] || 0;
-      if (count === 0) return false;
+      if (!isModActive && MOD_ONLY_COUNTRIES.includes(k)) return false;
       if (continentFilter === 'ALL') return true;
-      const eur = ['GER', 'DEN', 'FRA', 'ESP', 'SWE', 'CRO', 'POR', 'NOR', 'HUN', 'ISL', 'POL', 'AUT', 'SUI'];
-      return eur.includes(k);
+      const eur = UEFA_COUNTRIES;
+      const amr = [...CONMEBOL_COUNTRIES, ...CONCACAF_COUNTRIES];
+      const asi = AFC_COUNTRIES;
+      if (continentFilter === 'EUROPE') return eur.includes(k);
+      if (continentFilter === 'AMERICAS') return amr.includes(k);
+      if (continentFilter === 'APAC') return asi.includes(k);
+      return true;
     });
-  }, [clubsDb, continentFilter, modVersion]);
+  }, [continentFilter, isModActive]);
 
-  useEffect(() => {
-    if (availableCountries.length > 0 && !availableCountries.includes(nationality) && nationality !== 'ALL') {
-      setNationality(availableCountries[0]);
-    }
-  }, [availableCountries, nationality]);
-
-  // Keep selectedClub and startingOffers cleanly synchronized when switching between Mod, Custom Mod, and Non-Mod
-  useEffect(() => {
-    if (!clubsDb || clubsDb.length === 0) return;
-    if (selectedClub) {
-      const updatedMatch = clubsDb.find(
-        (c) => String(c.id) === String(selectedClub.id) || (c.name && c.name.toLowerCase() === selectedClub.name.toLowerCase())
-      );
-      if (updatedMatch) {
-        if (
-          updatedMatch.logo !== selectedClub.logo ||
-          updatedMatch.name !== selectedClub.name ||
-          updatedMatch.color !== selectedClub.color ||
-          updatedMatch.historicContext !== selectedClub.historicContext
-        ) {
-          setSelectedClub(updatedMatch);
-        }
-      } else {
-        // Selected club's nation/entry is no longer in the active database (e.g. POL/AUT/SUI when mod disabled)
-        setSelectedClub(null);
-        if (step === 5) setStep(4);
+  const availableLeaguesForCountry = useMemo(() => {
+    if (nationality === 'ALL') return [];
+    
+    // Find all clubs in this country from clubsDb
+    const clubsInCountry = clubsDb.filter((c) => (c.country || 'GER') === nationality);
+    
+    // Dynamically discover all tiers present in the database (supports custom community mod tiers)
+    const dbTiers: number[] = Array.from(new Set(clubsInCountry.map((c) => c.tier)))
+      .filter((t): t is number => typeof t === 'number' && t > 0);
+      
+    // Also include standard preset tiers for this country if populated
+    const standardMax = getMaxTier(nationality, clubsDb);
+    const combinedTiers = new Set<number>(dbTiers);
+    for (let t = 1; t <= standardMax; t++) {
+      if (clubsInCountry.some(c => c.tier === t) || (combinedTiers.size === 0 && t <= 3)) {
+        combinedTiers.add(t);
       }
     }
-    if (startingOffers.length > 0) {
-      const syncedOffers = startingOffers
-        .map((offer) =>
-          clubsDb.find(
-            (c) => String(c.id) === String(offer.id) || (c.name && c.name.toLowerCase() === offer.name.toLowerCase())
-          )
-        )
-        .filter((c): c is Club => Boolean(c));
-      if (syncedOffers.length === startingOffers.length) {
-        const changed = syncedOffers.some(
-          (c, i) =>
-            c.logo !== startingOffers[i].logo ||
-            c.name !== startingOffers[i].name ||
-            c.color !== startingOffers[i].color
-        );
-        if (changed) setStartingOffers(syncedOffers);
-      } else {
-        // Re-roll starting offers from the newly active database
-        const eligibleClubs = clubsDb.filter((c) => !isReserveClub(c.name));
-        const maxTierByCountry: Record<string, number> = {};
-        eligibleClubs.forEach((c) => {
-          const ctry = c.country || 'GER';
-          if (!maxTierByCountry[ctry] || c.tier > maxTierByCountry[ctry]) {
-            maxTierByCountry[ctry] = c.tier;
-          }
-        });
-        const pool = eligibleClubs.filter((c) => {
-          const ctry = c.country || 'GER';
-          if (nationality !== 'ALL' && ctry !== nationality) return false;
-          const maxT = maxTierByCountry[ctry] || 1;
-          return c.tier >= Math.max(1, maxT - 1);
-        });
-        const finalPool = pool.length > 0 ? [...pool].sort(() => 0.5 - Math.random()) : [...eligibleClubs].sort((a, b) => a.baseOvr - b.baseOvr);
-        setStartingOffers(finalPool.slice(0, 4));
-      }
-    }
-  }, [clubsDb, modVersion]);
+
+    const sortedTiers = Array.from(combinedTiers).sort((a, b) => a - b);
+    const countryLeagues = COUNTRY_LEAGUES[nationality] || {};
+    
+    return sortedTiers.map((t) => {
+      const sampleClub = clubsInCountry.find(c => c.tier === t);
+      const customLeagueName = (sampleClub as any)?.leagueName || (sampleClub as any)?.league;
+      const info = countryLeagues[t] || getLeagueInfo(t, nationality, customLeagueName);
+      return {
+        tier: t,
+        name: customLeagueName || info?.name || `Tier ${t}`,
+        tag: info?.tag || `T${t}`
+      };
+    });
+  }, [nationality, clubsDb]);
+
+  const [sortBy, setSortBy] = useState<'tier' | 'ovr' | 'budget' | 'name'>('tier');
 
   const displayedClubs = useMemo(() => {
     if (mode !== 'standard') return startingOffers;
@@ -209,16 +380,29 @@ export const Onboarding: React.FC<OnboardingProps> = ({
       return (c.country || 'GER') === nationality;
     };
 
+    const applySort = (list: Club[]) => {
+      return [...list].sort((a, b) => {
+        if (sortBy === 'ovr') return (b.baseOvr || 0) - (a.baseOvr || 0) || a.tier - b.tier;
+        if (sortBy === 'budget') {
+          const bBudget = b.currentBudget != null ? parseAndNormalizeModBudget(b.currentBudget, b.tier, b.country || 'GER') : getStartingBudget(b.tier, b.country || 'GER');
+          const aBudget = a.currentBudget != null ? parseAndNormalizeModBudget(a.currentBudget, a.tier, a.country || 'GER') : getStartingBudget(a.tier, a.country || 'GER');
+          return bBudget - aBudget;
+        }
+        if (sortBy === 'name') return a.name.localeCompare(b.name);
+        return a.tier - b.tier || (b.baseOvr || 0) - (a.baseOvr || 0) || a.name.localeCompare(b.name);
+      });
+    };
+
     if (!rawQuery) {
-      return clubsDb
-        .filter(
-          (c) =>
-            matchesCountryFilter(c) &&
-            (tierFilter === 'all' || c.tier === tierFilter)
-        )
-        .sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
+      const filtered = clubsDb.filter(
+        (c) =>
+          matchesCountryFilter(c) &&
+          (tierFilter === 'all' || c.tier === tierFilter)
+      );
+      return applySort(filtered);
     }
 
+    // Normalization helper: strips accents, diacritics, and non-alphanumeric chars
     const normalize = (str: string) =>
       str
         .normalize('NFD')
@@ -241,1281 +425,1766 @@ export const Onboarding: React.FC<OnboardingProps> = ({
       const countryNameNorm = normalize(countryObj?.name || '');
       const leagueNameNorm = normalize(leagueInfo?.name || '');
 
-      const fullSearchableText = `${nameNorm} ${countryNorm} ${countryNameNorm} ${leagueNameNorm} tier ${c.tier}`;
+      const aliases: string[] = [];
+      if (nameNorm.includes('richmond')) aliases.push('lasso', 'greyhounds', 'ted');
+      if (nameNorm.includes('dortmund')) aliases.push('bvb', 'borussia');
+      if (nameNorm.includes('bayern')) aliases.push('fcb', 'munich', 'muenchen', 'bavaria');
+      if (nameNorm.includes('barcelona')) aliases.push('barca', 'blaugrana');
+      if (nameNorm.includes('real madrid')) aliases.push('galacticos', 'merengues', 'rm');
+      if (nameNorm.includes('atletico madrid')) aliases.push('atleti', 'colchoneros');
+      if (nameNorm.includes('manchester city')) aliases.push('man city', 'citizens', 'mcfc');
+      if (nameNorm.includes('manchester united')) aliases.push('man utd', 'man united', 'mufc', 'red devils');
+      if (nameNorm.includes('tottenham')) aliases.push('spurs');
+      if (nameNorm.includes('arsenal')) aliases.push('gunners');
+      if (nameNorm.includes('liverpool')) aliases.push('reds', 'lfc');
+      if (nameNorm.includes('chelsea')) aliases.push('blues', 'cfc');
+      if (nameNorm.includes('paris saint germain') || nameNorm.includes('psg')) aliases.push('paris', 'psg');
+      if (nameNorm.includes('juventus')) aliases.push('juve', 'bianconeri');
+      if (nameNorm.includes('inter') && !nameNorm.includes('miami')) aliases.push('nerazzurri', 'inter milan');
+      if (nameNorm.includes('milan') && !nameNorm.includes('inter')) aliases.push('ac milan', 'rossoneri');
+      if (nameNorm.includes('roma')) aliases.push('giallorossi');
+      if (nameNorm.includes('napoli')) aliases.push('partenopei');
+      if (nameNorm.includes('benfica')) aliases.push('slb', 'eagles');
+      if (nameNorm.includes('sporting')) aliases.push('scp', 'lions');
+      if (nameNorm.includes('porto')) aliases.push('fcp', 'dragons');
+      if (nameNorm.includes('toronto')) aliases.push('tfc', 'canada');
+      if (nameNorm.includes('montreal')) aliases.push('cfm', 'impact', 'canada');
+      if (nameNorm.includes('vancouver')) aliases.push('whitecaps', 'caps', 'canada');
+      if (nameNorm.includes('wrexham')) aliases.push('hollywood', 'ryan reynolds');
+      if (nameNorm.includes('miami')) aliases.push('inter miami', 'messi');
+
+      const aliasNorm = aliases.map(normalize).join(' ');
+      const fullSearchableText = `${nameNorm} ${countryNorm} ${countryNameNorm} ${leagueNameNorm} tier ${c.tier} ${aliasNorm}`;
       return tokens.every((token) => fullSearchableText.includes(token));
     };
 
+    // 1. Search in current filtered country first (ignoring tierFilter during query)
     if (nationality !== 'ALL') {
       const natClubs = clubsDb.filter((c) => matchesCountryFilter(c));
       const natMatches = natClubs.filter(isMatch);
       if (natMatches.length > 0) {
-        return natMatches.sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
+        return applySort(natMatches);
       }
     }
 
-    return clubsDb.filter(isMatch).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name));
-  }, [mode, searchQuery, clubsDb, nationality, tierFilter, startingOffers]);
+    // 2. Global search across ALL countries if no match in current country or nationality === 'ALL'
+    return applySort(clubsDb.filter(isMatch));
+  }, [mode, searchQuery, clubsDb, nationality, tierFilter, startingOffers, sortBy]);
 
-  const handleProceedToStep3 = () => {
+  // Pre-warm crests for currently displayed clubs so scrolling and browsing has zero pop-in
+  useEffect(() => {
+    if (step === 3 && Array.isArray(displayedClubs) && displayedClubs.length > 0) {
+      prewarmClubsLogos(displayedClubs.slice(0, 30));
+    }
+  }, [step, displayedClubs]);
+
+  const [startInLowestLeague, setStartInLowestTier] = useState(false);
+
+  
+  const generateRealisticOffers = () => {
+      let natClubs = clubsDb;
+      let targetTier = 5;
+
+      if (nationality !== 'ALL') {
+        natClubs = clubsDb.filter((c) => (c.country || 'GER') === nationality);
+        targetTier = getMaxTier(nationality, clubsDb);
+        // If Germany, realistic default starts at tier 8
+        if (nationality === 'GER') {
+          targetTier = 8;
+        }
+      } else {
+        // If ALL countries, just pick very low tier clubs generally (e.g. tier >= 4)
+        natClubs = clubsDb;
+        targetTier = 4;
+      }
+
+      let lowerClubs = natClubs.filter((c) => c.tier >= targetTier).sort(() => 0.5 - Math.random());
+      if (lowerClubs.length < 3) lowerClubs = natClubs.filter((c) => c.tier >= targetTier - 1).sort(() => 0.5 - Math.random());
+      if (lowerClubs.length < 3) lowerClubs = natClubs.sort(() => 0.5 - Math.random());
+      setStartingOffers(lowerClubs.slice(0, 3));
+  };
+
+  const handleGoToStep3 = () => {
     if (!managerName.trim()) {
       setNameError(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(() => nameInputRef.current?.focus(), 100);
       return;
     }
-    setNameError(false);
+    if (mode === 'realistic' && clubsDb.length > 0) {
+      generateRealisticOffers();
+    }
+    if (nationality !== 'ALL') {
+      setTierFilter(1);
+    }
+    setShowAllClubs(false);
     setStep(3);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleProceedToStep4 = () => {
-    if (!managerName.trim()) {
-      setNameError(true);
-      setStep(2);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      setTimeout(() => nameInputRef.current?.focus(), 100);
-      return;
-    }
-    if (mode === 'realistic' && startingOffers.length === 0 && clubsDb.length > 0) {
-      const isGlobal = nationality === 'ALL';
-      const eligibleClubs = clubsDb.filter((c) => !isReserveClub(c.name));
-      let pool: Club[] = [];
-
-      if (isGlobal) {
-        const maxTierByCountry: Record<string, number> = {};
-        eligibleClubs.forEach((c) => {
-          const ctry = c.country || 'GER';
-          if (!maxTierByCountry[ctry] || c.tier > maxTierByCountry[ctry]) {
-            maxTierByCountry[ctry] = c.tier;
-          }
-        });
-
-        eligibleClubs.forEach((c) => {
-          const ctry = c.country || 'GER';
-          const maxT = maxTierByCountry[ctry];
-          if (c.tier >= Math.max(1, maxT - 1)) {
-            pool.push(c);
-          }
-        });
-      } else {
-        const natClubs = eligibleClubs.filter((c) => (c.country || 'GER') === nationality);
-        let targetMaxTier = 1;
-        natClubs.forEach((c) => {
-          if (c.tier > targetMaxTier) targetMaxTier = c.tier;
-        });
-        pool = natClubs.filter((c) => c.tier >= Math.max(1, targetMaxTier - 1));
-      }
-
-      if (pool.length === 0) {
-        pool = [...eligibleClubs].sort((a, b) => a.baseOvr - b.baseOvr);
-      } else {
-        pool.sort(() => 0.5 - Math.random());
-      }
-
-      setStartingOffers(pool.slice(0, 4));
-    }
-    setStep(4);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const isModActive = useMemo(() => {
-    return Boolean(getCustomDb()) || isRealDataModActive();
-  }, [modVersion]);
-
-  const activeModName = useMemo(() => {
-    if (getCustomDb()) return 'Custom Community Mod';
-    return isRealDataModActive() ? REALDATA_MOD_NAME : null;
-  }, [modVersion]);
-
-  const stepsConfig = [
-    { num: 1, label: 'Mode' },
-    { num: 2, label: 'Identity' },
-    { num: 3, label: 'Vision' },
-    { num: 4, label: 'Club' },
-    { num: 5, label: 'Mandate' },
-  ];
-
-  const activeRoadmap = useMemo(() => {
-    if (!selectedClub) return null;
-    return generateBoardRoadmap(selectedClub, startYear, []);
-  }, [selectedClub, startYear]);
-
-  const handleFinalStartGame = () => {
-    if (!selectedClub) return;
-    const clubCountry = selectedClub.country || (nationality === 'ALL' ? 'GER' : nationality);
-    onStartGame({
-      club: selectedClub,
-      managerName: managerName.trim().toUpperCase(),
-      startYear,
-      tactic,
-      nationality: clubCountry,
-      mode,
-    });
-  };
-
-  const handleStepClick = (targetStep: number) => {
-    if (targetStep === 1) {
-      setStep(1);
-    } else if (targetStep === 2) {
-      setStep(2);
-    } else if (targetStep === 3) {
-      if (!managerName.trim()) {
-        setNameError(true);
-        setStep(2);
-        setTimeout(() => nameInputRef.current?.focus(), 100);
-        return;
-      }
-      setStep(3);
-    } else if (targetStep === 4) {
-      handleProceedToStep4();
-    } else if (targetStep === 5) {
-      if (selectedClub) {
-        setStep(5);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    }
-  };
-
   return (
-    <div className="w-full max-w-5xl px-3 sm:px-6 mx-auto">
-      {/* Mod Selection Modal */}
+    <div className={`w-full ${step === 3 ? 'max-w-6xl' : 'max-w-5xl'} px-3 sm:px-4 mt-4 md:mt-8 mx-auto transition-all duration-300`}>
+
+      {/* Mod Importer Modal */}
       {showModModal && (
-        <ModSelectionModal
-          isOpen={showModModal}
-          onClose={() => setShowModModal(false)}
+        <ModModal
           lang={lang}
-          initialTab={modModalTab}
-          onDatabaseChange={(updatedClubs) => {
-            if (setClubsDb) setClubsDb(updatedClubs);
-            setModVersion((v) => v + 1);
+          clubsDb={clubsDb}
+          isModActive={isModActive}
+          onUpdateClubsDb={(newClubs, active) => {
+            if (onToggleMod) {
+              onToggleMod(active, newClubs);
+            } else if (setClubsDb) {
+              setClubsDb(newClubs);
+            }
+            if (selectedClubForArchetype) {
+              const updated = newClubs.find(c => c.id === selectedClubForArchetype.id);
+              if (updated) setSelectedClubForArchetype(updated);
+            }
+            setStartingOffers(prev => prev.map(offer => {
+              const match = newClubs.find(c => c.id === offer.id);
+              return match || offer;
+            }));
           }}
-          showToast={showToast as any}
+          showToast={showToast}
+          onClose={() => setShowModModal(false)}
         />
       )}
-
-      {/* Global Broadcast Progress Stepper (Hidden on Step 1, visible from Step 2 onwards) */}
+      {/* Step Navigation Header (Apple Minimalist Glassmorphism Tracker) */}
       {step > 1 && (
-        <div className="w-full max-w-lg mx-auto mb-6 sm:mb-8 pt-1">
-          <div className="flex items-center justify-between">
-            {stepsConfig.map((s, idx) => {
-              const isCurrent = step === s.num;
+        <div className="max-w-xl mx-auto mb-8 px-4">
+          <div className="flex items-center justify-between relative">
+            {/* Minimalist connecting track */}
+            <div className="absolute top-1/2 left-8 right-8 h-[1.5px] bg-white/[0.08] -translate-y-1/2 pointer-events-none overflow-hidden rounded-full">
+              <div 
+                className="h-full bg-white/70 transition-all duration-500 rounded-full"
+                style={{
+                  width: `${
+                    step === 1
+                      ? 0
+                      : step === 2
+                      ? subStep2 === '2B'
+                        ? (1.5 / 3) * 100
+                        : (1 / 3) * 100
+                      : ((step - 1) / 3) * 100
+                  }%`,
+                }}
+              />
+            </div>
+            
+            {[
+              { num: 1, title: isDe ? 'Modus' : 'Mode', icon: 'fa-gamepad' },
+              { num: 2, title: isDe ? 'Profil' : 'Profile', icon: 'fa-user-tie' },
+              { num: 3, title: isDe ? 'Verein' : 'Club', icon: 'fa-shield-halved' },
+              { num: 4, title: isDe ? 'Trainer' : 'Staff', icon: 'fa-clipboard-user' },
+            ].map(s => {
               const isCompleted = step > s.num;
-
+              const isCurrent = step === s.num;
+              const canNavigate = step > s.num;
+              
               return (
-                <React.Fragment key={`step-pip-${s.num}`}>
-                  <button
-                    type="button"
-                    onClick={() => handleStepClick(s.num)}
-                    className="flex flex-col items-center gap-1.5 group cursor-pointer focus:outline-none transition-transform active:scale-95"
-                  >
-                    <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition-all duration-200 ${
-                        isCurrent
-                          ? 'bg-white text-black font-semibold shadow-[0_0_12px_rgba(255,255,255,0.4)]'
-                          : isCompleted
-                          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold'
-                          : 'bg-white/[0.05] border border-white/[0.1] text-zinc-500 font-medium'
-                      }`}
-                    >
-                      {isCompleted ? (
-                        <i className="fas fa-check text-[9px]" />
-                      ) : (
-                        <span className="tabular-nums">{s.num}</span>
-                      )}
-                    </div>
-                    <span
-                      className={`text-[11px] transition-colors ${
-                        isCurrent
-                          ? 'text-white font-semibold'
-                          : isCompleted
-                          ? 'text-zinc-400 font-medium group-hover:text-zinc-200'
-                          : 'text-zinc-500 font-medium group-hover:text-zinc-400'
-                      }`}
-                    >
-                      {s.label}
-                    </span>
-                  </button>
-
-                  {idx < stepsConfig.length - 1 && (
-                    <div
-                      className={`h-[1px] flex-1 max-w-[40px] mx-1 sm:mx-1.5 transition-all duration-300 ${
-                        step > idx + 1 ? 'bg-emerald-500/40' : 'bg-white/[0.08]'
-                      }`}
-                    />
-                  )}
-                </React.Fragment>
+                <button
+                  key={s.num}
+                  type="button"
+                  onClick={() => {
+                    if (canNavigate) {
+                      setStep(s.num);
+                      if (s.num === 2) setSubStep2('2A');
+                    }
+                  }}
+                  disabled={!canNavigate}
+                  className={`relative z-10 flex flex-col items-center gap-1.5 transition ${canNavigate ? 'cursor-pointer group' : 'cursor-default'}`}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all backdrop-blur-md ${
+                    isCurrent
+                      ? 'bg-white text-zinc-950 shadow-lg shadow-black/30 scale-105'
+                      : isCompleted
+                      ? 'bg-white/10 text-white border border-white/20 group-hover:bg-white/15'
+                      : 'bg-white/[0.03] text-zinc-500 border border-white/[0.08]'
+                  }`}>
+                    {isCompleted ? <i className="fa-solid fa-check text-[10px]"></i> : s.num}
+                  </div>
+                  <span className={`text-[11px] font-medium tracking-wide transition-colors ${
+                    isCurrent ? 'text-white' : isCompleted ? 'text-zinc-400' : 'text-zinc-600'
+                  }`}>
+                    {s.title}
+                  </span>
+                </button>
               );
             })}
           </div>
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* STEP 1: CAREER MODE SELECTION (PREMIUM BROADCAST SETUP)                    */}
-      {/* ========================================================================= */}
+      {/* STEP 1: Game Mode */}
       {step === 1 && (
-        <motion.div
-          key="step-1"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-lg md:max-w-3xl mx-auto flex flex-col items-center pt-2 pb-6 font-sans text-neutral-200"
-        >
-          {/* Subtle Ambient Radial Lighting */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[500px] h-[350px] bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.035),_transparent_70%)] rounded-full blur-2xl pointer-events-none -z-10" />
+        <>
+          <div className="max-w-2xl mx-auto text-center fade-in px-4 py-4 relative">
+          <div className="w-20 h-20 border border-white/10 rounded-3xl mx-auto overflow-hidden shadow-2xl mb-5 bg-white/[0.04] backdrop-blur-xl">
+            <img src="/assets/a_footballsim_logo.jpg" alt="Football Manager Sim Logo" className="w-full h-full object-cover" />
+          </div>
 
-          {/* Top Update Pill: v 2.2 Sponsors, Supercup & World Updates */}
-          <button
-            type="button"
-            onClick={() => {
-              setModModalTab('changelog');
-              setShowModModal(true);
-            }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 hover:border-white/20 text-xs text-zinc-300 transition mx-auto mb-4 cursor-pointer active:scale-95 shadow-sm"
-          >
-            <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-zinc-200 border border-white/15 font-semibold text-[10px] tracking-tight">
-              v 2.2
-            </span>
-            <span className="text-zinc-300 font-medium text-xs">
-              Sponsors, Supercup &amp; World Updates
-            </span>
-            <i className="fas fa-chevron-right text-[9px] text-zinc-500" />
-          </button>
+          {/* Version pill & Tiny CR27 Community Mod Icon Button */}
+          <div className="flex items-center justify-center gap-2 mb-5 flex-wrap">
+            <button 
+              onClick={() => onShowAbout && onShowAbout()} 
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.1] shadow-sm cursor-pointer hover:bg-white/[0.12] transition group backdrop-blur-md"
+              title="v2.2: Road-to-Glory 11-Tier Scaling, Delta Save Engine & Prestige Legacy (v2.1 & v2.0 Archived)"
+            >
+              <span 
+                className="bg-white font-extrabold text-[10px] px-2 py-0.5 rounded-full tracking-wider shadow-sm"
+                style={{ color: '#09090b', backgroundColor: '#ffffff' }}
+              >
+                v 2.2
+              </span>
+              <span className="text-zinc-300 group-hover:text-white transition text-xs font-medium pr-1 tracking-wide flex items-center gap-1.5">
+                360° Engine Parity & Road-to-Glory v2.2 <span className="text-[10px] text-zinc-500 hidden sm:inline">(v2.1 Archived)</span> <i className="fa-solid fa-chevron-right text-[9px] opacity-50 group-hover:opacity-100 transition"></i>
+              </span>
+            </button>
 
-          {/* Main Title & Subtitle */}
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-white tracking-tight uppercase text-center mb-2">
-            Handball Manager Sim
+            {/* Tiny CR27 Community Mod Icon Button */}
+            <button
+              type="button"
+              onClick={() => setShowModModal(true)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer transition-all shadow-sm backdrop-blur-md active:scale-95 ${
+                isModActive
+                  ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 shadow-[0_0_14px_rgba(16,185,129,0.3)]'
+                  : 'border-white/[0.1] bg-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/[0.08]'
+              }`}
+              title="CR27_Footy Community Mod (Toggle & JSON Export/Import)"
+            >
+              <i className="fa-solid fa-shield-halved text-xs text-sky-400"></i>
+              <span className="text-[11px] font-bold">CR27</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${isModActive ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-zinc-600'}`}></span>
+            </button>
+          </div>
+
+          <h1 className="text-3xl md:text-5xl font-semibold text-white tracking-tight mb-2.5">
+            {t('Football Manager Sim', 'Fussball Manager Sim')}
           </h1>
-          <p className="text-zinc-400 text-xs sm:text-sm font-normal text-center max-w-sm sm:max-w-md mx-auto leading-relaxed mb-6 px-2">
-            Lead a club over 35 seasons. Hire coaches, scout talent, and build a dynasty.
+          <p className="text-sm md:text-base text-zinc-400 mb-8 font-normal max-w-lg mx-auto leading-relaxed">
+            {t(
+              'Lead a club over 35 seasons. Hire coaches, scout talent, and build a dynasty.',
+              'Fuehre einen Verein ueber 35 Saisons. Stelle Trainer ein, scoute Talente und baue eine Dynastie auf.'
+            )}
           </p>
 
-          {/* Mode Selection Cards (Monochrome / Black & White) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-5 w-full max-w-sm md:max-w-2xl mx-auto mb-6">
-            {/* Card 1: Pick Any Club */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto fade-in-delay-1 text-center">
             <div
               onClick={() => setMode('standard')}
-              className={`rounded-2xl p-5 sm:p-6 relative transition-all duration-200 cursor-pointer flex flex-col items-center text-center justify-between bg-[#14151e] active:scale-[0.99] ${
+              className={`p-6 rounded-3xl border transition-all cursor-pointer relative overflow-hidden flex flex-col items-center text-center justify-between min-h-[160px] backdrop-blur-2xl ${
                 mode === 'standard'
-                  ? 'border border-white/30 bg-white/[0.04] shadow-[0_12px_32px_rgba(0,0,0,0.6)]'
-                  : 'border border-white/[0.05] hover:border-white/15'
+                  ? 'bg-white/[0.12] border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.18)] ring-1 ring-white/20'
+                  : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/[0.16]'
               }`}
             >
               {mode === 'standard' && (
-                <div className="absolute top-3.5 right-3.5 bg-white/10 text-white border border-white/20 text-[10px] font-medium tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1.5 shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                  <span>SELECTED</span>
-                </div>
+                <span className="absolute top-3.5 right-3.5 text-[10px] font-semibold uppercase tracking-wider bg-white text-zinc-950 px-2 py-0.5 rounded-full shadow-sm">
+                  {isDe ? 'Aktiv' : 'Selected'}
+                </span>
               )}
-              <div className="flex flex-col items-center">
-                <div
-                  className={`w-12 h-12 rounded-xl border flex items-center justify-center mb-3 shadow-sm transition-colors ${
-                    mode === 'standard'
-                      ? 'bg-white/10 border-white/20 text-white'
-                      : 'bg-white/[0.03] border-white/[0.06] text-zinc-400'
-                  }`}
-                >
-                  <i className="fas fa-bars-staggered text-base" />
+              <div className="flex flex-col items-center w-full">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl mb-3 shadow-inner ${
+                  mode === 'standard' ? 'bg-white text-zinc-950 font-bold' : 'bg-white/[0.06] text-white border border-white/[0.1]'
+                }`}>
+                  <i className="fas fa-list"></i>
                 </div>
-                <h2 className="text-base sm:text-lg font-semibold text-white tracking-tight mb-1">
-                  Pick Any Club
-                </h2>
-                <p className="text-xs text-zinc-400 font-normal leading-relaxed max-w-xs mb-3">
-                  Choose any of the {clubsDb.length.toLocaleString()}+ clubs worldwide.
-                </p>
+                <div className="font-semibold text-white text-base mb-1">
+                  {t('Pick Any Club', 'Freie Auswahl')}
+                </div>
+                <div className="text-xs text-zinc-400 font-normal leading-relaxed max-w-[220px]">
+                  {t(
+                    'Choose any of the 1,200+ clubs worldwide.',
+                    'Waehle einen beliebigen von 1.200+ Vereinen weltweit.'
+                  )}
+                </div>
               </div>
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-400 font-medium pt-1">
-                <i className="fas fa-globe text-zinc-500 text-xs" />
-                <span className="tabular-nums">{clubsDb.length.toLocaleString()} clubs worldwide</span>
+              <div className="pt-3 mt-4 border-t border-white/[0.06] text-[11px] text-zinc-400 font-normal flex items-center justify-center gap-1.5 w-full">
+                <i className="fa-solid fa-earth-americas text-[10px] text-zinc-400"></i>
+                <span>{isDe ? '1.202 Vereine weltweit' : '1,202 clubs worldwide'}</span>
               </div>
             </div>
 
-            {/* Card 2: Realistic Career */}
             <div
               onClick={() => setMode('realistic')}
-              className={`rounded-2xl p-5 sm:p-6 relative transition-all duration-200 cursor-pointer flex flex-col items-center text-center justify-between bg-[#14151e] active:scale-[0.99] ${
+              className={`p-6 rounded-3xl border transition-all cursor-pointer relative overflow-hidden flex flex-col items-center text-center justify-between min-h-[160px] backdrop-blur-2xl ${
                 mode === 'realistic'
-                  ? 'border border-white/30 bg-white/[0.04] shadow-[0_12px_32px_rgba(0,0,0,0.6)]'
-                  : 'border border-white/[0.05] hover:border-white/15'
+                  ? 'bg-white/[0.12] border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.18)] ring-1 ring-white/20'
+                  : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] hover:border-white/[0.16]'
               }`}
             >
               {mode === 'realistic' && (
-                <div className="absolute top-3.5 right-3.5 bg-white/10 text-white border border-white/20 text-[10px] font-medium tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1.5 shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                  <span>SELECTED</span>
-                </div>
+                <span className="absolute top-3.5 right-3.5 text-[10px] font-semibold uppercase tracking-wider bg-white text-zinc-950 px-2 py-0.5 rounded-full shadow-sm">
+                  {isDe ? 'Aktiv' : 'Selected'}
+                </span>
               )}
-              <div className="flex flex-col items-center">
-                <div
-                  className={`w-12 h-12 rounded-xl border flex items-center justify-center mb-3 shadow-sm transition-colors ${
-                    mode === 'realistic'
-                      ? 'bg-white/10 border-white/20 text-white'
-                      : 'bg-white/[0.03] border-white/[0.06] text-zinc-400'
-                  }`}
-                >
-                  <i className="fas fa-bolt text-base" />
+              <div className="flex flex-col items-center w-full">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl mb-3 shadow-inner ${
+                  mode === 'realistic' ? 'bg-white text-zinc-950 font-bold' : 'bg-white/[0.06] text-white border border-white/[0.1]'
+                }`}>
+                  <i className="fas fa-bolt"></i>
                 </div>
-                <h2 className="text-base sm:text-lg font-semibold text-white tracking-tight mb-1">
-                  Realistic Career
-                </h2>
-                <p className="text-xs text-zinc-400 font-normal leading-relaxed max-w-xs mb-3">
-                  Authentic job offers & board pressure.
-                </p>
+                <div className="font-semibold text-white text-base mb-1">
+                  {t('Realistic Career', 'Realistische Karriere')}
+                </div>
+                <div className="text-xs text-zinc-400 font-normal leading-relaxed max-w-[220px]">
+                  {t(
+                    'Authentic job offers & board pressure.',
+                    'Authentische Job-Angebote & Vorstandsdruck.'
+                  )}
+                </div>
               </div>
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-400 font-medium pt-1">
-                <i className="fas fa-briefcase text-zinc-500 text-xs" />
-                <span>Grassroots offers</span>
+              <div className="pt-3 mt-4 border-t border-white/[0.06] text-[11px] text-zinc-400 font-normal flex items-center justify-center gap-1.5 w-full">
+                <i className="fa-solid fa-briefcase text-[10px] text-zinc-400"></i>
+                <span>{isDe ? 'Grassroots-Angebote' : 'Grassroots offers'}</span>
               </div>
             </div>
           </div>
 
-          {/* Action CTA: Continue button + Leaderboard link */}
-          <div className="flex flex-col items-center w-full">
+          <div className="mt-8 fade-in-delay-2 pb-6 flex flex-col items-center justify-center gap-4">
             <button
-              type="button"
               onClick={() => setStep(2)}
-              className="w-full max-w-[280px] py-3.5 px-8 rounded-full bg-white hover:bg-zinc-100 text-black font-semibold text-sm sm:text-base shadow-[0_8px_24px_rgba(255,255,255,0.18)] transition-all duration-200 active:scale-95 cursor-pointer flex items-center justify-center"
+              className="bg-white hover:bg-zinc-100 text-zinc-950 text-sm md:text-base font-semibold py-3.5 px-10 rounded-2xl transition active:scale-95 shadow-[0_4px_20px_rgba(255,255,255,0.15)] cursor-pointer min-w-[200px] flex items-center justify-center gap-2"
             >
-              Continue →
+              <span>{t('Continue', 'Weiter')}</span>
+              <i className="fa-solid fa-arrow-right text-xs"></i>
             </button>
-
-            <button
-              type="button"
-              onClick={onShowLeaderboard}
-              className="flex items-center justify-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition duration-150 cursor-pointer mt-3"
+            
+            <button 
+              onClick={onShowLeaderboard} 
+              className="text-xs font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center gap-2 mx-auto"
             >
-              <i className="fas fa-trophy text-[#eab308] text-xs" />
-              <span>View Global Leaderboard</span>
+              <i className="fas fa-trophy text-xs text-amber-400"></i> {t('View Global Leaderboard', 'Globale Rangliste')}
             </button>
           </div>
-        </motion.div>
+        </div>
+        </>
       )}
 
-      {/* ========================================================================= */}
-      {/* STEP 2: DIRECTOR IDENTITY & COUNTRY (DUAL BENTO LAYOUT)                    */}
-      {/* ========================================================================= */}
+      {/* STEP 2: Director Profile (Apple Minimalist Glassmorphism: 2A Heritage -> 2B Managerial DNA) */}
       {step === 2 && (
-        <motion.div
-          key="step-2"
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -14 }}
-          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-4xl mx-auto flex flex-col gap-6"
-        >
-          {/* Header */}
-          <div className="text-center">
-            <div className="inline-flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.06] text-zinc-400 text-[10px] tracking-widest uppercase px-3 py-1 rounded-full mb-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-400/80" />
-              <span>Step 02 · Executive Dossier</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight uppercase text-white">
-              Coach Identity & Jurisdiction
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed font-normal max-w-lg mx-auto mt-1">
-              Define your coaching credentials, managerial inception era, and continental jurisdiction.
-            </p>
-          </div>
-
-          {/* Dual Bento Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full">
-            {/* Left Card: Personal Dossier */}
-            <div className="bg-[#14151e] border border-white/[0.05] rounded-2xl p-5 sm:p-6 flex flex-col justify-between shadow-[0_20px_50px_rgba(0,0,0,0.7)]">
-              <div>
-                {/* Dossier Header */}
-                <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.04]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-xs">
-                      <i className="fas fa-user-tie" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-semibold text-zinc-200 tracking-wider uppercase">
-                        Personal Dossier
-                      </h3>
-                      <p className="text-[11px] text-zinc-500 font-normal">
-                        Name & Inception Era
-                      </p>
-                    </div>
+        <div className="max-w-5xl mx-auto px-2 sm:px-4 pb-12">
+          <AnimatePresence mode="wait">
+            {subStep2 === '2A' ? (
+              /* ================= SCREEN 2A: HERITAGE & ROOTS ================= */
+              <motion.div
+                key="screen-2a"
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                transition={{ duration: 0.25 }}
+                className="fade-in"
+              >
+                {/* Header Title with Apple Frosted Kicker */}
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] text-zinc-300 text-[11px] font-medium tracking-wide mb-3 backdrop-blur-md">
+                    <span>{t('Identity & Country', 'Identität & Land')}</span>
                   </div>
-                  <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-zinc-400">
-                    Pro License
-                  </span>
+                  <h1 className="text-3xl md:text-5xl font-semibold text-white tracking-tight">
+                    {t('Director Identity', 'Sportdirektor-Identität')}
+                  </h1>
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-2 max-w-lg mx-auto font-normal leading-relaxed">
+                    {t('Establish your managerial persona, inaugural era, and starting federation roots.', 'Definiere deinen Namen, deine Start-Ära und dein Heimatland.')}
+                  </p>
                 </div>
 
-                <div className="space-y-4">
-                  {/* Name Input */}
-                  <div
-                    className={`p-3.5 px-4 rounded-xl border transition duration-150 ${
-                      nameError
-                        ? 'bg-rose-500/10 border-rose-500/30 shadow-[0_0_14px_rgba(244,63,94,0.15)]'
-                        : 'bg-black/40 border-white/[0.06] focus-within:border-sky-500/40 focus-within:ring-1 focus-within:ring-sky-500/20'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <label
-                        className={`text-xs font-medium block uppercase tracking-wider ${
-                          nameError ? 'text-rose-400' : 'text-zinc-400'
-                        }`}
-                      >
-                        Head Coach Name
-                      </label>
-                      {nameError && (
-                        <span className="text-[10px] font-semibold text-rose-400">
-                          Required
+                {/* Mobile-First Bento Dual-Card Layout (Equal heights & balanced spacing) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-8 items-stretch">
+                  {/* Card 1: Director Credentials (Left 6 Cols) */}
+                  <div className="lg:col-span-6 bg-[#161820]/75 rounded-3xl p-6 sm:p-7 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl relative overflow-hidden flex flex-col justify-between text-left h-full">
+                    <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/[0.02] blur-3xl pointer-events-none" />
+
+                    <div className="flex flex-col justify-between h-full space-y-6">
+                      {/* Section Header */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-white/[0.08] text-white border border-white/[0.12] flex items-center justify-center text-xs shadow-inner">
+                            <i className="fa-solid fa-user-tie"></i>
+                          </div>
+                          <div>
+                            <h2 className="text-xs sm:text-sm font-semibold text-white tracking-wide">
+                              {t('Personal Dossier', 'Personal-Dossier')}
+                            </h2>
+                            <span className="text-[11px] text-zinc-400 font-normal">
+                              {t('Name & Inception Era', 'Name & Startjahr')}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-medium text-zinc-400 bg-white/[0.06] px-2.5 py-0.5 rounded-full border border-white/[0.1]">
+                          1 of 2
                         </span>
-                      )}
-                    </div>
-                    <input
-                      ref={nameInputRef}
-                      type="text"
-                      maxLength={24}
-                      value={managerName}
-                      onChange={(e) => {
-                        setManagerName(e.target.value);
-                        setNameError(false);
-                      }}
-                      placeholder="e.g. Alfred Gislason"
-                      className="bg-transparent w-full text-white font-semibold text-base sm:text-lg outline-none placeholder-zinc-600 tracking-tight"
-                    />
-                  </div>
+                      </div>
 
-                  {/* Start Year Input */}
-                  <div className="bg-black/40 border border-white/[0.06] focus-within:border-sky-500/40 focus-within:ring-1 focus-within:ring-sky-500/20 p-3.5 px-4 rounded-xl transition">
-                    <label className="text-xs text-zinc-400 font-medium block uppercase tracking-wider mb-1">
-                      Start Year (Inception)
-                    </label>
-                    <div className="flex items-center justify-between">
-                      <input
-                        type="number"
-                        min={1990}
-                        max={2030}
-                        value={startYear}
-                        onChange={(e) => setStartYear(parseInt(e.target.value) || 2026)}
-                        className="bg-transparent w-full text-white font-semibold text-base sm:text-lg outline-none tabular-nums"
-                      />
-                      <span className="text-xs text-zinc-500 font-medium shrink-0">
-                        Season {startYear}/{(startYear + 1).toString().slice(-2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                      {/* Name Input Field */}
+                      <div className="mb-5">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-medium text-zinc-400 tracking-wide uppercase">
+                            {t('Sporting Director Name', 'Name des Direktors')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const name = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
+                              setManagerName(name);
+                              setNameError(false);
+                            }}
+                            className="text-zinc-300 hover:text-white px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-[11px] font-medium flex items-center gap-1.5 transition active:scale-95 cursor-pointer backdrop-blur-md"
+                          >
+                            <i className="fa-solid fa-dice text-[11px] text-zinc-400"></i>
+                            <span>{t('Random', 'Zufall')}</span>
+                          </button>
+                        </div>
 
-              {/* Status Note */}
-              <div className="mt-6 pt-3 border-t border-white/[0.04] flex items-center justify-between text-xs text-zinc-500">
-                <span className="flex items-center gap-1.5">
-                  <i className="fas fa-shield text-[10px] text-zinc-500" />
-                  <span>Credential Status</span>
-                </span>
-                <span className="text-zinc-400 font-medium">Free Agent · Ready</span>
-              </div>
-            </div>
-
-            {/* Right Card: Continental Jurisdiction & Territory */}
-            <div className="bg-[#14151e] border border-white/[0.05] rounded-2xl p-5 sm:p-6 flex flex-col justify-between shadow-[0_20px_50px_rgba(0,0,0,0.7)]">
-              <div>
-                {/* Jurisdiction Header */}
-                <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.04]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-xs">
-                      <i className="fas fa-earth-europe" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-semibold text-zinc-200 tracking-wider uppercase">
-                        Jurisdiction & Pyramids
-                      </h3>
-                      <p className="text-[11px] text-zinc-500 font-normal">
-                        Territory Focus
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-zinc-400">
-                    {nationality === 'ALL' ? 'Global' : nationality}
-                  </span>
-                </div>
-
-                {/* Continent Selector */}
-                <div className="flex bg-black/40 p-1 rounded-xl border border-white/[0.04] w-fit mb-3.5 gap-1">
-                  {(['ALL', 'EUROPE'] as const).map((cont) => (
-                    <button
-                      key={`step2-cont-${cont}`}
-                      type="button"
-                      onClick={() => {
-                        setContinentFilter(cont);
-                        if (cont === 'ALL') setNationality('ALL');
-                        else setNationality('GER');
-                        setTierFilter('all');
-                        setStartingOffers([]);
-                      }}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition duration-150 cursor-pointer ${
-                        continentFilter === cont
-                          ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm'
-                          : 'text-zinc-400 hover:text-white border border-transparent'
-                      }`}
-                    >
-                      {cont === 'ALL' ? 'All Continents' : 'Europe (EHF)'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Country Selection Grid */}
-                <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                  {availableCountries.map((key) => {
-                    const country = COUNTRIES[key] || { name: key, flag: '🌐', active: true };
-                    const isSelected = nationality === key;
-                    const clubCount = clubsDb.filter((c) => (c.country || 'GER') === key).length;
-                    const isActive = clubCount > 0;
-
-                    return (
-                      <button
-                        key={`step2-country-${key}`}
-                        type="button"
-                        onClick={() => {
-                          if (isActive) {
-                            setNationality(key);
-                            setTierFilter('all');
-                            setStartingOffers([]);
-                          }
-                        }}
-                        disabled={!isActive}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition duration-150 border cursor-pointer ${
-                          isSelected
-                            ? 'bg-sky-500/[0.05] border-sky-500/20 text-sky-300 shadow-sm'
-                            : 'bg-black/30 border-white/[0.04] text-zinc-400 hover:text-white hover:border-white/10'
-                        } ${!isActive ? 'opacity-30 cursor-not-allowed' : ''}`}
-                      >
-                        <span className="text-sm">{country.flag}</span>
-                        <span>{country.name}</span>
-                        {clubCount > 0 && (
-                          <span className="text-[10px] text-zinc-500 font-normal tabular-nums">
-                            {clubCount}
+                        <div className={`transition-all duration-200 p-3.5 rounded-2xl border ${
+                          nameError
+                            ? 'bg-rose-950/20 border-rose-500/80 ring-2 ring-rose-500/20'
+                            : 'bg-white/[0.03] border-white/[0.1] hover:border-white/20 focus-within:border-white/40 focus-within:ring-2 focus-within:ring-white/10 focus-within:bg-white/[0.05]'
+                        } shadow-inner relative flex items-center backdrop-blur-md`}>
+                          <input
+                            ref={nameInputRef}
+                            type="text"
+                            value={managerName}
+                            onChange={(e) => {
+                              setManagerName(e.target.value);
+                              setNameError(false);
+                            }}
+                            placeholder={t('E.G. ALEX FERGUSON', 'Z.B. JÜRGEN KLOPP')}
+                            className="bg-transparent w-full text-white font-semibold text-base sm:text-lg outline-none uppercase placeholder-zinc-600 pr-7 tracking-wide font-sans"
+                          />
+                          {managerName && (
+                            <button
+                              type="button"
+                              onClick={() => setManagerName('')}
+                              className="absolute right-3 text-zinc-500 hover:text-zinc-300 p-1 transition cursor-pointer"
+                            >
+                              <i className="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                          )}
+                        </div>
+                        {nameError && (
+                          <span className="text-[11px] font-medium text-rose-400 mt-1.5 inline-block">
+                            {t('Please enter a director name to proceed.', 'Bitte gib einen Namen ein, um fortzufahren.')}
                           </span>
                         )}
+                      </div>
+
+                      {/* Start Year Dial / Controls */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-medium text-zinc-400 tracking-wide uppercase">
+                            {t('Inaugural Season Era', 'Start-Saison')}
+                          </span>
+                          <span className="text-[11px] text-zinc-300 font-medium">
+                            {startYear} Kickoff
+                          </span>
+                        </div>
+
+                        <div className="bg-white/[0.02] rounded-2xl p-3 border border-white/[0.08] flex items-center justify-between gap-3 shadow-inner">
+                          <button
+                            type="button"
+                            onClick={() => setStartYear((prev) => Math.max(1950, prev - 1))}
+                            className="w-10 h-10 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white flex items-center justify-center transition border border-white/[0.1] active:scale-95 cursor-pointer shrink-0"
+                            title="-1 Year"
+                          >
+                            <i className="fa-solid fa-minus text-xs"></i>
+                          </button>
+                          <div className="flex flex-col items-center">
+                            <span className="text-2xl sm:text-3xl font-semibold text-white tracking-tight leading-none">
+                              {startYear}
+                            </span>
+                            <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mt-1">
+                              {startYear === currentYear ? t('Modern Era', 'Moderne Ära') : t('Historical Era', 'Historische Ära')}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setStartYear((prev) => Math.min(currentYear, prev + 1))}
+                            className="w-10 h-10 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white flex items-center justify-center transition border border-white/[0.1] active:scale-95 cursor-pointer shrink-0"
+                            title="+1 Year"
+                          >
+                            <i className="fa-solid fa-plus text-xs"></i>
+                          </button>
+                        </div>
+
+                        {/* Era Quick Presets */}
+                        <div className="flex items-center gap-1.5 mt-2.5 justify-center flex-wrap">
+                          {[currentYear, 2010, 1990, 1974, 1954].map((y) => (
+                            <button
+                              key={y}
+                              type="button"
+                              onClick={() => setStartYear(y)}
+                              className={`text-[11px] px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                                startYear === y
+                                  ? 'bg-white text-zinc-950 font-semibold shadow-sm'
+                                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06] border border-transparent'
+                              }`}
+                            >
+                              {y}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Federation Roots & Starting Country (Right 6 Cols) */}
+                  <div className="lg:col-span-6 bg-[#161820]/75 rounded-3xl p-6 sm:p-7 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl relative overflow-hidden flex flex-col justify-between text-left h-full">
+                    <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/[0.02] blur-3xl pointer-events-none" />
+
+                    <div className="flex flex-col justify-between h-full space-y-4">
+                      {/* Section Header */}
+                      <div className="flex items-center justify-between mb-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-white/[0.08] text-white border border-white/[0.12] flex items-center justify-center text-xs shadow-inner">
+                            <i className="fa-solid fa-earth-americas"></i>
+                          </div>
+                          <div>
+                            <h2 className="text-xs sm:text-sm font-semibold text-white tracking-wide">
+                              {t('Starting Country', 'Start-Land')}
+                            </h2>
+                            <span className="text-[11px] text-zinc-400 font-normal">
+                              {t('Domestic Pyramid & Heritage', 'Ligensystem & Verband')}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-medium text-zinc-400 bg-white/[0.06] px-2.5 py-0.5 rounded-full border border-white/[0.1]">
+                          {nationality}
+                        </span>
+                      </div>
+
+                      {/* Selected Country Spotlight Banner */}
+                      <div className="p-3 rounded-2xl bg-white/[0.04] border border-white/[0.1] shadow-inner backdrop-blur-xl flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl drop-shadow select-none">{COUNTRIES[nationality]?.flag || '🌍'}</span>
+                          <div>
+                            <div className="text-sm font-semibold text-white flex items-center gap-2">
+                              <span>{COUNTRIES[nationality]?.name || 'Germany'}</span>
+                              <span className="text-[10px] font-medium px-2 py-0.2 rounded-full bg-white/[0.1] text-white border border-white/[0.15]">
+                                Active
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-zinc-400 font-normal">
+                              {UEFA_COUNTRIES.includes(nationality) ? 'Europe' : (CONMEBOL_COUNTRIES.includes(nationality) || CONCACAF_COUNTRIES.includes(nationality)) ? 'Americas' : 'Asia-Pacific'} • Tier 1-{getMaxTier(nationality, clubsDb)} Leagues
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs text-zinc-300 font-semibold uppercase tracking-wider">
+                            {nationality}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Quick Search & Filter Bar */}
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <div className="relative flex-1">
+                          <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 text-[10px]"></i>
+                          <input
+                            type="text"
+                            value={countrySearch}
+                            onChange={(e) => setCountrySearch(e.target.value)}
+                            placeholder={t(`Filter ${isModActive ? 34 : 21} countries...`, `${isModActive ? 34 : 21} Länder filtern...`)}
+                            className="w-full bg-white/[0.03] text-xs text-white pl-7 pr-2.5 py-1.5 rounded-xl border border-white/[0.08] focus:border-white/30 outline-none placeholder-zinc-500 transition font-normal backdrop-blur-md"
+                          />
+                          {countrySearch && (
+                            <button
+                              type="button"
+                              onClick={() => setCountrySearch('')}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs"
+                            >
+                              <i className="fa-solid fa-xmark"></i>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Continent Filter Segmented Control */}
+                      <div className="flex bg-black/30 p-1 rounded-xl border border-white/[0.08] mb-3 gap-1 shadow-inner backdrop-blur-md">
+                        {(['ALL', 'EUROPE', 'AMERICAS', 'APAC'] as const).map((cont) => (
+                          <button
+                            key={cont}
+                            type="button"
+                            onClick={() => {
+                              setContinentFilter(cont);
+                              setCountrySearch('');
+                              if (cont === 'EUROPE') setNationality('GER');
+                              else if (cont === 'AMERICAS') setNationality('USA');
+                              else if (cont === 'APAC') setNationality('JPN');
+                              else setNationality('GER');
+                              setTierFilter('all');
+                              setStartingOffers([]);
+                            }}
+                            className={`flex-1 py-1 rounded-lg text-[10px] font-semibold tracking-wider transition-all cursor-pointer ${
+                              continentFilter === cont
+                                ? 'bg-white/[0.15] text-white shadow-sm backdrop-blur-md border border-white/[0.12]'
+                                : 'text-zinc-400 hover:text-white hover:bg-white/[0.04]'
+                            }`}
+                          >
+                            {cont === 'ALL' ? (isDe ? 'All' : 'All') : cont === 'EUROPE' ? 'Europe' : cont === 'AMERICAS' ? 'Americas' : 'APAC'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Country Chips (Horizontally scrolling on mobile, 3-col grid on sm+) */}
+                      <div className="flex sm:grid sm:grid-cols-3 overflow-x-auto hide-scrollbar sm:overflow-y-auto sm:max-h-36 gap-1.5 pb-1 sm:pr-1">
+                        {Object.keys(COUNTRIES)
+                          .filter((k) => {
+                            if (!isModActive && MOD_ONLY_COUNTRIES.includes(k)) return false;
+                            if (countrySearch.trim()) {
+                              const q = countrySearch.toLowerCase().trim();
+                              return COUNTRIES[k].name.toLowerCase().includes(q) || k.toLowerCase().includes(q);
+                            }
+                            if (continentFilter === 'ALL') return true;
+                            const eur = UEFA_COUNTRIES;
+                            const amr = [...CONMEBOL_COUNTRIES, ...CONCACAF_COUNTRIES];
+                            const asi = AFC_COUNTRIES;
+                            if (continentFilter === 'EUROPE') return eur.includes(k);
+                            if (continentFilter === 'AMERICAS') return amr.includes(k);
+                            if (continentFilter === 'APAC') return asi.includes(k);
+                            return true;
+                          })
+                          .map((key) => {
+                            const isActive = COUNTRIES[key].active;
+                            const isSelected = nationality === key;
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => {
+                                  if (isActive) {
+                                    setNationality(key);
+                                    setTierFilter('all');
+                                    setStartingOffers([]);
+                                  }
+                                }}
+                                disabled={!isActive}
+                                className={`min-w-[125px] sm:min-w-0 px-2.5 py-1.5 rounded-xl text-[11px] font-medium transition-all duration-200 flex items-center justify-between shrink-0 backdrop-blur-md ${
+                                  isSelected
+                                    ? 'bg-white text-zinc-950 font-semibold shadow-md'
+                                    : 'bg-white/[0.03] text-zinc-300 border border-white/[0.06] hover:border-white/20 hover:text-white hover:bg-white/[0.06]'
+                                } ${!isActive ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
+                              >
+                                <span className="flex items-center gap-1.5 truncate">
+                                  <span>{COUNTRIES[key].flag}</span>
+                                  <span className="truncate">{COUNTRIES[key].name}</span>
+                                </span>
+                                {isSelected && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 shrink-0 ml-1"></span>
+                                )}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sticky Mobile Action Bar (Apple Frosted Dock) */}
+                <div className="sticky bottom-0 z-40 bg-[#0c0d12]/80 backdrop-blur-2xl border-t border-white/[0.08] px-4 py-3 -mx-2 sm:mx-0 sm:static sm:bg-transparent sm:border-0 sm:p-0 sm:shadow-none sm:backdrop-blur-none flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white text-xs sm:text-sm font-medium py-3.5 px-6 rounded-2xl border border-white/[0.1] backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm flex items-center gap-2"
+                  >
+                    <i className="fa-solid fa-arrow-left text-xs"></i>
+                    <span>{t('Back', 'Zurück')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!managerName.trim()) {
+                        setNameError(true);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        setTimeout(() => nameInputRef.current?.focus(), 100);
+                        return;
+                      }
+                      setSubStep2('2B');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="bg-white hover:bg-zinc-100 text-zinc-950 text-xs sm:text-sm font-semibold tracking-wide py-3.5 px-8 sm:px-10 rounded-2xl transition-all duration-200 active:scale-95 shadow-[0_4px_20px_rgba(255,255,255,0.12)] cursor-pointer flex-1 sm:flex-none sm:min-w-[240px] flex items-center justify-center gap-2.5"
+                  >
+                    <span>{t('Continue to Managerial DNA', 'Weiter zur Manager-DNA')}</span>
+                    <i className="fa-solid fa-arrow-right text-xs"></i>
+                  </button>
+                </div>
+              </motion.div>
+            ) : (
+              /* ================= SCREEN 2B: MANAGERIAL DNA & TACTICS ================= */
+              <motion.div
+                key="screen-2b"
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 16 }}
+                transition={{ duration: 0.25 }}
+                className="fade-in"
+              >
+                {/* Header Title with Apple Frosted Kicker */}
+                <div className="text-center mb-7">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/[0.06] border border-white/[0.1] text-zinc-300 text-[11px] font-medium tracking-wide mb-3 backdrop-blur-md">
+                    <span>{t('Career Path & Tactical Philosophy', 'Karrierepfad & Philosophie')}</span>
+                  </div>
+                  <h1 className="text-3xl md:text-5xl font-semibold text-white tracking-tight">
+                    {t('Director Vision', 'Sportdirektor-Vision')}
+                  </h1>
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-2 max-w-xl mx-auto font-normal leading-relaxed">
+                    {t('Every great football project starts with an identity. Choose the story of your tenure.', 'Jedes erfolgreiche Vereinsprojekt beginnt mit einer klaren Vision. Wähle den Schwerpunkt deiner Ära.')}
+                  </p>
+
+                  {/* Director Credentials Breadcrumb Pill (Unified Sans Typography) */}
+                  <div className="inline-flex items-center gap-2.5 mt-3 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs text-zinc-300 shadow-sm backdrop-blur-xl">
+                    <span className="text-white font-medium">
+                      {managerName.trim() || 'Director'}
+                    </span>
+                    <span className="text-zinc-600">•</span>
+                    <span className="text-zinc-400 font-normal">
+                      {startYear}
+                    </span>
+                    <span className="text-zinc-600">•</span>
+                    <span className="text-zinc-300 flex items-center gap-1.5 font-normal">
+                      <span>{COUNTRIES[nationality]?.flag}</span>
+                      <span>{COUNTRIES[nationality]?.name}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSubStep2('2A')}
+                      className="ml-1 text-[11px] text-zinc-400 hover:text-white underline font-medium cursor-pointer"
+                    >
+                      {t('Edit', 'Ändern')}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4 Story-Driven Career Blueprints */}
+                <div className="mb-6 text-left">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      {
+                        id: 'scout',
+                        title: t('The Academy Architect', 'Der NLZ-Architekt'),
+                        badge: t('Youth Dynasty', 'Nachwuchs-Dynastie'),
+                        icon: 'fa-magnifying-glass',
+                        story: t(
+                          'Build a sustainable dynasty. You prioritize world-class scouting networks, elite youth facilities, and cultivating homegrown wonderkids.',
+                          'Baue eine nachhaltige Dynastie auf. Fokus auf modernste Nachwuchs-Förderung, weltweites Scouting und flüssigen Angriffsfußball.'
+                        ),
+                        advantage: t('-35% Academy Upgrade Costs · Wonderkid Pipeline', '-35% NLZ-Ausbaukosten · Top-Talentförderung'),
+                        defaultTactic: 'Total Football',
+                        tacticLabel: t('Fluid Attack (Total Football)', 'Flüssiger Angriff (Total Football)'),
+                      },
+                      {
+                        id: 'legend',
+                        title: t('The Dressing Room Icon', 'Die Vereinslegende'),
+                        badge: t('Authority & Morale', 'Autorität & Moral'),
+                        icon: 'fa-star',
+                        story: t(
+                          'A revered football figure returning home. Your presence commands instant board patience, unshakeable dressing room respect, and cup spirit.',
+                          'Eine verehrte Ikone übernimmt das Ruder. Dein Name garantiert sofortiges Vorstandsvertrauen, hohe Moral und Pokalsieger-Mentalität.'
+                        ),
+                        advantage: t('Instant Board Respect · +5 Squad Morale', 'Sofortiges Vorstandsvertrauen · +5 Moral'),
+                        defaultTactic: 'Gegenpressing',
+                        tacticLabel: t('High Press (Gegenpressing)', 'Hohes Pressing (Gegenpressing)'),
+                      },
+                      {
+                        id: 'finance',
+                        title: t('The Commercial Powerhouse', 'Der Finanz-Stratege'),
+                        badge: t('Transfer War Chest', 'Transfer-Dominanz'),
+                        icon: 'fa-chart-line',
+                        story: t(
+                          'A master of the boardroom and the transfer market. You negotiate lucrative sponsor deals, maximize ticket yields, and build a war chest.',
+                          'Wirtschaftliche Überlegenheit. Verhandle Rekord-Sponsorendeals, maximiere Spieltagserlöse und sichere dir ein massives Transferbudget.'
+                        ),
+                        advantage: t('+25% Transfer Budget · +20% Sponsors', '+25% Transferbudget · +20% Sponsoren'),
+                        defaultTactic: 'Direct Counter',
+                        tacticLabel: t('Lethal Counter (Direct Counter)', 'Lethale Konter (Direct Counter)'),
+                      },
+                      {
+                        id: 'balanced',
+                        title: t('The Balanced Traditionalist', 'Der ausgewogene Klassiker'),
+                        badge: t('Neutral Clean Slate', 'Neutraler Start'),
+                        icon: 'fa-scale-balanced',
+                        story: t(
+                          'A complete clean slate for the football purist. An uncompromised foundation with equal focus across youth, commercial growth, and squad management.',
+                          'Ein neutraler Neustart für den Puristen. Ausgewogene Ausgangsbedingungen ohne Nachteile oder Vorfestlegungen.'
+                        ),
+                        advantage: t('Neutral Slate · Balanced Fundamentals', 'Neutraler Start · Ausgewogene Bedingungen'),
+                        defaultTactic: 'Tiki-Taka',
+                        tacticLabel: t('Control (Tiki-Taka)', 'Positionsspiel & Kontrolle (Tiki-Taka)'),
+                      },
+                    ].map((vision) => {
+                      const isSelected = archetype === vision.id;
+                      return (
+                        <button
+                          key={vision.id}
+                          type="button"
+                          onClick={() => {
+                            setArchetype(vision.id as any);
+                            setTactic(vision.defaultTactic);
+                          }}
+                          className={`p-5 rounded-3xl border text-left transition-all duration-300 cursor-pointer flex flex-col justify-between group active:scale-[0.98] relative overflow-hidden backdrop-blur-2xl ${
+                            isSelected
+                              ? 'bg-sky-500/[0.08] border-sky-400/50 ring-1 ring-sky-400/25 shadow-[0_8px_32px_rgba(56,189,248,0.14),inset_0_1px_0_0_rgba(125,211,252,0.2)] scale-[1.01]'
+                              : 'opacity-60 hover:opacity-100 bg-white/[0.03] border-white/[0.08] hover:bg-white/[0.06] hover:border-white/[0.16]'
+                          }`}
+                        >
+                          <div>
+                            {/* Top row: Icon & Radio Checkmark */}
+                            <div className="flex items-center justify-between mb-4">
+                              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-sm shadow-inner transition-colors ${
+                                isSelected
+                                  ? 'bg-sky-500/20 border border-sky-400/30 text-sky-300'
+                                  : 'bg-white/[0.06] border border-white/[0.1] text-white'
+                              }`}>
+                                <i className={`fas ${vision.icon}`}></i>
+                              </div>
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] transition-all ${
+                                isSelected
+                                  ? 'bg-sky-400 text-zinc-950 font-bold shadow-sm'
+                                  : 'border border-white/20 group-hover:border-white/40'
+                              }`}>
+                                {isSelected && <i className="fa-solid fa-check"></i>}
+                              </div>
+                            </div>
+
+                            {/* Badge */}
+                            <div className={`inline-block text-[10px] font-medium px-2.5 py-0.5 rounded-full mb-2 transition-colors ${
+                              isSelected
+                                ? 'bg-sky-500/15 text-sky-300 border border-sky-400/25'
+                                : 'bg-white/[0.04] text-zinc-400 border border-white/[0.06]'
+                            }`}>
+                              {vision.badge}
+                            </div>
+
+                            {/* Title */}
+                            <h3 className="font-semibold text-white text-base tracking-tight mb-2">
+                              {vision.title}
+                            </h3>
+
+                            {/* Narrative Story */}
+                            <p className="text-[12px] text-zinc-400 font-normal leading-relaxed mb-4">
+                              {vision.story}
+                            </p>
+                          </div>
+
+                          <div>
+                            {/* Key Advantage Pill */}
+                            <div className={`text-[11px] font-medium p-2.5 rounded-2xl border transition-colors leading-snug mb-3 ${
+                              isSelected
+                                ? 'bg-sky-500/10 text-sky-200 border-sky-400/20'
+                                : 'bg-white/[0.03] text-zinc-300 border-white/[0.06]'
+                            }`}>
+                              <i className="fa-solid fa-bolt text-[9px] mr-1.5 opacity-70"></i>
+                              <span>{vision.advantage}</span>
+                            </div>
+
+                            {/* Natural Tactic Indicator */}
+                            <div className="text-[11px] text-zinc-500 flex items-center justify-between pt-2 border-t border-white/[0.06]">
+                              <span className="text-[10px] uppercase font-medium tracking-wider text-zinc-500">
+                                {t('Tactical Style', 'Spielstil')}
+                              </span>
+                              <span className={`font-medium ${isSelected ? 'text-sky-300' : 'text-zinc-400'}`}>
+                                {vision.tacticLabel}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Tactical Alignment Bar (Apple Glass Capsule with Progressive Disclosure) */}
+                <div className="bg-[#161820]/75 border border-white/[0.08] rounded-3xl p-4 sm:p-5 mb-8 backdrop-blur-2xl text-left shadow-[0_8px_32px_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-sky-500/15 border border-sky-400/30 flex items-center justify-center text-sky-300 text-sm shadow-inner shrink-0">
+                        <i className={`fas ${PHILOSOPHIES[tactic]?.icon || 'fa-chess-board'}`}></i>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs uppercase font-medium text-zinc-400 tracking-wider">
+                            {t('Tactical Philosophy', 'Taktische Ausrichtung')}
+                          </span>
+                          <span className="text-[11px] font-semibold text-sky-300 bg-sky-500/15 px-2.5 py-0.5 rounded-full border border-sky-400/25">
+                            {tactic}
+                          </span>
+                        </div>
+                        <p className="text-[12px] text-zinc-300 font-normal mt-0.5">
+                          {TACTIC_DETAILS[tactic]?.shortEthos || tactic} · <span className="text-sky-300/90">{TACTIC_DETAILS[tactic]?.shortPerk || ''}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomTactics(!showCustomTactics)}
+                      className="px-3.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-zinc-300 hover:text-white transition cursor-pointer self-start sm:self-center flex items-center gap-1.5 backdrop-blur-md"
+                    >
+                      <i className="fa-solid fa-sliders text-[10px] text-sky-400"></i>
+                      <span>{showCustomTactics ? (isDe ? 'Schließen' : 'Close') : (isDe ? 'Spielstil anpassen' : 'Change Philosophy')}</span>
+                      <i className={`fa-solid ${showCustomTactics ? 'fa-chevron-up' : 'fa-chevron-down'} text-[9px] text-zinc-400`}></i>
+                    </button>
+                  </div>
+
+                  {/* Expandable 5 Core Tactics Pills */}
+                  {showCustomTactics && (
+                    <div className="mt-4 pt-4 border-t border-white/[0.06] fade-in">
+                      <p className="text-[11px] text-zinc-400 mb-2.5">
+                        {t('Select an alternative matchday philosophy for your squad:', 'Wähle einen alternativen Matchday-Spielstil für dein Team:')}
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                        {Object.keys(PHILOSOPHIES).map((tacKey) => {
+                          const isTacSelected = tactic === tacKey;
+                          const tac = PHILOSOPHIES[tacKey];
+                          return (
+                            <button
+                              key={tacKey}
+                              type="button"
+                              onClick={() => setTactic(tacKey)}
+                              className={`px-3.5 py-2.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer flex items-center gap-2.5 backdrop-blur-md active:scale-95 ${
+                                isTacSelected
+                                  ? 'bg-sky-500/20 border-sky-400/50 text-white shadow-sm ring-1 ring-sky-400/20'
+                                  : 'bg-white/[0.03] border-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+                              }`}
+                            >
+                              <i className={`fas ${tac.icon} text-xs ${isTacSelected ? 'text-sky-300' : 'text-zinc-500'}`}></i>
+                              <span className="text-xs font-medium truncate">{tacKey}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sticky Mobile Action Bar (Apple Frosted Dock) */}
+                <div className="sticky bottom-0 z-40 bg-[#0c0d12]/80 backdrop-blur-2xl border-t border-white/[0.08] px-4 py-3 -mx-2 sm:mx-0 sm:static sm:bg-transparent sm:border-0 sm:p-0 sm:shadow-none sm:backdrop-blur-none flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubStep2('2A');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white text-xs sm:text-sm font-medium py-3.5 px-6 rounded-2xl border border-white/[0.1] backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm flex items-center gap-2"
+                  >
+                    <i className="fa-solid fa-arrow-left text-xs"></i>
+                    <span>{t('Back to Identity & Country', 'Zurück zu Identität & Land')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGoToStep3}
+                    className="bg-white hover:bg-zinc-100 text-zinc-950 text-xs sm:text-sm font-semibold tracking-wide py-3.5 px-8 sm:px-10 rounded-2xl transition-all duration-200 active:scale-95 shadow-[0_4px_20px_rgba(255,255,255,0.12)] cursor-pointer flex-1 sm:flex-none sm:min-w-[240px] flex items-center justify-center gap-2.5"
+                  >
+                    <span>{t('Continue to Club Selection', 'Weiter zur Vereinswahl')}</span>
+                    <i className="fa-solid fa-arrow-right text-xs"></i>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* STEP 3: Club Selection / Job Offers (Apple Minimalist Glassmorphism) */}
+      {step === 3 && (
+        <div className="max-w-5xl mx-auto fade-in text-center px-2 sm:px-4 pb-12">
+          {/* Director Context Pill (Unified Apple Typography & Soft Azure Accent) */}
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 mb-4 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs font-medium backdrop-blur-xl shadow-sm">
+            <span className="text-zinc-400">{isDe ? 'Sportdirektor:' : 'Director:'}</span>
+            <span className="text-white font-medium">{managerName.trim() || 'Director'}</span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-zinc-400">{isDe ? 'Start:' : 'Start:'}</span>
+            <span className="text-zinc-200 font-medium">{startYear}</span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-zinc-400">{isDe ? 'Philosophie:' : 'Philosophy:'}</span>
+            <span className="text-sky-300 font-medium">{tactic}</span>
+          </div>
+
+          <h1 className="text-3xl md:text-4xl font-semibold text-white tracking-tight mb-2">
+            {mode === 'standard'
+              ? t('Choose Your Club', 'Verein wählen')
+              : t('Grassroots Job Offers', 'Offizielle Job-Angebote')}
+          </h1>
+          <p className="text-[14px] md:text-[15px] font-normal text-zinc-400 max-w-xl mx-auto mb-6 leading-relaxed">
+            {mode === 'standard'
+              ? t('Explore clubs by league division, search by name, or browse international powerhouses.', 'Wähle deinen Verein nach Liga, suche nach Namen oder starte bei einem Spitzenklub.')
+              : t('Three clubs have submitted official managerial contract offers. Review their project and choose your club.', 'Drei Vereine bieten dir den Posten als Sportdirektor an. Wähle dein Einstiegsprojekt.')}
+          </p>
+
+          {/* CR27_Footy Real Name Pack Status & Responsive Toggle */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 max-w-5xl mx-auto mb-6 px-1">
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs backdrop-blur-xl">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isModActive ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] animate-pulse' : 'bg-zinc-500'}`} />
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-bold text-white tracking-tight">CR27_Footy Pack</span>
+                <span className="text-zinc-400">·</span>
+                <span className="text-zinc-300 font-medium truncate">
+                  {isModActive
+                    ? (isDe ? '1.202 reale Vereine & Wappen aktiv' : '1,202 verified clubs & crests active')
+                    : (isDe ? 'Lizenzfreie Standard-Namen' : 'Standard copyright-safe names')}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5">
+              {onToggleMod && (
+                <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] px-3 py-1.5 rounded-2xl backdrop-blur-xl">
+                  <span className="text-[11px] font-semibold text-zinc-300">
+                    {isModActive ? (isDe ? 'Echtnamen' : 'Real Names') : (isDe ? 'Standard' : 'Standard')}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isModActive}
+                    onClick={() => onToggleMod(!isModActive)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none shadow-sm ${
+                      isModActive ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]' : 'bg-zinc-700 hover:bg-zinc-600'
+                    }`}
+                    title={isModActive ? 'Disable Real Name Pack' : 'Enable Real Name Pack'}
+                  >
+                    <span className="sr-only">Toggle CR27 Real Name Pack</span>
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        isModActive ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowModModal(true)}
+                className="px-3.5 py-1.5 rounded-2xl text-xs font-semibold text-zinc-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] transition cursor-pointer backdrop-blur-xl active:scale-95 flex items-center gap-1.5 shadow-sm"
+                title="Open Database & Community Mods"
+              >
+                <i className="fa-solid fa-sliders text-[11px] text-zinc-400"></i>
+                <span>{isDe ? 'Optionen' : 'Options'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* REALISTIC MODE: 3 Job Offers (Apple Glass Dossiers) */}
+          {mode === 'realistic' && (
+            <div className="w-full max-w-5xl mx-auto space-y-6">
+              <div className="flex justify-center mb-2">
+                <button
+                  type="button"
+                  onClick={generateRealisticOffers}
+                  className="bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 hover:text-white font-medium text-xs py-2 px-5 rounded-full border border-white/[0.1] transition backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-2 shadow-sm"
+                >
+                  <i className="fa-solid fa-arrows-rotate text-xs text-sky-400/80"></i>
+                  <span>{isDe ? 'Angebote neu mischen' : 'Reshuffle Job Offers'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-left">
+                {startingOffers.map((c, idx) => {
+                  const clubCountry = c.country || 'GER';
+                  const countryInfo = COUNTRIES[clubCountry];
+                  const leagueInfo = getLeagueInfo(c.tier, clubCountry);
+                  const clubContext = isModActive
+                    ? (c.historicContext || c.narrative || getClubHistoricContext(c.name, c.tier, isDe, clubCountry))
+                    : undefined;
+
+                  return (
+                    <div
+                      key={`${c.id}-${c.name}`}
+                      onClick={() => {
+                        setSelectedClubForArchetype(c);
+                        setStep(4);
+                      }}
+                      className="rounded-3xl p-5 sm:p-6 flex flex-col justify-between min-h-[350px] sm:min-h-[390px] bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-sky-400/40 hover:shadow-[0_8px_32px_rgba(56,189,248,0.12)] transition-all duration-300 cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.06)] relative overflow-hidden group backdrop-blur-2xl"
+                    >
+                      {/* Top offer badge */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-zinc-300 border border-white/[0.1] text-[10px] font-medium tracking-wide">
+                          <i className="fa-solid fa-briefcase text-[9px] text-sky-400/80"></i>
+                          <span>{isDe ? `Angebot #${idx + 1}` : `Offer #${idx + 1}`}</span>
+                        </div>
+                        <div className="px-2.5 py-0.5 rounded-lg font-medium text-xs text-zinc-200 bg-white/[0.06] border border-white/[0.08] flex items-center gap-1.5">
+                          <span className="text-[10px] text-zinc-400">OVR</span>
+                          <span className="font-semibold text-white">{c.baseOvr}</span>
+                        </div>
+                      </div>
+
+                      {/* Crest Section */}
+                      <div className="my-2 flex flex-col items-center text-center">
+                        <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center p-2.5 mb-3 shadow-inner group-hover:scale-105 transition-transform duration-200 backdrop-blur-md">
+                          <ClubLogo
+                            name={c.name}
+                            id={c.id}
+                            color={c.color}
+                            logo={c.logo}
+                            fallbackLogo={c.fallbackLogo}
+                            isModActive={isModActive}
+                            className="w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-md"
+                            fallbackClassName="w-14 h-14 sm:w-16 sm:h-16 text-lg sm:text-xl rounded-xl flex items-center justify-center font-bold text-white"
+                          />
+                        </div>
+
+                        <h3 className="text-lg font-semibold text-white tracking-tight leading-snug">
+                          {c.name}
+                        </h3>
+
+                        <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-1">
+                          <span>{countryInfo?.flag || '🏁'}</span>
+                          <span className="font-medium text-zinc-300">{leagueInfo?.name || `Tier ${c.tier}`}</span>
+                        </div>
+
+                        {clubContext ? (
+                          <p className="text-[11px] font-normal text-zinc-400 line-clamp-2 mt-2 px-1 leading-snug">
+                            "{clubContext}"
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-zinc-500 mt-2">
+                            {(c.stadium || 15000).toLocaleString()} {isDe ? 'Zuschauerkapazität' : 'capacity'}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Key contract specifications */}
+                      <div className="w-full space-y-3 mt-4">
+                        <div className="grid grid-cols-3 gap-1 bg-white/[0.03] p-2.5 rounded-2xl border border-white/[0.06] text-center text-xs backdrop-blur-sm">
+                          <div>
+                            <div className="text-[9px] uppercase font-medium text-zinc-500 tracking-wider">
+                              {isDe ? 'Budget' : 'Budget'}
+                            </div>
+                            <div className="font-semibold text-white text-xs mt-0.5">
+                              {formatMoney(c.currentBudget != null ? parseAndNormalizeModBudget(c.currentBudget, c.tier, c.country || 'GER') : getStartingBudget(c.tier, c.country || 'GER'), c.country || 'GER')}
+                            </div>
+                          </div>
+                          <div className="border-x border-white/[0.06]">
+                            <div className="text-[9px] uppercase font-medium text-zinc-500 tracking-wider">
+                              {isDe ? 'Stadion' : 'Stadium'}
+                            </div>
+                            <div className="font-semibold text-zinc-300 text-xs mt-0.5">
+                              {((c.stadium || 15000) / 1000).toFixed(0)}k
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-[9px] uppercase font-medium text-zinc-500 tracking-wider">
+                              {isDe ? 'Reputation' : 'Rep'}
+                            </div>
+                            <div className="font-semibold text-sky-300 text-xs mt-0.5">
+                              {c.rep || c.baseOvr || 65}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="w-full py-2.5 rounded-xl bg-white hover:bg-zinc-100 text-zinc-950 font-semibold text-xs transition duration-150 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                        >
+                          <span>{isDe ? 'Angebot annehmen' : 'Accept Contract'}</span>
+                          <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* STANDARD MODE: Clean Unified Apple Glass Explorer */}
+          {mode === 'standard' && (
+            <div className="w-full max-w-5xl mx-auto mb-6 text-left space-y-4">
+              <div className="bg-[#161820]/75 border border-white/[0.08] rounded-3xl p-4 sm:p-5 shadow-[0_8px_32px_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.06)] backdrop-blur-2xl space-y-3.5">
+                
+                {/* Search Bar */}
+                <div className="relative flex items-center">
+                  <i className="fas fa-search absolute left-4 text-zinc-400 text-sm pointer-events-none"></i>
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder={isModActive
+                      ? (isDe ? 'Verein suchen... (z.B. Bayern, Dortmund, Real Madrid, Arsenal)' : 'Search club by name... (e.g. Bayern, Dortmund, Real Madrid, Arsenal)')
+                      : (isDe ? 'Verein suchen... (z.B. Bavaria, Prussia, Manchester Blue)' : 'Search club by name... (e.g. Bavaria, Prussia, Manchester Blue)')}
+                    enterKeyHint="search"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    className="w-full bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.06] text-white font-medium text-xs sm:text-sm pl-11 pr-24 py-3 rounded-2xl border border-white/[0.08] focus:border-sky-400/40 focus:ring-1 focus:ring-sky-400/30 outline-none transition placeholder-zinc-500"
+                  />
+                  <div className="absolute right-3 flex items-center gap-2">
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('');
+                          if (searchInputRef.current) searchInputRef.current.focus();
+                        }}
+                        className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-zinc-400 hover:text-white flex items-center justify-center text-xs transition cursor-pointer"
+                      >
+                        <i className="fas fa-xmark"></i>
                       </button>
+                    )}
+                    <span className="text-[10px] font-medium text-zinc-400 bg-white/[0.05] px-2.5 py-1 rounded-full border border-white/[0.06]">
+                      {displayedClubs.length} {isDe ? 'Vereine' : 'clubs'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Country / League Quick Switch Strip */}
+                <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+                  <div className="flex items-center justify-between text-xs px-0.5">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                      {isDe ? 'Land / Wettbewerb' : 'Country / Region'}
+                    </span>
+                    {nationality !== 'ALL' && COUNTRIES[nationality] && (
+                      <span className="text-zinc-300 text-xs flex items-center gap-1 font-medium">
+                        <span>{COUNTRIES[nationality].flag}</span>
+                        <span>{COUNTRIES[nationality].name}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-0.5 custom-scrollbar -mx-1 px-1">
+                    {/* Top Football Nations */}
+                    {(['GER', 'ENG', 'ESP', 'ITA', 'FRA', 'POR', 'USA'] as const).map(code => {
+                      const country = COUNTRIES[code];
+                      if (!country) return null;
+                      const isSelected = nationality === code;
+                      return (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => {
+                            setNationality(code);
+                            setTierFilter(1);
+                            setShowAllClubs(false);
+                          }}
+                          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-all cursor-pointer backdrop-blur-md ${
+                            isSelected
+                              ? 'bg-sky-500/20 text-sky-200 border border-sky-400/40 shadow-sm'
+                              : 'bg-white/[0.03] text-zinc-400 hover:text-white border border-white/[0.06] hover:bg-white/[0.06]'
+                          }`}
+                        >
+                          <span>{country.flag}</span>
+                          <span>{country.name}</span>
+                        </button>
+                      );
+                    })}
+
+                    {/* All Countries (World) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNationality('ALL');
+                        setTierFilter('all');
+                        setShowAllClubs(false);
+                      }}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-all cursor-pointer backdrop-blur-md ${
+                        nationality === 'ALL'
+                          ? 'bg-sky-500/20 text-sky-200 border border-sky-400/40 shadow-sm'
+                          : 'bg-white/[0.03] text-zinc-400 hover:text-white border border-white/[0.06] hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <span>🌍</span>
+                      <span>{isDe ? 'Alle Länder' : 'All Countries'}</span>
+                    </button>
+
+                    {/* More Nations Dropdown */}
+                    <div className="relative shrink-0">
+                      <select
+                        value={['ALL', 'GER', 'ENG', 'ESP', 'ITA', 'FRA', 'POR', 'USA'].includes(nationality) ? '' : nationality}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setNationality(e.target.value);
+                            setTierFilter(1);
+                            setShowAllClubs(false);
+                          }
+                        }}
+                        className="bg-white/[0.03] text-zinc-400 hover:text-white border border-white/[0.06] hover:bg-white/[0.06] rounded-xl px-3 py-1.5 text-xs font-medium outline-none cursor-pointer pr-7 transition backdrop-blur-md"
+                      >
+                        <option value="" disabled>
+                          {isDe ? '🌐 Weitere Länder...' : '🌐 More Nations...'}
+                        </option>
+                        {Object.keys(COUNTRIES)
+                          .filter(k => !['ALL', 'GER', 'ENG', 'ESP', 'ITA', 'FRA', 'POR', 'USA'].includes(k))
+                          .filter(k => isModActive || !MOD_ONLY_COUNTRIES.includes(k))
+                          .map(k => (
+                            <option key={k} value={k} className="bg-[#161820] text-white">
+                              {COUNTRIES[k]?.flag} {COUNTRIES[k]?.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Division / Tier Tabs (Allows hiding lower leagues by defaulting to Tier 1) */}
+                {nationality !== 'ALL' && availableLeaguesForCountry.length > 0 && (
+                  <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] px-0.5">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                        {isDe ? 'Spielklasse wählen' : 'Select Division'}
+                      </span>
+                      <span className="text-zinc-400 text-xs">
+                        {COUNTRIES[nationality]?.flag} {COUNTRIES[nationality]?.name}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar py-0.5 custom-scrollbar -mx-1 px-1">
+                      {availableLeaguesForCountry.map(({ tier, name }) => {
+                        const isSelected = tierFilter === tier;
+                        const tierClubsCount = clubsDb.filter(c => (c.country || 'GER') === nationality && c.tier === tier).length;
+                        return (
+                          <button
+                            key={tier}
+                            type="button"
+                            onClick={() => {
+                              setTierFilter(isSelected ? 'all' : tier);
+                              setShowAllClubs(false);
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-all cursor-pointer backdrop-blur-md ${
+                              isSelected
+                                ? 'bg-sky-500/20 text-sky-200 border border-sky-400/40 shadow-sm'
+                                : 'bg-white/[0.03] text-zinc-400 hover:text-white border border-white/[0.06] hover:bg-white/[0.06]'
+                            }`}
+                          >
+                            <span className="opacity-70 text-[10px] font-medium">T{tier}</span>
+                            <span>{name}</span>
+                            {tierClubsCount > 0 && (
+                              <span className="text-[10px] opacity-70 ml-0.5">({tierClubsCount})</span>
+                            )}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTierFilter('all');
+                          setShowAllClubs(false);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-all cursor-pointer backdrop-blur-md ${
+                          tierFilter === 'all'
+                            ? 'bg-sky-500/20 text-sky-200 border border-sky-400/40 shadow-sm'
+                            : 'bg-white/[0.03] text-zinc-400 hover:text-white border border-white/[0.06] hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        {isDe ? 'Alle Ligen' : 'All Divisions'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sort Bar */}
+                <div className="pt-2 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 mr-1.5">
+                      {isDe ? 'Sortierung:' : 'Sort By:'}
+                    </span>
+                    {(
+                      [
+                        { id: 'tier', label: isDe ? 'Liga & Stärke' : 'Tier & Rating', icon: 'fa-layer-group' },
+                        { id: 'ovr', label: isDe ? 'Stärke (OVR)' : 'Overall OVR', icon: 'fa-bolt' },
+                        { id: 'budget', label: isDe ? 'Budget' : 'Budget', icon: 'fa-coins' },
+                        { id: 'name', label: isDe ? 'Name' : 'A-Z', icon: 'fa-arrow-down-a-z' },
+                      ] as const
+                    ).map(s => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSortBy(s.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                          sortBy === s.id
+                            ? 'bg-white/15 text-white shadow-sm border border-white/10'
+                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <i className={`fa-solid ${s.icon} text-[10px]`}></i>
+                        <span>{s.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1 cursor-pointer transition text-xs"
+                    >
+                      <i className="fas fa-xmark text-xs"></i>
+                      <span>{isDe ? 'Suche zurücksetzen' : 'Clear search'}</span>
+                    </button>
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* Standard Mode Clubs Grid with Progressive Disclosure (Hides overwhelming choice) */}
+          {mode === 'standard' && (
+            displayedClubs.length === 0 ? (
+              <div className="bg-[#161820]/75 border border-white/[0.08] rounded-3xl p-8 max-w-md mx-auto text-center my-6 shadow-xl backdrop-blur-2xl">
+                <i className="fas fa-magnifying-glass text-3xl text-zinc-500 mb-3 block"></i>
+                <p className="text-white font-medium text-base mb-1">
+                  {isDe ? 'Keine Vereine gefunden' : 'No Results Found'}
+                </p>
+                <p className="text-zinc-400 text-xs mb-4">
+                  {isDe
+                    ? `Kein Verein entspricht "${searchQuery}". Versuche es mit einem anderen Begriff oder setze Filter zurück.`
+                    : `No clubs matched "${searchQuery}". Try a different keyword or reset filters.`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="bg-white hover:bg-zinc-100 text-zinc-950 font-medium text-xs py-2.5 px-6 rounded-full transition shadow-sm active:scale-95 cursor-pointer"
+                >
+                  {isDe ? 'Suche zurücksetzen' : 'Reset Search'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6 max-w-5xl mx-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
+                  {(searchQuery.trim() !== '' || showAllClubs ? displayedClubs : displayedClubs.slice(0, 9)).map((c) => {
+                    const clubCountry = c.country || (nationality === 'ALL' ? 'GER' : nationality);
+                    const countryInfo = COUNTRIES[clubCountry];
+                    const leagueInfo = getLeagueInfo(c.tier, clubCountry);
+                    
+                    const clubContext = isModActive
+                      ? (c.historicContext || c.narrative || getClubHistoricContext(c.name, c.tier, isDe, clubCountry))
+                      : undefined;
+
+                    return (
+                      <div
+                        key={`${c.id}-${c.name}`}
+                        onClick={() => {
+                          if (!managerName.trim()) {
+                            setNameError(true);
+                            setSubStep2('2A');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                            setTimeout(() => nameInputRef.current?.focus(), 100);
+                            return;
+                          }
+                          if (document.activeElement instanceof HTMLElement) { document.activeElement.blur(); }
+                          setSelectedClubForArchetype(c);
+                          setStep(4);
+                        }}
+                        className="rounded-3xl p-4 sm:p-5 flex flex-col justify-between bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-sky-400/40 hover:shadow-[0_8px_32px_rgba(56,189,248,0.12)] transition-all duration-300 cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.36),inset_0_1px_0_0_rgba(255,255,255,0.06)] relative overflow-hidden group backdrop-blur-2xl active:scale-[0.99]"
+                      >
+                        {/* Mobile Row Layout (< sm) */}
+                        <div className="sm:hidden flex items-center gap-3.5 w-full mb-3">
+                          <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center p-2 shrink-0 shadow-inner">
+                            <ClubLogo
+                              name={c.name}
+                              id={c.id}
+                              color={c.color}
+                              logo={c.logo}
+                              fallbackLogo={c.fallbackLogo}
+                              isModActive={isModActive}
+                              className="w-10 h-10 object-contain drop-shadow-md"
+                              fallbackClassName="w-10 h-10 text-base rounded-xl shadow-sm flex items-center justify-center font-bold text-white"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0 text-left">
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <span className="text-[10px] font-medium text-zinc-300 truncate bg-white/[0.04] px-2 py-0.5 rounded-md border border-white/[0.06]">
+                                {isCanadianMLSClub(c.name, c.id, c.country) ? '🇨🇦' : (countryInfo?.flag || '🏁')} {leagueInfo?.name || `Tier ${c.tier}`}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md font-medium text-[10px] shrink-0 bg-white/[0.06] text-zinc-200 border border-white/[0.08]">
+                                OVR {c.baseOvr}
+                              </span>
+                            </div>
+                            <h3 className="text-base font-semibold text-white break-words leading-tight">
+                              {c.name}
+                            </h3>
+                            {clubContext ? (
+                              <p className="text-[10px] font-normal text-zinc-400 truncate mt-0.5">
+                                "{clubContext}"
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-zinc-400 truncate mt-0.5">
+                                {(c.stadium || 20000).toLocaleString()} {isDe ? 'Plätze' : 'seats'}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Desktop Top Row (>= sm) */}
+                        <div className="hidden sm:flex w-full items-center justify-between text-xs mb-2">
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[11px] font-medium text-zinc-300 truncate max-w-[65%] shadow-sm">
+                            <span>{isCanadianMLSClub(c.name, c.id, c.country) ? '🇨🇦' : (countryInfo?.flag || '🏁')}</span>
+                            <span className="truncate">{leagueInfo?.name || `Tier ${c.tier}`}</span>
+                          </div>
+                          <div className="px-2.5 py-0.5 rounded-lg font-medium text-xs shrink-0 flex items-center gap-1 bg-white/[0.06] text-zinc-200 border border-white/[0.08] shadow-sm">
+                            <span className="text-[10px] text-zinc-400">OVR</span>
+                            <span className="font-semibold">{c.baseOvr}</span>
+                          </div>
+                        </div>
+
+                        {/* Desktop Crest Section (>= sm) */}
+                        <div className="hidden sm:flex my-2 items-center justify-center relative">
+                          <div className="w-18 h-18 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center p-2.5 shadow-inner group-hover:scale-105 transition-transform duration-200 backdrop-blur-sm">
+                            <ClubLogo
+                              name={c.name}
+                              id={c.id}
+                              color={c.color}
+                              logo={c.logo}
+                              fallbackLogo={c.fallbackLogo}
+                              isModActive={isModActive}
+                              className="w-14 h-14 object-contain drop-shadow-md p-0.5"
+                              fallbackClassName="w-14 h-14 text-xl rounded-xl shadow-md flex items-center justify-center font-bold text-white"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Desktop Club Name & Context (>= sm) */}
+                        <div className="hidden sm:flex text-center w-full mb-3 flex-col items-center">
+                          <h3 className="text-base font-semibold text-white tracking-tight truncate w-full px-1 py-0.5 leading-normal">
+                            {c.name}
+                          </h3>
+
+                          {clubContext ? (
+                            <p className="text-[11px] font-normal text-zinc-400 text-center line-clamp-2 min-h-[32px] px-2 mt-1 leading-snug">
+                              "{clubContext}"
+                            </p>
+                          ) : (
+                            <p className="text-[11px] font-normal text-zinc-400 text-center line-clamp-1 min-h-[20px] px-2 mt-1">
+                              {countryInfo?.name || clubCountry} · {(c.stadium || 20000).toLocaleString()} {isDe ? 'Kapazität' : 'Capacity'}
+                            </p>
+                          )}
+
+                          {isReserveClub(c.name) && (
+                            <span className="mt-1 text-[9px] font-medium uppercase tracking-wider bg-white/[0.06] text-zinc-300 border border-white/[0.1] px-2 py-0.5 rounded-full">
+                              {isDe ? 'Reserve-Team' : 'Reserve Team'}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Key Metrics Strip */}
+                        <div className="w-full grid grid-cols-3 gap-1 bg-white/[0.03] p-2 rounded-2xl border border-white/[0.06] text-center text-xs mb-3 backdrop-blur-sm">
+                          <div className="flex flex-col">
+                            <span className="text-[9px] uppercase font-medium text-zinc-500 tracking-wider">
+                              {isDe ? 'Budget' : 'Budget'}
+                            </span>
+                            <span className="font-semibold text-white text-[11px]">
+                              {formatMoney(c.currentBudget != null ? parseAndNormalizeModBudget(c.currentBudget, c.tier, c.country || 'GER') : getStartingBudget(c.tier, c.country || 'GER'), c.country || 'GER')}
+                            </span>
+                          </div>
+                          <div className="flex flex-col border-x border-white/[0.06]">
+                            <span className="text-[9px] uppercase font-medium text-zinc-500 tracking-wider">
+                              {isDe ? 'Stadion' : 'Stadium'}
+                            </span>
+                            <span className="font-semibold text-zinc-300 text-[11px]">
+                              {((c.stadium || 20000) / 1000).toFixed(0)}k
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] uppercase font-medium text-zinc-500 tracking-wider">
+                              {isDe ? 'Rep' : 'Rep'}
+                            </span>
+                            <span className="font-semibold text-sky-300 text-[11px]">
+                              {c.rep || c.baseOvr || 70}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Select Action Button */}
+                        <button
+                          type="button"
+                          className="w-full py-2.5 rounded-xl bg-white/[0.06] group-hover:bg-white text-zinc-300 group-hover:text-zinc-950 font-medium text-xs transition duration-150 flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <span>{t('Select Club', 'Verein wählen')}</span>
+                          <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
+
+                {/* Progressive Disclosure (Show All / Show Less) */}
+                {searchQuery.trim() === '' && displayedClubs.length > 9 && (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAllClubs(!showAllClubs)}
+                      className="px-6 py-2.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.08] backdrop-blur-xl text-xs font-medium transition cursor-pointer flex items-center gap-2 shadow-sm active:scale-95"
+                    >
+                      <span>
+                        {showAllClubs
+                          ? (isDe ? 'Weniger Vereine anzeigen' : 'Show fewer clubs')
+                          : (isDe ? `Alle ${displayedClubs.length} Vereine anzeigen` : `Show all ${displayedClubs.length} clubs`)}
+                      </span>
+                      <i className={`fa-solid ${showAllClubs ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px] text-zinc-400`}></i>
+                    </button>
+                  </div>
+                )}
               </div>
+            )
+          )}
 
-              {/* Summary Footer */}
-              <div className="mt-6 pt-3 border-t border-white/[0.04] flex items-center justify-between text-xs text-zinc-500">
-                <span>Selected Pyramid</span>
-                <span className="text-zinc-300 font-medium">
-                  {nationality === 'ALL' ? 'All Pyramids (Global)' : COUNTRIES[nationality]?.name || nationality}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Bar */}
-          <div className="flex items-center justify-between gap-3 pt-2">
+          {/* Navigation to Step 2 */}
+          <div className="text-center mt-8 fade-in-delay-2">
             <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] font-semibold text-xs transition active:scale-95 cursor-pointer flex items-center gap-2"
+              onClick={() => {
+                setStep(2);
+                setSubStep2('2B');
+              }}
+              className="bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white font-medium text-xs sm:text-sm py-3 px-7 rounded-2xl border border-white/[0.08] backdrop-blur-xl transition-all active:scale-95 cursor-pointer inline-flex items-center gap-2 shadow-sm"
             >
-              <i className="fas fa-arrow-left text-xs" />
-              <span>Back</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleProceedToStep3}
-              className="bg-white hover:bg-zinc-100 text-black font-semibold text-xs sm:text-sm py-2.5 px-6 rounded-xl transition duration-150 active:scale-95 cursor-pointer shadow-[0_4px_16px_rgba(255,255,255,0.15)] flex items-center gap-2"
-            >
-              <span>Proceed to Vision</span>
-              <i className="fas fa-arrow-right text-xs" />
+              <i className="fas fa-arrow-left text-xs"></i>
+              <span>{t('Back to Managerial DNA', 'Zurück zur Management-DNA')}</span>
             </button>
           </div>
-        </motion.div>
+        </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* STEP 3: MANAGERIAL VISION & TACTICAL PHILOSOPHY                            */}
-      {/* ========================================================================= */}
-      {step === 3 && (
-        <motion.div
-          key="step-3"
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -14 }}
-          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-4xl mx-auto rounded-2xl bg-[#14151e] border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden p-6 sm:p-8"
-        >
-          {/* Top Delicate Ambient Glow */}
-          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-purple-400/30 to-transparent pointer-events-none" />
-
-          {/* Header */}
-          <div className="text-center relative z-10 pb-6 border-b border-white/[0.04] mb-6">
-            <div className="inline-flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.06] text-purple-400 text-[10px] tracking-widest uppercase px-3 py-1 rounded-full mb-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-              <span>Step 03 · Tactical Doctrine</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight uppercase text-white">
-              Tactical Philosophy & Vision
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed font-normal max-w-lg mx-auto mt-1">
-              Choose the tactical identity you will instill in your squad. Affects scoring cadence, defensive grit, and match engine outcomes.
-            </p>
+      {/* STEP 4: Hire Head Coach */}
+      {step === 4 && selectedClubForArchetype && (
+        <div className="max-w-2xl mx-auto text-center fade-in px-4 pb-10">
+          <div className="inline-flex items-center gap-2 mb-3 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs font-medium backdrop-blur-xl shadow-sm">
+            <span className="text-zinc-400">{isDe ? 'Verein:' : 'Club:'}</span>
+            <span className="text-white font-medium">{selectedClubForArchetype.name}</span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-zinc-400">{isDe ? 'Philosophie:' : 'Philosophy:'}</span>
+            <span className="text-sky-300 font-medium">{tactic}</span>
           </div>
 
-          {/* Philosophy Cards Grid */}
-          <div className="space-y-3 relative z-10">
-            {Object.keys(PHILOSOPHIES).map((tacKey) => {
-              const tac = PHILOSOPHIES[tacKey];
-              const isSelected = tactic === tacKey;
-              const gfPct = Math.round((tac.gfMod - 1) * 100);
-              const gaPct = Math.round((tac.gaMod - 1) * 100);
-
-              const gfText = gfPct > 0 ? `+${gfPct}%` : `${gfPct}%`;
-              const gaText = gaPct > 0 ? `+${gaPct}%` : `${gaPct}%`;
-
+          <h1 className="text-3xl md:text-4xl font-semibold text-white tracking-tight mb-2">
+            {t('Hire Head Coach', 'Cheftrainer einstellen')}
+          </h1>
+          <p className="text-[14px] md:text-[15px] font-normal text-zinc-400 max-w-xl mx-auto mb-8 leading-relaxed">
+            {t(
+              `As the new Sporting Director of ${selectedClubForArchetype.name}, appoint your Head Coach. Choose someone who aligns with your ${tactic} philosophy.`,
+              `Als neuer Sportdirektor von ${selectedClubForArchetype.name} musst du einen Cheftrainer einstellen. Wähle jemanden, der zu deiner ${tactic}-Philosophie passt.`
+            )}
+          </p>
+          
+          <div className="grid gap-3.5 text-left">
+            {coachMarket.map((coach) => {
+              const hasSynergy = isTacticalSynergy(coach.style, tactic);
+              const isSelected = selectedCoach?.id === coach.id;
+              const archConfig = getCoachArchetypeConfig(coach.coachArchetype || coach.archetype);
+              
               return (
-                <div
-                  key={`tactic-${tacKey}`}
-                  onClick={() => setTactic(tacKey)}
-                  className={`p-4 sm:p-5 rounded-xl flex items-start gap-4 cursor-pointer transition-all duration-150 border text-left relative ${
+                <div 
+                  key={coach.id}
+                  onClick={() => setSelectedCoach(coach)}
+                  className={`p-4 sm:p-5 rounded-3xl border transition-all duration-200 cursor-pointer flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 backdrop-blur-2xl ${
                     isSelected
-                      ? 'border-purple-500/30 bg-purple-500/[0.04] shadow-[0_4px_20px_rgba(168,85,247,0.08)]'
-                      : 'border-white/[0.04] bg-[#10121a] hover:border-white/10 hover:bg-white/[0.02]'
+                      ? 'bg-sky-500/[0.08] border-sky-400/40 ring-1 ring-sky-400/25 shadow-[0_8px_30px_rgba(56,189,248,0.14),inset_0_1px_0_0_rgba(125,211,252,0.2)] scale-[1.01]'
+                      : 'bg-white/[0.03] border-white/[0.08] hover:bg-white/[0.06] hover:border-white/[0.16]'
                   }`}
                 >
-                  {/* Tactic Icon */}
-                  <div
-                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 ${
-                      isSelected
-                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-300 shadow-sm'
-                        : 'bg-white/[0.03] border-white/[0.06] text-zinc-400'
-                    }`}
-                  >
-                    <tac.icon className="w-5 h-5" />
-                  </div>
-
-                  {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                      <h4 className="font-semibold text-white text-base tracking-tight">
-                        {tacKey}
-                      </h4>
-                      <span className="text-xs text-zinc-400 font-normal">
-                        {tac.en}
+                    <div className="font-semibold text-base sm:text-lg text-white mb-1.5 flex items-center gap-2 flex-wrap">
+                      <span>{coach.name}</span>
+                      
+                      {/* Coach Archetype Pill */}
+                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-semibold border flex items-center gap-1 ${archConfig.badgeClass}`}>
+                        <i className={`fa-solid ${archConfig.icon} text-[9px]`}></i>
+                        <span>{isDe ? archConfig.labelDe : archConfig.labelEn}</span>
                       </span>
+
+                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-medium transition-colors ${
+                        isSelected
+                          ? 'bg-sky-500/20 text-sky-200 border border-sky-400/30'
+                          : 'bg-white/[0.08] border border-white/[0.1] text-zinc-300'
+                      }`}>{coach.strength}</span>
                     </div>
 
-                    {/* Perk Line */}
-                    <div className="flex items-center gap-1.5 text-xs text-amber-300/90 font-medium mt-1">
-                      <i className="fas fa-bolt text-amber-400 text-[10px]" />
-                      <span>{tac.perkEn}</span>
+                    <div className="text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                      <span className="text-zinc-300 font-medium flex items-center gap-1">
+                        <i className={`fas ${TACTICS[coach.style]?.icon || 'fa-chess-board'} text-zinc-400 text-xs`}></i> {coach.style}
+                      </span>
+                      {hasSynergy && (
+                         <span className="text-[10px] bg-sky-500/15 text-sky-200 px-2.5 py-0.5 rounded-full font-medium tracking-wide border border-sky-400/30 flex items-center gap-1">
+                           <i className="fa-solid fa-circle-check text-[9px] text-sky-400"></i>
+                           <span>Synergy</span>
+                         </span>
+                      )}
+                      {coach.trophyPedigree ? (
+                        <span className="text-[11px] text-amber-400/90 font-medium flex items-center gap-1">
+                          <i className="fa-solid fa-trophy text-[9px]"></i>
+                          <span>{coach.trophyPedigree} {isDe ? 'Titel' : 'Trophies'}</span>
+                        </span>
+                      ) : null}
                     </div>
 
-                    {/* Narrative Description */}
-                    <p className="text-xs text-zinc-400 mt-1 leading-snug font-normal">
-                      {tac.effectDescEn}
-                    </p>
-
-                    {/* Engine Rate Chips */}
-                    <div className="flex items-center gap-2 mt-2.5 text-xs font-medium">
-                      <span className="bg-white/[0.03] border border-white/[0.04] rounded-lg px-2 py-0.5 text-zinc-300 tabular-nums">
-                        GF: <strong className="text-emerald-400 font-semibold tabular-nums">{gfText}</strong>
-                      </span>
-                      <span className="bg-white/[0.03] border border-white/[0.04] rounded-lg px-2 py-0.5 text-zinc-300 tabular-nums">
-                        GA: <strong className="text-sky-400 font-semibold tabular-nums">{gaText}</strong>
-                      </span>
+                    <div className="text-xs text-zinc-400 mt-2 font-normal italic line-clamp-1">
+                      "{getCoachQuote(coach.ovrBoost, isDe, coach.id)}"
                     </div>
                   </div>
 
-                  {/* Radio / Selection Indicator */}
-                  <div
-                    className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-1 transition-colors ${
-                      isSelected
-                        ? 'border-purple-400/50 bg-purple-500/20 text-purple-300 shadow-sm'
-                        : 'border-white/20 bg-black/40'
-                    }`}
-                  >
-                    {isSelected && <div className="w-2 h-2 rounded-full bg-purple-400" />}
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.06] gap-2">
+                    <div className="text-left sm:text-right">
+                      <div className="text-sm font-semibold text-white mb-0.5">{formatMoney(coach.cost)} / {isDe ? 'Jahr' : 'yr'}</div>
+                      <div className="text-xs text-zinc-400">{coach.contractYearsLeft} {isDe ? 'Jahre Vertrag' : 'Year Deal'}</div>
+                    </div>
+
+                    {/* View Dossier Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDossierCoach(coach);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-sky-300 hover:text-white border border-white/[0.1] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <i className="fa-solid fa-fingerprint text-[11px] text-sky-400"></i>
+                      <span>{isDe ? 'Dossier ansehen' : 'View Dossier'}</span>
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Action Footer */}
-          <div className="flex items-center justify-between gap-3 pt-6 mt-6 border-t border-white/[0.04] relative z-10 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] font-semibold text-xs transition active:scale-95 cursor-pointer flex items-center gap-2"
+          <div className="mt-8 flex gap-3">
+            <button 
+              type="button" 
+              onClick={() => setStep(3)} 
+              className="bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white font-medium text-xs sm:text-sm py-3.5 px-7 rounded-2xl border border-white/[0.1] backdrop-blur-md transition active:scale-95 cursor-pointer shadow-sm flex items-center gap-2"
             >
-              <i className="fas fa-arrow-left text-xs" />
-              <span>Back to Identity</span>
+              <i className="fa-solid fa-arrow-left text-xs"></i>
+              <span>{t('Back', 'Zurück')}</span>
             </button>
-
-            <button
-              type="button"
-              onClick={handleProceedToStep4}
-              className="bg-white hover:bg-zinc-100 text-black font-semibold text-xs sm:text-sm py-2.5 px-6 rounded-xl transition duration-150 active:scale-95 cursor-pointer shadow-[0_4px_16px_rgba(255,255,255,0.15)] flex items-center gap-2"
-            >
-              <span>Proceed to Club Selection</span>
-              <i className="fas fa-arrow-right text-xs" />
-            </button>
-          </div>
-        </motion.div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* STEP 4: CLUB SELECTION / GRASSROOTS OFFERS                                */}
-      {/* ========================================================================= */}
-      {step === 4 && (
-        <motion.div
-          key="step-4"
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -14 }}
-          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-5xl mx-auto rounded-2xl bg-[#14151e] border border-amber-500/20 shadow-[0_20px_60px_rgba(245,158,11,0.08)] overflow-hidden p-5 sm:p-7"
-        >
-          {/* Top Delicate Ambient Glow */}
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-amber-400/30 to-transparent pointer-events-none" />
-
-          {/* Header */}
-          <div className="text-center relative z-10 pb-5 border-b border-white/[0.04] mb-5">
-            <div className="flex items-center justify-center gap-1.5 mb-1.5">
-              <i className="fas fa-building text-[10px] text-amber-400" />
-              <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400/90">
-                {mode === 'standard'
-                  ? 'OPEN FRANCHISE SELECTION · ALL TIERS'
-                  : 'INBOUND CONTRACT OFFERS · 4 OFFICIAL PROPOSALS'}
-              </span>
-            </div>
-
-            <h2 className="text-2xl sm:text-[28px] font-semibold tracking-tight leading-tight uppercase text-white drop-shadow-sm">
-              {mode === 'standard'
-                ? t('Choose Your Club', 'Verein Waehlen')
-                : t('Grassroots Job Offers', 'Vertrags-Angebote')}
-            </h2>
-
-            <p className="text-[13px] text-zinc-300 leading-relaxed font-normal max-w-lg mx-auto mt-1">
-              {mode === 'standard'
-                ? t(
-                    'Select any club across European handball pyramids to start your managerial journey.',
-                    'Waehle einen beliebigen Verein fuer deinen Karrierestart aus.'
-                  )
-                : t(
-                    'Four clubs have extended official contracts to you. Review roster strength and accept an appointment.',
-                    'Vier Vereine moechten dich verpflichten. Waehle deinen Startpunkt.'
-                  )}
-            </p>
-
-            {/* Active Mod Pill */}
-            <div className="flex items-center justify-center gap-2 mt-3">
-              <button
-                type="button"
-                onClick={() => setShowModModal(true)}
-                className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition border cursor-pointer active:scale-95 shadow-sm ${
-                  isModActive
-                    ? 'bg-amber-500/10 border-amber-400/25 text-amber-300 hover:bg-amber-500/20'
-                    : 'bg-white/[0.04] border-white/10 text-zinc-300 hover:text-white hover:bg-white/[0.08]'
-                }`}
-              >
-                <i className={`fas ${isModActive ? 'fa-shield-halved text-amber-400' : 'fa-database text-zinc-400'} text-xs`} />
-                <span>{activeModName || 'Standard Database (Mod Off)'}</span>
-                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border ${
-                  isModActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-black/40 text-zinc-400 border-white/[0.04]'
-                }`}>
-                  {isModActive ? 'ACTIVE' : 'OFF'}
-                </span>
-                <span className="text-[10px] text-zinc-400 font-medium tabular-nums">· {clubsDb.length} Clubs</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Standard Mode: Search and Country / Tier Filters */}
-          {mode === 'standard' && (
-            <div className="mb-6 space-y-3.5 relative z-10">
-              {/* Search Bar */}
-              <div className="max-w-md mx-auto relative">
-                <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-xs pointer-events-none" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  placeholder={t('Search club or city... (e.g. Kiel, Magdeburg)', 'Verein oder Stadt suchen... (z.B. Kiel)')}
-                  className="w-full bg-black/50 hover:bg-black/70 focus:bg-black/80 text-white font-medium text-xs pl-10 pr-9 py-2.5 rounded-xl border border-white/10 outline-none transition focus:border-amber-400/60 placeholder-zinc-500 shadow-inner"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery('');
-                      searchInputRef.current?.focus();
-                    }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 text-zinc-400 hover:text-white flex items-center justify-center text-[10px] transition cursor-pointer"
-                  >
-                    <i className="fas fa-times" />
-                  </button>
-                )}
-              </div>
-
-              {/* Country Filters Bar */}
-              {!searchQuery && (
-                <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-4xl mx-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNationality('ALL');
-                      setTierFilter('all');
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition duration-150 border cursor-pointer ${
-                      nationality === 'ALL'
-                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 shadow-sm'
-                        : 'bg-black/30 border-white/[0.04] text-zinc-400 hover:text-white hover:border-white/15'
-                    }`}
-                  >
-                    🌍 All Countries
-                  </button>
-
-                  {Object.keys(COUNTRIES)
-                    .filter((k) => {
-                      if (['POL', 'AUT', 'SUI'].includes(k) && !isModActive) return false;
-                      return COUNTRIES[k].active;
-                    })
-                    .map((k) => {
-                      const c = COUNTRIES[k];
-                      const isSelected = nationality === k;
-                      return (
-                        <button
-                          key={`step4-nat-${k}`}
-                          type="button"
-                          onClick={() => {
-                            setNationality(k);
-                            setTierFilter('all');
-                          }}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition duration-150 border cursor-pointer ${
-                            isSelected
-                              ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 shadow-sm'
-                              : 'bg-black/30 border-white/[0.04] text-zinc-400 hover:text-white hover:border-white/15'
-                          }`}
-                        >
-                          <span>{c.flag}</span> <span className="hidden sm:inline">{c.name}</span>
-                        </button>
-                      );
-                    })}
-                </div>
-              )}
-
-              {/* Tier Filters for Selected Country */}
-              {!searchQuery && nationality !== 'ALL' && (
-                <div className="flex items-center justify-center gap-1.5 flex-wrap pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setTierFilter('all')}
-                    className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition duration-150 border cursor-pointer ${
-                      tierFilter === 'all'
-                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 shadow-sm'
-                        : 'bg-black/20 text-zinc-500 border-white/[0.04] hover:text-zinc-300'
-                    }`}
-                  >
-                    All Tiers
-                  </button>
-                  {Array.from({ length: getMaxTier(nationality) }, (_, i) => i + 1).map((tVal) => (
-                    <button
-                      key={`step4-tier-${tVal}`}
-                      type="button"
-                      onClick={() => setTierFilter((prev) => (prev === tVal ? 'all' : tVal))}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition duration-150 border cursor-pointer ${
-                        tierFilter === tVal
-                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 shadow-sm'
-                          : 'bg-black/20 text-zinc-500 border-white/[0.04] hover:text-zinc-300'
-                      }`}
-                    >
-                      Tier {tVal}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Club Grid */}
-          {displayedClubs.length === 0 ? (
-            <div className="bg-[#10121a] border border-white/[0.04] rounded-2xl p-8 max-w-md mx-auto text-center my-6">
-              <i className="fas fa-search text-3xl text-zinc-600 mb-3 block" />
-              <h3 className="text-white font-semibold text-base mb-1">
-                No Clubs Found
-              </h3>
-              <p className="text-zinc-400 text-xs mb-4">
-                No club matches "{searchQuery}". Try searching for "Kiel" or "Berlin".
-              </p>
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 font-semibold text-xs py-2 px-5 rounded-xl transition cursor-pointer shadow-sm"
-              >
-                Clear Filters
-              </button>
-            </div>
-          ) : (
-            <div
-              className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 relative z-10 ${
-                mode === 'standard' ? 'overflow-y-auto max-h-[58vh] pr-1.5 custom-scrollbar pb-4' : ''
+            <button 
+              onClick={() => {
+                onStartGame({
+                  club: selectedClubForArchetype,
+                  managerName: managerName.trim().toUpperCase(),
+                  startYear,
+                  tactic,
+                  nationality: selectedClubForArchetype.country || nationality || 'GER',
+                  mode: mode,
+                  archetype,
+                  coach: selectedCoach || undefined,
+                });
+              }}
+              className={`flex-1 font-semibold text-xs sm:text-sm py-3.5 px-8 rounded-2xl transition-all duration-200 cursor-pointer shadow-[0_4px_20px_rgba(255,255,255,0.15)] ${
+                selectedCoach ? 'bg-white text-zinc-950 hover:bg-zinc-100 active:scale-95' : 'bg-white/[0.06] text-zinc-600 border border-white/[0.05] cursor-not-allowed shadow-none'
               }`}
+              disabled={!selectedCoach}
             >
-              {displayedClubs.map((c, cIdx) => {
-                const clubCountry = c.country || (nationality === 'ALL' ? 'GER' : nationality);
-                const countryInfo = COUNTRIES[clubCountry];
-                const isDisabledClub = c.tier > getMaxTier(clubCountry);
-                const clubContext = getClubHistoricContext(c.name, c.tier, false, clubCountry, c);
-                const startingBudget = getStartingBudget(c.tier, clubCountry);
-                const isSelected = selectedClub?.name === c.name;
-
-                return (
-                  <div
-                    key={`club-card-${c.id || c.name || cIdx}-${cIdx}`}
-                    onClick={() => {
-                      if (!managerName.trim()) {
-                        setNameError(true);
-                        setStep(2);
-                        return;
-                      }
-                      if (isDisabledClub) return;
-                      setSelectedClub(c);
-                      setStep(5);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className={`group rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-200 border text-left relative overflow-hidden ${
-                      isDisabledClub
-                        ? 'bg-[#10121a]/40 opacity-40 grayscale cursor-not-allowed border-white/[0.04] pointer-events-none'
-                        : isSelected
-                        ? 'bg-[#10121a] border-amber-500/50 shadow-[0_10px_30px_rgba(245,158,11,0.12)] cursor-pointer active:scale-[0.98]'
-                        : 'bg-[#10121a] hover:bg-amber-500/[0.02] hover:border-amber-500/30 hover:shadow-[0_10px_30px_rgba(245,158,11,0.08)] border-white/[0.04] cursor-pointer active:scale-[0.98]'
-                    }`}
-                  >
-                    {/* Top Row: Unboxed League & OVR Readout */}
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5 truncate">
-                        <span>{countryInfo?.flag || '🏁'}</span>
-                        <span className="truncate">{countryInfo?.name || clubCountry}</span>
-                        <span aria-hidden="true" className="text-zinc-600">·</span>
-                        <span className="text-zinc-400 font-medium">Tier {c.tier}</span>
-                      </div>
-
-                      {/* Tabular OVR Readout */}
-                      <div className="flex items-center gap-1 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-lg text-xs font-semibold text-amber-300 shrink-0 tabular-nums">
-                        <span className="text-[9px] text-zinc-400 uppercase font-medium">OVR</span>
-                        <span>{c.baseOvr}</span>
-                      </div>
-                    </div>
-
-                    {/* Logo & Club Name */}
-                    <div className="flex flex-col items-center text-center my-2">
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 mb-3 flex items-center justify-center drop-shadow-md">
-                        <ClubLogo
-                          club={c}
-                          name={c.name}
-                          color={c.color}
-                          logo={c.logo}
-                          fallbackLogo={c.fallbackLogo}
-                          className="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-lg p-0.5"
-                          fallbackClassName="w-16 h-16 sm:w-20 sm:h-20 text-xl rounded-2xl shadow-lg flex items-center justify-center font-semibold text-white border border-white/10 shrink-0"
-                        />
-                      </div>
-
-                      <h3 className="text-base sm:text-lg font-semibold text-white tracking-tight truncate w-full px-1">
-                        {c.name}
-                      </h3>
-
-                      {/* Reserve Club indicator */}
-                      {isReserveClub(c.name) && (
-                        <div className="text-[10px] font-semibold text-amber-400/90 mt-0.5">
-                          Reserve Squad
-                        </div>
-                      )}
-
-                      {/* Historic Narrative / Vision */}
-                      {clubContext && (
-                        <div className="w-full text-xs text-zinc-300/85 italic text-center line-clamp-2 min-h-[32px] px-1 mt-1.5 leading-snug border-t border-white/[0.04] pt-1.5">
-                          "{clubContext}"
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 2x2 Metric Grid */}
-                    <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-2 gap-1.5 text-[11px] font-medium">
-                      <div className="bg-black/30 border border-white/[0.04] rounded-lg p-1.5 px-2 flex items-center gap-1.5 text-zinc-300 tabular-nums">
-                        <i className="fas fa-users text-amber-400/80 text-[10px]" />
-                        <span className="truncate">{c.stadium ? `${formatNum(c.stadium)} Seats` : 'Arena'}</span>
-                      </div>
-                      <div className="bg-black/30 border border-white/[0.04] rounded-lg p-1.5 px-2 flex items-center gap-1.5 text-emerald-300 tabular-nums">
-                        <i className="fas fa-coins text-amber-400/80 text-[10px]" />
-                        <span className="truncate">{formatMoney(startingBudget)}</span>
-                      </div>
-                    </div>
-
-                    {/* Sign Contract CTA bar */}
-                    <div className="mt-3 pt-2">
-                      <div
-                        className={`w-full py-2 rounded-xl text-center text-xs font-semibold tracking-normal transition-all duration-150 border shadow-sm ${
-                          isSelected
-                            ? 'bg-amber-500 text-black border-amber-400 font-semibold'
-                            : 'bg-white/[0.04] group-hover:bg-amber-500/10 group-hover:text-amber-300 text-zinc-300 border-white/[0.06] group-hover:border-amber-500/20'
-                        }`}
-                      >
-                        {isSelected ? 'Selected · View Mandate →' : 'Select Club'}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Action Footer */}
-          <div className="flex items-center justify-between gap-3 pt-5 mt-5 border-t border-white/[0.04] relative z-10 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setStep(3)}
-              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] font-semibold text-xs tracking-normal transition active:scale-[0.98] cursor-pointer flex items-center gap-2"
-            >
-              <i className="fas fa-arrow-left text-xs" />
-              <span>Back to Vision</span>
+              {t('Start Career', 'Karriere Starten')}
             </button>
-
-            <span className="text-xs text-zinc-400 font-normal hidden sm:inline tabular-nums">
-              {displayedClubs.length} Clubs available
-            </span>
           </div>
-        </motion.div>
+        </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* STEP 5: BOARD INAUGURATION & STRATEGIC MANDATE CONFIRMATION               */}
-      {/* ========================================================================= */}
-      {step === 5 && selectedClub && (() => {
-        const clubCountry = selectedClub.country || (nationality === 'ALL' ? 'GER' : nationality);
-        const leagueInfo = getLeagueInfo(selectedClub.tier, clubCountry);
-        const homeArena = getClubHomeArena(selectedClub);
-        const stadiumCap = selectedClub.stadium || (leagueInfo ? leagueInfo.stadBase : 5000);
-        const startingBudget = getStartingBudget(selectedClub.tier, clubCountry);
+      {/* Coach Dossier Modal in Onboarding */}
+      <AnimatePresence>
+        {dossierCoach && (
+          <CoachDossierModal
+            coach={dossierCoach}
+            lang={lang}
+            clubTactic={tactic}
+            onSelectInOnboarding={(c) => {
+              setSelectedCoach(c);
+              setDossierCoach(null);
+            }}
+            onClose={() => setDossierCoach(null)}
+          />
+        )}
+      </AnimatePresence>
 
-        return (
-          <motion.div
-            key="step-5"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-4xl mx-auto space-y-5 pt-1 pb-6 font-sans text-neutral-200"
-          >
-            {/* 1. Official Welcome Letter Hero Box */}
-            <div className="bg-[#14151e] border border-white/[0.05] rounded-2xl p-6 sm:p-7 relative overflow-hidden shadow-xl">
-              {/* Top Ambient Glow */}
-              <div
-                className="absolute top-0 right-0 w-80 h-80 rounded-full blur-3xl pointer-events-none -mr-24 -mt-24 opacity-25"
-                style={{ backgroundColor: selectedClub.color || '#f59e0b' }}
-              />
-
-              {/* Header row */}
-              <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 pb-5 border-b border-white/[0.05]">
-                <div className="w-14 h-14 rounded-xl object-contain bg-white/[0.03] p-1 border border-white/[0.08] flex items-center justify-center shrink-0 shadow-md">
-                  <ClubLogo
-                    club={selectedClub}
-                    name={selectedClub.name}
-                    color={selectedClub.color}
-                    logo={selectedClub.logo}
-                    fallbackLogo={selectedClub.fallbackLogo}
-                    className="w-12 h-12 object-contain drop-shadow p-0.5"
-                    fallbackClassName="w-12 h-12 text-lg rounded-lg flex items-center justify-center font-semibold text-white border border-white/10"
-                  />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-400 flex items-center gap-1.5 mb-1">
-                    <i className="fas fa-signature text-xs" />
-                    <span>Official Board Appointment & Charter</span>
-                  </div>
-
-                  <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight truncate">
-                    Welcome to {selectedClub.name}, Coach {managerName.trim().toUpperCase() || 'COACH'}
-                  </h1>
-
-                  <div className="text-xs text-zinc-400 font-normal mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-zinc-300 font-medium">
-                      Division: {leagueInfo?.name || `Tier ${selectedClub.tier}`} (Tier {selectedClub.tier})
-                    </span>
-                    <span className="text-zinc-600">·</span>
-                    <span>
-                      Home Arena: <span className="text-zinc-300 font-medium">{homeArena}</span> (<span className="tabular-nums">{stadiumCap.toLocaleString()}</span> Seats)
-                    </span>
-                    <span className="text-zinc-600">·</span>
-                    <span>
-                      Era: <span className="text-zinc-300 font-medium tabular-nums">{startYear}</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Welcome Message */}
-              <div className="relative z-10 pt-5 text-xs sm:text-sm text-zinc-300/90 leading-relaxed space-y-2">
-                <p>
-                  The Supervisory Board and Club Executive Committee have formally ratified your appointment as Head Coach ahead of the{' '}
-                  <span className="text-white font-medium tabular-nums">{startYear}</span> campaign. You have been granted complete executive stewardship over squad recruitment, tactical doctrine, and long-term infrastructure investment.
-                </p>
-                {activeRoadmap?.narrativeEn && (
-                  <p className="text-zinc-400 italic text-xs border-l-2 border-amber-500/40 pl-3 py-1 mt-2">
-                    "{activeRoadmap.narrativeEn}"
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* 2. Governance Micro-Indicators Strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {/* Board Confidence */}
-              <div className="bg-[#14151e] border border-white/[0.04] rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium flex items-center gap-1.5">
-                  <i className="fas fa-shield-halved text-emerald-400 text-xs" />
-                  <span>Board Confidence</span>
-                </div>
-                <div className="mt-2 flex items-baseline gap-1.5">
-                  <span className="text-lg font-semibold text-emerald-400 tabular-nums">100%</span>
-                  <span className="text-[10px] text-zinc-500 uppercase font-medium">Approval</span>
-                </div>
-              </div>
-
-              {/* Starting Treasury */}
-              <div className="bg-[#14151e] border border-white/[0.04] rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium flex items-center gap-1.5">
-                  <i className="fas fa-vault text-amber-400 text-xs" />
-                  <span>Treasury Reserves</span>
-                </div>
-                <div className="mt-2 flex items-baseline gap-1.5">
-                  <span className="text-lg font-semibold text-white tabular-nums">{formatMoney(startingBudget)}</span>
-                  <span className="text-[10px] text-zinc-500 uppercase font-medium">Budget</span>
-                </div>
-              </div>
-
-              {/* Charter Horizon */}
-              <div className="bg-[#14151e] border border-white/[0.04] rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium flex items-center gap-1.5">
-                  <i className="fas fa-compass text-sky-400 text-xs" />
-                  <span>Charter Horizon</span>
-                </div>
-                <div className="mt-2 flex items-baseline gap-1.5">
-                  <span className="text-lg font-semibold text-white tabular-nums">{activeRoadmap?.horizonYears || 3}</span>
-                  <span className="text-[10px] text-zinc-500 uppercase font-medium tabular-nums">
-                    Seasons ({startYear}–{startYear + (activeRoadmap?.horizonYears || 3)})
-                  </span>
-                </div>
-              </div>
-
-              {/* Tactical Doctrine */}
-              <div className="bg-[#14151e] border border-white/[0.04] rounded-xl p-3.5 flex flex-col justify-between shadow-sm">
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium flex items-center gap-1.5">
-                  <i className="fas fa-chess text-purple-400 text-xs" />
-                  <span>Tactical Doctrine</span>
-                </div>
-                <div className="mt-2 flex items-baseline gap-1.5">
-                  <span className="text-base sm:text-lg font-semibold text-white truncate">{tactic}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Board Roadmap Goals Box */}
-            <div className="bg-[#14151e] border border-white/[0.04] rounded-2xl p-5 sm:p-6 shadow-xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-white/[0.04] mb-4">
-                <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5 mb-0.5">
-                    <i className="fas fa-list-check text-xs" />
-                    <span>Mandate Directives & Deliverables</span>
-                  </div>
-                  <h3 className="text-lg font-semibold text-white tracking-tight">
-                    {activeRoadmap?.titleEn || 'Club Strategic Roadmap'}
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-zinc-400 bg-white/[0.04] border border-white/[0.06] px-2.5 py-1 rounded-lg tabular-nums">
-                    {activeRoadmap?.horizonYears || 3}-Year Milestone Cycle
-                  </span>
-                </div>
-              </div>
-
-              {/* Goals Grid */}
-              {activeRoadmap?.goals && activeRoadmap.goals.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                  {activeRoadmap.goals.map((goal, idx) => {
-                    const meta = getGoalCategoryMeta(goal.targetType);
-                    return (
-                      <div
-                        key={goal.id || `goal-${idx}`}
-                        className="bg-black/30 border border-white/[0.04] hover:border-white/[0.08] rounded-xl p-4 sm:p-5 flex flex-col justify-between transition-all"
-                      >
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                              <i className={`fas ${meta.icon} text-xs`} />
-                              <span>{meta.label}</span>
-                            </span>
-                            <span className="text-[10px] font-semibold text-amber-400/90 bg-amber-500/[0.06] border border-amber-500/20 px-2 py-0.5 rounded-md uppercase tracking-wider tabular-nums">
-                              Directive 0{idx + 1}
-                            </span>
-                          </div>
-
-                          <h4 className="text-sm sm:text-base font-semibold text-white tracking-tight mb-1.5">
-                            {goal.titleEn}
-                          </h4>
-                          <p className="text-xs text-zinc-400 font-normal leading-relaxed">
-                            {goal.descriptionEn}
-                          </p>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-white/[0.04] flex items-center justify-between gap-2 flex-wrap text-xs">
-                          <span className="text-[11px] text-zinc-500 font-medium">Bounty on Completion:</span>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="bg-amber-500/10 border border-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-md text-[11px] font-semibold tabular-nums">
-                              +{goal.rewardMp} MP
-                            </span>
-                            {Boolean(goal.rewardCash) && (
-                              <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-md text-[11px] font-semibold tabular-nums">
-                                +{formatMoney(goal.rewardCash!)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-
-            {/* 4. Action Footer */}
-            <div className="flex items-center justify-between gap-3 pt-5 border-t border-white/[0.04] flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  setStep(4);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] font-semibold text-xs tracking-normal transition active:scale-[0.98] cursor-pointer flex items-center gap-2"
-              >
-                <i className="fas fa-arrow-left text-xs" />
-                <span>Back to Club Selection</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleFinalStartGame}
-                className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2 cursor-pointer shadow-amber-500/10"
-              >
-                <span>Enter Front Office & Begin Season</span>
-                <i className="fas fa-arrow-right text-xs" />
-              </button>
-            </div>
-          </motion.div>
-        );
-      })()}
     </div>
   );
 };

@@ -1,663 +1,732 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { GameState } from '../types';
-import { formatMoney, getLeagueScaledVal, getRequiredAcademyLevelForYouthPull, getMaxYouthPullsPerSeason } from '../data/gameConstants';
-import { CountUp } from './CountUp';
-import { useModalDismiss } from '../utils/modalUtils';
+import { formatMoney, sanitizePlayerName, getAcademyCallUpCap } from '../data/gameConstants';
+import { getVeteranRingerEconomics, pickVeteranRinger } from '../engine/seasonSimEngine';
 
-type TransferCategory = 'all' | 'signings' | 'loans_sales' | 'academy';
+interface CompactTreasuryProps {
+  budget: number;
+  financials: { estRevenue: number; wages: number; net: number };
+  squadSize: number;
+  t: (en: string, de: string) => string;
+}
+
+const CompactTreasury: React.FC<CompactTreasuryProps> = ({ budget, financials, squadSize, t }) => {
+  return (
+    <div className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-2xl p-3.5 sm:p-4 grid grid-cols-3 gap-2 text-left">
+      <div>
+        <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+          {t('Transfer Budget', 'Transferbudget')}
+        </div>
+        <div className="text-base sm:text-lg font-bold font-mono text-white tracking-tight">
+          {formatMoney(budget)}
+        </div>
+      </div>
+      <div>
+        <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+          {t('Net / Match', 'Netto / Spiel')}
+        </div>
+        <div className={`text-base sm:text-lg font-bold font-mono ${financials.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          {financials.net >= 0 ? '+' : ''}{formatMoney(financials.net)}
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mb-0.5">
+          {t('Squad Capacity', 'Kadergröße')}
+        </div>
+        <div className="text-base sm:text-lg font-bold font-mono text-zinc-200">
+          {squadSize}<span className="text-zinc-500 font-normal text-xs">/50</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface TransferModalProps {
   state: GameState;
   lang: string;
-  creditLimit: number;
   financials: { estRevenue: number; wages: number; net: number };
-  actionCosts: { bidReg: number; bidKey: number; bidSuperstar?: number; bidVeteranRinger?: number };
+  actionCosts: { bidReg: number; bidKey: number };
   onBidReg: () => void;
   onBidKey: () => void;
-  onSuperstarTransfer: () => void;
-  onSignVeteranRinger?: () => void;
+  onGalacticoTransfer: () => void;
   onLoanPlayer: () => void;
-  onSellBench: () => void;
-  onSellStarter: () => void;
-  onTerminateContractMutual?: () => void;
-  onPullYouth?: (prospectId?: string) => void;
-  onOpenYouth?: () => void;
+  onSellPlayer: () => void;
+  onPullYouthToSquad?: (id: string) => void;
+  onSignVeteranRinger?: () => void;
   onClose: () => void;
+  isMinimized?: boolean;
 }
 
 export const TransferModal: React.FC<TransferModalProps> = ({
   state,
   lang,
-  creditLimit,
   financials,
   actionCosts,
   onBidReg,
   onBidKey,
-  onSuperstarTransfer,
-  onSignVeteranRinger,
+  onGalacticoTransfer,
   onLoanPlayer,
-  onSellBench,
-  onSellStarter,
-  onTerminateContractMutual,
-  onPullYouth,
-  onOpenYouth,
-  onClose
+  onSellPlayer,
+  onPullYouthToSquad,
+  onSignVeteranRinger,
+  onClose,
+  isMinimized = false
 }) => {
-  useModalDismiss(onClose);
-  const t = (en: string, _de?: string, _es?: string) => en;
   const isDe = lang === 'de';
-
-  const [activeCategory, setActiveCategory] = useState<TransferCategory>('all');
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const isSigningRef = useRef(false);
-
-  const handleBidReg = () => {
-    if (isSigningRef.current) return;
-    isSigningRef.current = true;
-    onBidReg();
-    setTimeout(() => { isSigningRef.current = false; }, 400);
-  };
-
-  const handleBidKey = () => {
-    if (isSigningRef.current) return;
-    isSigningRef.current = true;
-    onBidKey();
-    setTimeout(() => { isSigningRef.current = false; }, 400);
-  };
-
-  useEffect(() => {
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-  }, [activeCategory]);
-
+  const t = (en: string, de: string, es: string = en) => (lang === 'de' ? de : lang === 'es' ? es : en);
+  const isWinter = state.seasonPhase === 'mid';
   const isUnderdog = (state.managerSkills || []).includes('rosinenpicker');
-  const winterBonusReg = state.winterTransfersOpenedYear === state.year ? 3 : 0;
-  const winterBonusKey = state.winterTransfersOpenedYear === state.year ? 1 : 0;
-  const limitTransfers = ((state.managerSkills || []).includes('scouting_network') ? 5 : 3) + winterBonusReg;
-  const currentTransfers = state.regTransfersThisSeason || 0;
-  const isTransferLimitReached = currentTransfers >= limitTransfers;
-  const maxKeyTransfers = ((state.managerSkills || []).includes('star_magnet') ? 3 : 2) + winterBonusKey;
-  const youthPullsThisSeason = (state.youthPullsSeasonYear === state.year) ? (state.youthPullsThisSeason || 0) : 0;
-  const maxYouthPulls = getMaxYouthPullsPerSeason(state.club.tier || 1, state.club.academyLevel || 1);
-  const isYouthPullLimitReached = youthPullsThisSeason >= maxYouthPulls;
-  const academyProspects = state.youthPipeline || [];
-  const academyLvl = state.club.academyLevel || 1;
-  const requiredAcademyLvl = getRequiredAcademyLevelForYouthPull(state.club.tier || 1);
-  const isAcademyLvlTooLow = academyLvl < requiredAcademyLvl;
+  const maxKeyTransfers = (state.managerSkills || []).includes('star_magnet') ? 3 : 2;
 
-  // Moral Hazard Restructuring Oversight
-  const isDebtVetoActive = state.budget < 0;
-  const pureWages = (financials as any).pureWages || financials.wages;
-  const wageRatio = financials.estRevenue > 0 ? (pureWages / financials.estRevenue) : 1;
-  const isWageCapExceeded = isDebtVetoActive && wageRatio > 0.65;
+  const [activeTab, setActiveTab] = useState<'all' | 'signings' | 'outgoings' | 'galactico' | 'academy'>('all');
+  const [isLocalProcessing, setIsLocalProcessing] = useState(false);
+  const handleAction = (action: () => void) => {
+    if (isLocalProcessing) return;
+    setIsLocalProcessing(true);
+    action();
+    setTimeout(() => setIsLocalProcessing(false), 350);
+  };
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const savedScrollTop = React.useRef<number>(0);
+
+  React.useEffect(() => {
+    if (isMinimized) {
+      if (scrollRef.current) {
+        savedScrollTop.current = scrollRef.current.scrollTop;
+      }
+    } else {
+      if (scrollRef.current && savedScrollTop.current > 0) {
+        scrollRef.current.scrollTop = savedScrollTop.current;
+      }
+    }
+  }, [isMinimized]);
+
+  const handleTabChange = (tab: 'all' | 'signings' | 'outgoings' | 'galactico' | 'academy') => {
+    setActiveTab(tab);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  };
 
   const salesThisSeason = state.squadSalesThisSeason || 0;
-  const currentSquadSize = state.club.squadSize || 18;
-  const minSquadSize = 13;
-  const maxSquadSize = 22;
+  const currentSquadSize = state.club.squadSize || 24;
+  const minSquadSize = 18;
   const availableSales = Math.max(0, Math.min(3 - salesThisSeason, currentSquadSize - minSquadSize));
   const isSellDisabled = availableSales <= 0;
   let sellReason = `(${availableSales}x)`;
   if (isSellDisabled) {
      if (currentSquadSize <= minSquadSize) {
-        sellReason = isDe ? 'Min. Kader' : 'Min Squad';
+        sellReason = t('Min Squad Size Reached', 'Minimaler Kader erreicht');
      } else {
-        sellReason = isDe ? 'Limit erreicht' : 'Limit reached';
+        sellReason = t('Season Limit Reached', 'Saisonlimit erreicht');
      }
   }
 
-  // Net per match (34 matchdays in a European handball season)
-  const netPerMatch = Math.round(financials.net / 34);
+  // Squad capacity lock (hard 50-man limit)
+  const isSquadFull = currentSquadSize >= 50;
+
+  // Allowance stats
+  const regCount = isWinter ? (state.winterTransfers || 0) : (state.regTransfersThisSeason || 0);
+  const regMax = isWinter ? 2 : 3;
+  const isRegDisabled = isSquadFull || regCount >= regMax;
+
+  const keyLimit = isWinter ? (maxKeyTransfers === 3 ? 2 : 1) : maxKeyTransfers;
+  const keyCount = isWinter ? (state.winterKeyTransfers || 0) : (state.keyTransfersThisSeason || 0);
+  const isMoraleLow = (state.club.morale ?? 100) < 40;
+  const isMoneyball = state.clubIdentity === 'moneyball';
+  const isKeyDisabled = isSquadFull || isMoraleLow || keyCount >= keyLimit || isMoneyball;
+
+  // Academy Call-up Allowance
+  const callUpCap = getAcademyCallUpCap(state.club.academyLevel || 1);
+  const callUpsUsed = state.academyCallUpsThisSeason || 0;
+  const isCallUpCapped = isSquadFull || callUpsUsed >= callUpCap;
+
+  const loanLimit = isWinter ? 3 : 2;
+  const loanCount = state.loansThisSeason || 0;
+  const isLoanDisabled = isSquadFull || loanCount >= loanLimit;
+
+  const isGalacticoDisabled = isSquadFull || state.club.tier !== 1 || (state.galacticosThisSeason || 0) >= 1 || isMoraleLow || isMoneyball;
+  const featuredLegend = React.useMemo(
+    () => pickVeteranRinger(state.club.country || 'GER', state.year, state.club.id || 0),
+    [state.club.country, state.year, state.club.id]
+  );
 
   return (
-    <div 
-      onClick={onClose}
-      className="fixed inset-0 bg-black/80 flex items-center justify-center p-3 sm:p-5 z-[110] backdrop-blur-2xl cursor-pointer animate-in fade-in duration-150"
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: isMinimized ? 0 : 1 }} 
+      exit={{ opacity: 0 }} 
+      transition={{ duration: 0.1, ease: 'linear' }} 
+      onClick={() => {
+        if (!isMinimized) onClose();
+      }}
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-2xl text-left cursor-pointer overflow-y-auto overscroll-contain transition-opacity duration-150 ${isMinimized ? 'opacity-0 pointer-events-none invisible' : ''}`}
     >
       <motion.div 
-        initial={{ opacity: 0, scale: 0.96, y: 8 }} 
-        animate={{ opacity: 1, scale: 1, y: 0 }} 
-        exit={{ opacity: 0, scale: 0.96, y: 8 }} 
-        transition={{ duration: 0.15, ease: 'easeOut' }}
+        initial={{ scale: 0.98, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        exit={{ scale: 0.98, opacity: 0 }} 
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }} 
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[560px] bg-[#14151e] rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-[92vh] overflow-hidden cursor-default pointer-events-auto"
+        className="relative w-full max-w-xl bg-[#12141c]/90 backdrop-blur-3xl rounded-[28px] sm:rounded-[32px] border border-white/[0.08] shadow-[0_24px_64px_rgba(0,0,0,0.6)] flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto overflow-hidden cursor-default shrink-0"
       >
-        {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/30 to-transparent pointer-events-none" />
+        {/* Subtle Ambient Sky-Blue / Ice-Blue Glow */}
+        <div className={`absolute -top-24 -right-24 w-80 h-80 ${isWinter ? 'bg-cyan-500/10' : 'bg-sky-500/10'} rounded-full blur-3xl pointer-events-none`} />
 
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-5 pb-3 border-b border-white/[0.04] shrink-0">
+        {/* Header */}
+        <div className="p-5 sm:p-6 border-b border-white/[0.06] bg-white/[0.02] flex items-center justify-between shrink-0 relative z-10">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-sm border border-sky-500/20 shrink-0">
-              <i className="fas fa-arrows-rotate" />
+            <div className={`w-11 h-11 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center ${isWinter ? 'text-cyan-400' : 'text-sky-400'} text-base shadow-inner shrink-0`}>
+              <i className={isWinter ? "fa-solid fa-snowflake" : "fa-solid fa-right-left"}></i>
             </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-sky-400 leading-none mb-1">
-                {t('SEASON TRANSFER WINDOW', 'SAISON-TRANSFERFENSTER')}
-              </span>
-              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-tight">
-                {t('Squad Transfer Market', 'Kader Transfermarkt')}
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-sky-400/90 mb-0.5">
+                {isWinter 
+                  ? t('Mid-Season Window', 'Winterpause Transferfenster') 
+                  : t('Season Transfer Window', 'Saison Transfermarkt')}
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">
+                {isWinter 
+                  ? t('Winter Transfer Market', 'Winter-Transfermarkt') 
+                  : t('Squad Transfer Market', 'Kader-Transfermarkt')}
               </h2>
             </div>
           </div>
           <button 
             aria-label="Close modal"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] flex items-center justify-center transition active:scale-95 text-zinc-400 hover:text-white cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center transition border border-white/[0.08] cursor-pointer shrink-0"
           >
-            <i className="fas fa-xmark text-sm" />
+            <i className="fas fa-xmark text-xs"></i>
           </button>
         </div>
 
-        {/* 3-Column Metrics Bento Box */}
-        <div className="px-5 pt-4 shrink-0">
-          <div className="bg-[#181924] border border-white/[0.04] rounded-2xl p-3.5 sm:p-4 grid grid-cols-3 gap-2 shadow-sm">
-            <div>
-              <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider block mb-1">
-                {t('TRANSFER BUDGET', 'TRANSFERBUDGET')}
-              </span>
-              <span className={`text-lg sm:text-xl font-semibold tracking-tight tabular-nums ${state.budget < 0 ? 'text-rose-400' : 'text-white'}`}>
-                <CountUp value={state.budget} formatValue={formatMoney} duration={900} />
-              </span>
-            </div>
-
-            <div>
-              <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider block mb-1">
-                {t('NET / MATCH', 'NETTO / SPIEL')}
-              </span>
-              <span className={`text-lg sm:text-xl font-semibold tracking-tight tabular-nums flex items-center gap-1 ${netPerMatch >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                <span>{netPerMatch >= 0 ? '+' : ''}{formatMoney(netPerMatch)}</span>
-              </span>
-            </div>
-
-            <div className="text-right">
-              <span className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider block mb-1">
-                {t('SQUAD CAPACITY', 'KADERGRÖSSE')}
-              </span>
-              <span className="text-lg sm:text-xl font-semibold tracking-tight tabular-nums text-white">
-                {currentSquadSize}<span className="text-xs sm:text-sm font-medium text-zinc-500">/22</span>
-              </span>
-            </div>
-          </div>
+        {/* Treasury Metrics Strip */}
+        <div className="px-5 sm:px-6 pt-4 shrink-0 relative z-10">
+          <CompactTreasury 
+            budget={state.budget} 
+            financials={financials} 
+            squadSize={currentSquadSize}
+            t={t} 
+          />
         </div>
 
-        {/* Category Navigation Pills */}
-        <div className="px-5 pt-3 shrink-0">
-          <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 text-xs">
+        {/* Progressive Disclosure: Segmented Navigation */}
+        <div className="px-5 sm:px-6 pt-3 shrink-0 relative z-10">
+          <div className="flex items-center gap-1 p-1 bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-x-auto custom-scrollbar">
             <button
-              onClick={() => setActiveCategory('all')}
-              className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl font-medium transition cursor-pointer shrink-0 ${
-                activeCategory === 'all'
-                  ? 'bg-sky-500/[0.08] text-sky-300 border border-sky-500/20 shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
+              onClick={() => handleTabChange('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 ${
+                activeTab === 'all'
+                  ? 'bg-white/[0.1] text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              {t('All Operations', 'Alle Operationen')}
+              {t('All Operations', 'Alle Aktionen')}
             </button>
             <button
-              onClick={() => setActiveCategory('signings')}
-              className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl font-medium transition cursor-pointer shrink-0 ${
-                activeCategory === 'signings'
-                  ? 'bg-sky-500/[0.08] text-sky-300 border border-sky-500/20 shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
+              onClick={() => handleTabChange('signings')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 ${
+                activeTab === 'signings'
+                  ? 'bg-white/[0.1] text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
               {t('Incoming Signings', 'Neuzugänge')}
             </button>
             <button
-              onClick={() => setActiveCategory('loans_sales')}
-              className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl font-medium transition cursor-pointer shrink-0 ${
-                activeCategory === 'loans_sales'
-                  ? 'bg-sky-500/[0.08] text-sky-300 border border-sky-500/20 shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
+              onClick={() => handleTabChange('outgoings')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 ${
+                activeTab === 'outgoings'
+                  ? 'bg-white/[0.1] text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              {t('Loans & Sales', 'Leihen & Abgänge')}
+              {t('Loans & Sales', 'Leihe & Verkäufe')}
             </button>
-            <button
-              onClick={() => setActiveCategory('academy')}
-              className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl font-medium transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
-                activeCategory === 'academy'
-                  ? 'bg-emerald-500/[0.08] text-emerald-300 border border-emerald-500/20 shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]'
-              }`}
-            >
-              <span>{t('Academy Call-Up', 'U19 Nachwuchs')}</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium tabular-nums ${
-                academyProspects.length > 0 
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                  : 'bg-zinc-800 text-zinc-500'
-              }`}>
-                {academyProspects.length}
-              </span>
-            </button>
+            {state.club.tier === 1 && (
+              <button
+                onClick={() => handleTabChange('galactico')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 ${
+                  activeTab === 'galactico'
+                    ? 'bg-amber-500/20 text-amber-300 shadow-sm'
+                    : 'text-amber-400/70 hover:text-amber-300'
+                }`}
+              >
+                {t('Galactico Elite', 'Galactico')}
+              </button>
+            )}
+            {state.youthPipeline && state.youthPipeline.length > 0 && (
+              <button
+                onClick={() => handleTabChange('academy')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                  activeTab === 'academy'
+                    ? 'bg-emerald-500/20 text-emerald-300 shadow-sm'
+                    : 'text-emerald-400/80 hover:text-emerald-300'
+                }`}
+              >
+                <span>{t('Academy Call-Up', 'Jugend-Abruf')}</span>
+                <span className="text-[10px] bg-emerald-500/30 px-1.5 py-0.2 rounded-full font-mono text-emerald-200">
+                  {state.youthPipeline.length}
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Scrollable Body */}
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+        {/* Scrollable Operations Body */}
+        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4 custom-scrollbar relative z-10">
           
-          {/* Moral Hazard Sanierungsplan Restructuring Covenant Banner */}
-          {isDebtVetoActive && (
-            <div className="bg-amber-500/[0.05] border border-amber-500/20 rounded-2xl p-3.5 flex flex-col gap-2.5 text-xs text-amber-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-7 h-7 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 text-xs">
-                    <i className="fas fa-shield-halved" />
-                  </span>
-                  <div>
-                    <span className="font-semibold text-amber-300 block">{t('Restructuring Covenant Enforced', 'Sanierungsauflagen in Kraft')}</span>
-                    <span className="text-[11px] text-amber-200/80 leading-snug">
-                      {t(
-                        'Board veto freezes cash transfer fees until €0 net debt. Hard wage cap of 65% on external signings.',
-                        'Vorstands-Veto sperrt Transferausgaben bis 0 € Schulden. 65% Gehaltsobergrenze für Neuzugänge.'
-                      )}
-                    </span>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 shrink-0">
-                  {t('Moral Hazard Lock', 'Schuldenbremse')}
-                </span>
+          {/* Signings Section */}
+          {(activeTab === 'all' || activeTab === 'signings') && (
+            <div className="space-y-3">
+              <div className="text-[10px] font-semibold tracking-wider text-zinc-400 uppercase px-1">
+                {t('First-Team Additions', 'Kaderverstärkung')}
               </div>
               
-              <div className="bg-[#14151e]/80 rounded-xl px-2.5 py-1.5 border border-white/[0.04] flex flex-col gap-1 text-[10px] text-amber-200/90">
-                <div className="flex items-center gap-2">
-                  <i className="fas fa-hand-holding-heart text-amber-400 shrink-0" />
-                  <span>
-                    {t(
-                      'Legacy Renewal Exemption: Existing contracts, flat-wage loyalty renewals, and free season loans enjoy a +5% buffer (up to 70% revenue) to protect roster continuity.',
-                      'Bestandsschutz-Klausel: Bestehende Verträge, treue Verlängerungen und kostenlose Leihen erhalten +5% Puffer (bis 70% Umsatz) für Kaderstabilität.'
-                    )}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 pt-1 border-t border-white/[0.04]">
-                  <i className="fas fa-seedling text-emerald-400 shrink-0" />
-                  <span>
-                    {t(
-                      'Academy Call-Up Exemption: Emergency promotions from your academy pipeline are permitted to strengthen your squad with zero transfer fees.',
-                      'Nachwuchs-Ausnahme: Beförderungen aus der eigenen Akademie sind ohne Transfergebühr jederzeit zulässig.'
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* SECTION 1: FIRST-TEAM ADDITIONS */}
-          {(activeCategory === 'all' || activeCategory === 'signings') && (
-            <div className="space-y-2.5">
-              <div className="text-[10px] font-medium tracking-wider text-zinc-400 uppercase">
-                {t('FIRST-TEAM ADDITIONS', 'ERSTE MANNSCHAFT')}
-              </div>
-
-              {/* Card 1: Sign Squad Player */}
+              {/* Buy Regular Squad Player */}
               <button
-                onClick={(e) => { e.stopPropagation(); handleBidReg(); }}
-                disabled={isDebtVetoActive || isTransferLimitReached || currentSquadSize >= maxSquadSize || (state.budget + creditLimit) < actionCosts.bidReg || isWageCapExceeded}
-                className="w-full bg-[#181924] hover:bg-white/[0.03] p-3.5 sm:p-4 rounded-2xl border border-white/[0.04] hover:border-sky-500/20 text-left transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden group disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={(e) => { e.stopPropagation(); handleAction(onBidReg); }}
+                disabled={isRegDisabled || isLocalProcessing}
+                className="w-full bg-white/[0.03] hover:bg-white/[0.05] p-4 rounded-2xl border border-white/[0.06] text-left transition-all duration-200 cursor-pointer flex flex-col gap-2 relative overflow-hidden group disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-sm shrink-0">
-                    <i className="fas fa-user-plus" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold text-white text-xs sm:text-sm truncate">
-                      {t('Sign Squad Player', 'Stammspieler kaufen')}
+                <div className="flex items-start sm:items-center justify-between gap-2.5 w-full">
+                  <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-400/20 flex items-center justify-center text-sky-400 text-xs shrink-0 group-hover:scale-105 transition-transform">
+                      <i className="fa-solid fa-user-plus"></i>
                     </div>
-                    <div className="text-[11px] text-zinc-400 leading-snug truncate">
-                      {isDebtVetoActive ? (
-                        <span className="text-amber-400 font-medium">{t('Board Veto: Locked under debt restructuring.', 'Vorstands-Veto: Wegen Schulden gesperrt.')}</span>
-                      ) : isWageCapExceeded ? (
-                        <span className="text-amber-400 font-medium">{t('Wage Cap (65%) Exceeded.', 'Gehaltsobergrenze überschritten.')}</span>
-                      ) : currentSquadSize >= maxSquadSize ? (
-                        <span className="text-rose-400 font-medium">{t('Blocked: Max squad size (22).', 'Kader voll (22).')}</span>
-                      ) : isTransferLimitReached ? (
-                        <span className="text-rose-400 font-medium">{t('Limit reached.', 'Limit erreicht.')}</span>
-                      ) : (state.budget + creditLimit) < actionCosts.bidReg ? (
-                        <span className="text-rose-400 font-medium">{t('Blocked: Insufficient funds.', 'Zu wenig Budget.')}</span>
-                      ) : (
-                        t('Solid starting quality to strengthen depth and base team OVR.', 'Solide Startelf-Qualität für mehr Kaderbreite.')
-                      )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs sm:text-sm font-semibold text-white flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <span>{t('Sign Squad Player', 'Stammspieler verpflichten')}</span>
+                        {isUnderdog && (
+                          <span className="text-[10px] text-amber-400 font-normal">· 20% Underdog Off</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-zinc-400 font-normal leading-snug mt-0.5">
+                        {t('Solid starting quality to strengthen depth and base team OVR.', 'Solider Stammspieler zur Stärkung der Kaderbreite und Basis-GES.')}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right shrink-0">
+                    <div className="font-mono font-bold text-white text-sm">
+                      -{formatMoney(actionCosts.bidReg)}
+                    </div>
+                    <div className="font-mono text-[10px] text-zinc-400">
+                      {regCount} / {regMax} {t('slots', 'Plätze')}
                     </div>
                   </div>
                 </div>
-
-                <div className="text-right shrink-0">
-                  <div className="font-semibold text-white text-xs sm:text-sm tabular-nums">
-                    -{formatMoney(actionCosts.bidReg)}
-                  </div>
-                  <div className="text-[10px] text-zinc-400 font-medium tabular-nums mt-0.5">
-                    {currentTransfers} / {limitTransfers} slots
-                  </div>
-                </div>
-
-                {isUnderdog && (
-                  <div className="absolute top-0 right-0 px-2 py-0.5 bg-amber-500/10 text-amber-300 text-[9px] font-medium tracking-wider uppercase rounded-bl-lg border-l border-b border-amber-500/20">
-                    20% Off
-                  </div>
-                )}
               </button>
-
-              {/* Card 2: Sign Key Player */}
+              
+              {/* Buy Key Player */}
               <button
-                onClick={(e) => { e.stopPropagation(); handleBidKey(); }}
-                disabled={isDebtVetoActive || (state.keyTransfersThisSeason || 0) >= maxKeyTransfers || currentSquadSize >= maxSquadSize || (state.club.morale ?? 100) < 40 || (state.budget + creditLimit) < actionCosts.bidKey || isWageCapExceeded}
-                className="w-full bg-[#181924] hover:bg-white/[0.03] p-3.5 sm:p-4 rounded-2xl border border-white/[0.04] hover:border-purple-500/20 text-left transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden group disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={(e) => { e.stopPropagation(); handleAction(onBidKey); }}
+                disabled={isKeyDisabled || isLocalProcessing}
+                className="w-full bg-white/[0.03] hover:bg-white/[0.05] p-4 rounded-2xl border border-white/[0.06] text-left transition-all duration-200 cursor-pointer flex flex-col gap-2 relative overflow-hidden group disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-sm shrink-0">
-                    <i className="fas fa-star" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold text-white text-xs sm:text-sm truncate">
-                      {t('Sign Key Player', 'Schlüsselspieler kaufen')}
+                <div className="flex items-start sm:items-center justify-between gap-2.5 w-full">
+                  <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-400/20 flex items-center justify-center text-purple-400 text-xs shrink-0 group-hover:scale-105 transition-transform">
+                      <i className="fa-solid fa-star"></i>
                     </div>
-                    <div className="text-[11px] text-zinc-400 leading-snug truncate">
-                      {isDebtVetoActive ? (
-                        <span className="text-amber-400 font-medium">{t('Board Veto: Locked under debt restructuring.', 'Vorstands-Veto: Wegen Schulden gesperrt.')}</span>
-                      ) : isWageCapExceeded ? (
-                        <span className="text-amber-400 font-medium">{t('Wage Cap (65%) Exceeded.', 'Gehaltsobergrenze überschritten.')}</span>
-                      ) : currentSquadSize >= maxSquadSize ? (
-                        <span className="text-rose-400 font-medium">{t('Blocked: Max squad size (22).', 'Kader voll (22).')}</span>
-                      ) : (state.keyTransfersThisSeason || 0) >= maxKeyTransfers ? (
-                        <span className="text-rose-400 font-medium">{t('Limit reached.', 'Limit erreicht.')}</span>
-                      ) : (state.club.morale ?? 100) < 40 ? (
-                        <span className="text-rose-400 font-medium">{t('Blocked: Team morale too low (<40).', 'Moral zu niedrig (<40).')}</span>
-                      ) : (state.budget + creditLimit) < actionCosts.bidKey ? (
-                        <span className="text-rose-400 font-medium">{t('Blocked: Insufficient funds.', 'Zu wenig Budget.')}</span>
-                      ) : (
-                        t('High stakes gamble! Immediate high OVR impact or expensive flop.', 'Großer OVR-Impact oder teurer Flop.')
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <div className="font-semibold text-white text-xs sm:text-sm tabular-nums">
-                    -{formatMoney(actionCosts.bidKey)}
-                  </div>
-                  <div className="text-[10px] text-zinc-400 font-medium tabular-nums mt-0.5">
-                    {state.keyTransfersThisSeason || 0} / {maxKeyTransfers} slots
-                  </div>
-                </div>
-
-                {isUnderdog && (
-                  <div className="absolute top-0 right-0 px-2 py-0.5 bg-amber-500/10 text-amber-300 text-[9px] font-medium tracking-wider uppercase rounded-bl-lg border-l border-b border-amber-500/20">
-                    20% Off
-                  </div>
-                )}
-              </button>
-
-              {/* Card 3: Superstar Galáctico (League 1 only) */}
-              {state.club.tier === 1 && (() => {
-                const superstarCost = actionCosts.bidSuperstar || (actionCosts.bidKey * 2);
-                return (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onSuperstarTransfer(); }}
-                    disabled={isDebtVetoActive || (state.galacticosThisSeason || 0) >= 1 || currentSquadSize >= maxSquadSize || (state.club.morale ?? 100) < 50 || isWageCapExceeded || (state.budget + creditLimit) < superstarCost}
-                    className="w-full bg-[#181924] hover:bg-white/[0.03] p-3.5 sm:p-4 rounded-2xl border border-white/[0.04] hover:border-amber-500/20 text-left transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden group disabled:opacity-30 disabled:grayscale"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-sm shrink-0">
-                        <i className="fas fa-crown" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs sm:text-sm font-semibold text-white flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <span>{t('Sign Key Player', 'Schlüsselspieler verpflichten')}</span>
+                        {isUnderdog && (
+                          <span className="text-[10px] text-amber-400 font-normal">· 20% Underdog Off</span>
+                        )}
                       </div>
-                      <div className="min-w-0">
-                        <div className="font-semibold text-amber-300 text-xs sm:text-sm truncate">
-                          {t('Sign Superstar Galáctico', 'Superstar Galáctico')}
-                        </div>
-                        <div className="text-[11px] text-zinc-400 leading-snug truncate">
-                          {isDebtVetoActive ? (
-                            <span className="text-amber-400 font-medium">{t('Board Veto: Locked under debt restructuring.', 'Vorstands-Veto.')}</span>
-                          ) : isWageCapExceeded ? (
-                            <span className="text-amber-400 font-medium">{t('Wage Cap Exceeded.', 'Gehaltsobergrenze überschritten.')}</span>
-                          ) : (state.galacticosThisSeason || 0) >= 1 ? (
-                            <span className="text-rose-400 font-medium">{t('Season limit reached (1/1).', 'Saisonlimit erreicht.')}</span>
-                          ) : currentSquadSize >= maxSquadSize ? (
-                            <span className="text-rose-400 font-medium">{t('Blocked: Max squad size (22).', 'Kader voll (22).')}</span>
-                          ) : (state.club.morale ?? 100) < 50 ? (
-                            <span className="text-rose-400 font-medium">{t('Blocked: Team morale too low.', 'Moral zu niedrig.')}</span>
-                          ) : (state.budget + creditLimit) < superstarCost ? (
-                            <span className="text-rose-400 font-medium">{t('Blocked: Insufficient funds.', 'Zu wenig Budget.')}</span>
-                          ) : (
-                            t('Bypasses rating caps. Guaranteed +3 OVR and +5,000 Fans immediately.', 'Garantiert sofort +3 GES & +5.000 Fans.')
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <div className="font-semibold text-rose-400 text-xs sm:text-sm tabular-nums">
-                        -{formatMoney(superstarCost)}
-                      </div>
-                      <div className="text-[10px] text-zinc-400 font-medium tabular-nums mt-0.5">
-                        {state.galacticosThisSeason || 0} / 1 slot
-                      </div>
-                    </div>
-                  </button>
-                );
-              })()}
-
-              {/* Card 4: Sign Veteran Ringer (Tiers 3, 4, 5, 6 only) */}
-              {(state.club.tier || 1) >= 3 && (() => {
-                const ringerFee = actionCosts.bidVeteranRinger || Math.round(actionCosts.bidReg * 0.4);
-                const isRingerSigned = Boolean(state.veteranRingerSignedThisSeason);
-                const isBlocked = isDebtVetoActive || isRingerSigned || currentSquadSize >= maxSquadSize || (state.budget + creditLimit) < ringerFee;
-
-                return (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onSignVeteranRinger?.(); }}
-                    disabled={isBlocked}
-                    className="w-full bg-[#181924] hover:bg-white/[0.03] p-3.5 sm:p-4 rounded-2xl border border-amber-500/20 hover:border-amber-400/40 text-left transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 relative overflow-hidden group disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 text-sm shrink-0">
-                        <i className="fas fa-medal" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-semibold text-amber-300 text-xs sm:text-sm truncate flex items-center gap-1.5">
-                          <span>{t('Sign Veteran Ringer', 'Altstar verpflichten')}</span>
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">
-                            T3–T6 All-In
+                      <div className="text-[11px] text-zinc-400 font-normal leading-snug mt-0.5">
+                        {isMoneyball ? (
+                          <span className="text-amber-400 font-medium">
+                            {t('Moneyball Syndicate: Locked out of Key Player signings.', 'Moneyball-Syndikat: Keine Verpflichtung von Schlüsselspielern erlaubt.')}
                           </span>
-                        </div>
-                        <div className="text-[11px] text-zinc-400 leading-snug truncate">
-                          {isRingerSigned ? (
-                            <span className="text-amber-400 font-medium">
-                              {t(`Active: ${state.veteranRingerName || 'Veteran Star'} (+${state.veteranRingerOvrGain || 4} OVR). Retires at season end.`, `Aktiv: ${state.veteranRingerName || 'Altstar'} (+${state.veteranRingerOvrGain || 4} GES). Hört nach Saison auf.`)}
-                            </span>
-                          ) : isDebtVetoActive ? (
-                            <span className="text-amber-400 font-medium">{t('Board Veto: Locked under debt restructuring.', 'Vorstands-Veto.')}</span>
-                          ) : currentSquadSize >= maxSquadSize ? (
-                            <span className="text-rose-400 font-medium">{t('Blocked: Max squad size (22).', 'Kader voll (22).')}</span>
-                          ) : (state.budget + creditLimit) < ringerFee ? (
-                            <span className="text-rose-400 font-medium">{t('Blocked: Insufficient funds.', 'Zu wenig Budget.')}</span>
-                          ) : (
-                            t('Massive +3 to +5 OVR immediate boost. Exorbitant wages & 1-season retirement. Promote or face crisis!', 'Sofort +3 bis +5 GES! Astronomisches Gehalt & Karriereende nach Saison. Aufstieg oder Krise!')
-                          )}
-                        </div>
+                        ) : isMoraleLow ? (
+                          <span className="text-rose-400 font-medium">
+                            {t('Squad morale too low (< 40%). High-profile players refuse to sign.', 'Kadermoral zu niedrig (< 40%). Topspieler lehnen Wechsel ab.')}
+                          </span>
+                        ) : state.club.tier >= 6 ? (
+                          t('High risk of flop (-OVR), massive wage impact.', 'Hohes Flop-Risiko (-GES), extreme Gehaltskosten.')
+                        ) : (
+                          t('High stakes gamble! Immediate high OVR impact or expensive flop.', 'Hoher Einsatz! Großer OVR-Boost oder teurer Flop.')
+                        )}
                       </div>
                     </div>
-
-                    <div className="text-right shrink-0">
-                      <div className="font-semibold text-amber-300 text-xs sm:text-sm tabular-nums">
-                        -{formatMoney(ringerFee)}
-                      </div>
-                      <div className="text-[10px] text-amber-400/90 font-medium tabular-nums mt-0.5">
-                        {isRingerSigned ? '1 / 1 slot' : '0 / 1 slot'}
-                      </div>
+                  </div>
+                  
+                  <div className="text-right shrink-0">
+                    <div className="font-mono font-bold text-white text-sm">
+                      -{formatMoney(actionCosts.bidKey)}
                     </div>
-                  </button>
-                );
-              })()}
+                    <div className="font-mono text-[10px] text-zinc-400">
+                      {keyCount} / {keyLimit} {t('slots', 'Plätze')}
+                    </div>
+                  </div>
+                </div>
+              </button>
             </div>
           )}
 
-          {/* SECTION 2: LOANS & OUTGOINGS */}
-          {(activeCategory === 'all' || activeCategory === 'loans_sales') && (
-            <div className="space-y-2.5">
-              <div className="text-[10px] font-medium tracking-wider text-zinc-400 uppercase">
-                {t('LOANS & OUTGOINGS', 'LEIHEN & ABGÄNGE')}
+          {/* Galactico Section (Tier 1) */}
+          {(activeTab === 'all' || activeTab === 'galactico') && state.club.tier === 1 && (
+            <div className="space-y-3">
+              <div className="text-[10px] font-semibold tracking-wider text-amber-400/90 uppercase px-1">
+                {t('Galactico Marquee Signing', 'Galactico Verpflichtung')}
+              </div>
+              
+              <button
+                onClick={(e) => { e.stopPropagation(); handleAction(onGalacticoTransfer); }}
+                disabled={isGalacticoDisabled || isLocalProcessing}
+                className="w-full bg-amber-500/[0.04] hover:bg-amber-500/[0.08] p-4 rounded-2xl border border-amber-400/20 text-left transition-all duration-200 cursor-pointer flex flex-col gap-2 relative overflow-hidden group disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <div className="flex items-start sm:items-center justify-between gap-2.5 w-full">
+                  <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-400/30 flex items-center justify-center text-amber-400 text-xs shrink-0 group-hover:scale-105 transition-transform">
+                      <i className="fa-solid fa-crown"></i>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs sm:text-sm font-semibold text-amber-200 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <span>{t('Sign Galactico', 'Galactico Verpflichten')}</span>
+                        <span className="text-[10px] text-amber-400/80 font-normal">· League 1 Exclusive</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-400 font-normal leading-snug mt-0.5">
+                        {isMoneyball ? (
+                          <span className="text-amber-400 font-medium">
+                            {t('Moneyball Syndicate: Locked out of Galactico signings.', 'Moneyball-Syndikat: Keine Verpflichtung von Galacticos erlaubt.')}
+                          </span>
+                        ) : state.club.baseOvr >= 96
+                          ? t('Elite squad diminishing returns: Guaranteed +1 OVR and +5,000 Fans.', 'Elite-Kader mit abnehmendem Ertrag: Garantiert +1 GES und +5.000 Fans.')
+                          : state.club.baseOvr > 92
+                          ? t('Elite roster diminishing returns: Guaranteed +2 OVR and +5,000 Fans.', 'Elite-Kader mit abnehmendem Ertrag: Garantiert +2 GES und +5.000 Fans.')
+                          : t('Bypass OVR cap limits. Guaranteed +4 OVR and +5,000 Fans immediately.', 'Umgeht GES-Limits. Garantiert sofort +4 GES und +5.000 Fans.')}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-right shrink-0">
+                    <div className="font-mono font-bold text-amber-300 text-sm">
+                      -{formatMoney(actionCosts.bidKey * 2)}
+                    </div>
+                    <div className="font-mono text-[10px] text-amber-400/80">
+                      {state.galacticosThisSeason || 0} / 1 {t('season', 'Saison')}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* Outgoings Section */}
+          {(activeTab === 'all' || activeTab === 'outgoings') && (
+            <div className="space-y-3">
+              <div className="text-[10px] font-semibold tracking-wider text-zinc-400 uppercase px-1">
+                {t('Loans & Outgoings', 'Leihe & Abgänge')}
               </div>
 
-              {/* 2-Column Bento Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Loan In Card */}
+                {/* Loan Player */}
                 <button
-                  onClick={(e) => { e.stopPropagation(); onLoanPlayer(); }}
-                  disabled={(state.loansThisSeason || 0) >= 2 || currentSquadSize >= maxSquadSize}
-                  className="bg-[#181924] hover:bg-white/[0.03] p-4 rounded-2xl border border-white/[0.04] hover:border-cyan-500/20 text-left transition-all duration-150 cursor-pointer flex flex-col justify-between gap-3 disabled:opacity-40 disabled:cursor-not-allowed group"
+                  onClick={(e) => { e.stopPropagation(); handleAction(onLoanPlayer); }}
+                  disabled={isLoanDisabled || isLocalProcessing}
+                  className="bg-white/[0.03] hover:bg-white/[0.05] p-4 rounded-2xl border border-white/[0.06] text-left transition-all duration-200 cursor-pointer flex flex-col justify-between gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-xs">
-                        <i className="fas fa-handshake" />
-                      </div>
-                      <span className="font-semibold text-white text-sm">{t('Loan In', 'Spieler leihen')}</span>
+                  <div className="flex items-center justify-between w-full">
+                    <div className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
+                      <i className="fa-solid fa-handshake text-sky-400 text-xs"></i>
+                      <span>{t('Loan In', 'Leihe')}</span>
                     </div>
-                    <span className="text-cyan-400 text-[10px] font-medium uppercase px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
-                      Free
-                    </span>
+                    <span className="text-emerald-400 font-mono text-xs font-semibold">Free</span>
                   </div>
 
-                  <p className="text-[11px] text-zinc-400 leading-snug">
-                    {t('Temporary signing (-1 to +2 OVR impact). Expires at season end.', 'Kurzfristige Verstärkung (-1 bis +2 GES). Endet nach einer Saison.')}
-                  </p>
+                  <div className="text-[11px] text-zinc-400 font-normal leading-snug">
+                    {t('Temporary signing (-1 to +2 OVR impact). Expires at season end.', 'Temporärer Leihspieler (-1 bis +2 GES). Endet nach der Saison.')}
+                  </div>
 
-                  <div className="text-[11px] text-zinc-500 font-medium tabular-nums">
-                    {state.loansThisSeason || 0} / 2 loans used
+                  <div className="font-mono text-[10px] text-zinc-400 pt-2 border-t border-white/[0.04]">
+                    {loanCount} / {loanLimit} {t('loans used', 'geliehen')}
                   </div>
                 </button>
-
-                {/* Sell Player Card */}
-                <div className="bg-[#181924] p-4 rounded-2xl border border-white/[0.04] text-left flex flex-col justify-between gap-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xs">
-                        <i className="fas fa-arrow-trend-up" />
-                      </div>
-                      <span className="font-semibold text-white text-sm">{t('Sell Player', 'Spieler verkaufen')}</span>
+                
+                {/* Sell Players */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleAction(onSellPlayer); }}
+                  disabled={isSellDisabled || isLocalProcessing}
+                  className="bg-white/[0.03] hover:bg-white/[0.05] p-4 rounded-2xl border border-white/[0.06] text-left transition-all duration-200 cursor-pointer flex flex-col justify-between gap-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
+                      <i className="fa-solid fa-arrow-trend-up text-emerald-400 text-xs"></i>
+                      <span>{t('Sell Player', 'Spieler Verkaufen')}</span>
                     </div>
-                    <span className="text-emerald-400 text-[10px] font-medium uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                      +Cash
-                    </span>
+                    <span className="text-emerald-400 font-mono text-xs font-semibold">+Cash</span>
                   </div>
 
-                  <p className="text-[11px] text-zinc-400 leading-snug">
-                    {t('Liquidate surplus talent to reduce squad wage bill and inject capital.', 'Überflüssige Spieler abgeben, Gehaltsetat senken und Erlöse erzielen.')}
-                  </p>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    {(() => {
-                      const ovrRatio = (state.club.baseOvr || 60) / 75;
-                      const benchSellValue = Math.round(getLeagueScaledVal(state.club.tier, 125000, state.club.country) * Math.max(0.5, Math.pow(ovrRatio, 2)));
-                      const starterSellValue = Math.round(getLeagueScaledVal(state.club.tier, 350000, state.club.country) * Math.max(0.5, Math.pow(ovrRatio, 2.5)));
-                      return (
-                        <>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onSellBench(); }}
-                            disabled={isSellDisabled}
-                            className="flex-1 py-1.5 px-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-xs font-medium text-zinc-200 border border-white/[0.04] transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-center truncate cursor-pointer"
-                            title="Sell Bench / Reserve Player"
-                          >
-                            Bench +{formatMoney(benchSellValue)} {sellReason}
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onSellStarter(); }}
-                            disabled={isSellDisabled}
-                            className="flex-1 py-1.5 px-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-medium text-emerald-300 border border-emerald-500/20 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-center truncate cursor-pointer"
-                            title="Sell First-Team Starter"
-                          >
-                            Starter +{formatMoney(starterSellValue)} {sellReason}
-                          </button>
-                        </>
-                      );
-                    })()}
+                  <div className="text-[11px] text-zinc-400 font-normal leading-snug">
+                    {t('Liquidate surplus talent to reduce squad wage bill and inject capital.', 'Kader verkleinern, Gehaltskosten senken und Budget freisetzen.')}
                   </div>
-                </div>
+
+                  <div className="font-mono text-[10px] text-zinc-400 pt-2 border-t border-white/[0.04]">
+                    {sellReason}
+                  </div>
+                </button>
               </div>
 
-              {/* Mutual Contract Termination Row */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onTerminateContractMutual) onTerminateContractMutual();
-                }}
-                disabled={currentSquadSize <= minSquadSize}
-                className="w-full bg-[#181924] hover:bg-white/[0.03] p-3 rounded-2xl border border-white/[0.04] hover:border-sky-500/20 text-left transition flex items-center justify-between gap-3 disabled:opacity-40 disabled:cursor-not-allowed group cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-xs shrink-0">
-                    <i className="fas fa-file-contract" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-white truncate">{t('Mutual Contract Termination', 'Einvernehmliche Vertragsauflösung')}</div>
-                    <div className="text-[10px] text-zinc-400 truncate">{t('Release contract by mutual agreement with €0 severance.', 'Vertrag ohne Abfindung einvernehmlich auflösen.')}</div>
-                  </div>
-                </div>
-                <span className="text-[10px] font-medium text-sky-400 uppercase tracking-wider bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded-full shrink-0">
-                  {t('€0 Severance', '0 € Abfindung')}
-                </span>
-              </button>
-            </div>
-          )}
+              {/* Veteran Ringer Promotion Gamble (Tiers 3-11) */}
+              {(() => {
+                const ringerEcon = getVeteranRingerEconomics(state);
+                if (!ringerEcon.isEligibleTier) return null;
+                const canAffordRinger = state.budget >= ringerEcon.signingFeeK;
+                const isRingerDisabled =
+                  ringerEcon.alreadySigned ||
+                  ringerEcon.isBlockedByDebtVeto ||
+                  !canAffordRinger ||
+                  isSquadFull ||
+                  isLocalProcessing;
 
-          {/* SECTION 3: YOUTH ACADEMY */}
-          {(activeCategory === 'all' || activeCategory === 'academy') && (
-            <div className="space-y-2.5">
-              <div className="text-[10px] font-medium tracking-wider text-zinc-400 uppercase">
-                {t('YOUTH ACADEMY', 'JUGENDAKADEMIE')}
-              </div>
+                return (
+                  <div className="mt-3 bg-[#181b26] border border-amber-500/30 rounded-2xl p-4 relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
+                          <span className="text-amber-400">
+                            <i className="fa-solid fa-fire-flame-curved mr-1.5" />
+                            {t('Veteran Ringer Gamble (Tiers 3–11)', 'Altstar-Aufstiegswette (Liga 3–11)')}
+                          </span>
+                          <span className="text-zinc-600" aria-hidden="true">·</span>
+                          <span className="text-emerald-400 font-mono">
+                            +5 OVR · 1 YR
+                          </span>
+                        </div>
+                        <div className="text-sm font-bold text-white tracking-tight">
+                          {ringerEcon.alreadySigned && state.veteranRingerName
+                            ? `${t('Active Veteran Ringer:', 'Aktiver Altstar:')} ${state.veteranRingerName}`
+                            : `${t('Recruit Ex-Top-Flight Legend', 'Ex-Erstliga-Ikone verpflichten')} (e.g. ${featuredLegend.name})`}
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-snug">
+                          {t(
+                            `Instant +5 OVR promotion boost for 1 season (retires at season end). Adds +${formatMoney(ringerEcon.annualWageBurdenK)} (+30%) to annual wage bill.`,
+                            `Sofortiger +5 GES Aufstiegs-Boost für 1 Saison (Karriereende nach der Saison). Erhöht das Jahresgehalt um +${formatMoney(ringerEcon.annualWageBurdenK)} (+30%).`
+                          )}
+                        </p>
+                        {ringerEcon.isBlockedByDebtVeto && (
+                          <div className="text-[10px] font-semibold text-rose-400 flex items-center gap-1.5 pt-1">
+                            <i className="fa-solid fa-ban" />
+                            {t(
+                              'Board Debt Veto: Luxury veteran contracts blocked during financial distress or debt.',
+                              'Vorstands-Veto: Luxus-Altstarverträge bei Verschuldung gesperrt.'
+                            )}
+                          </div>
+                        )}
+                      </div>
 
-              {/* Youth Academy Action Card */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onOpenYouth) onOpenYouth();
-                }}
-                className="w-full bg-[#181924] hover:bg-emerald-500/[0.04] p-3 rounded-2xl border border-white/[0.04] hover:border-emerald-500/20 text-left transition flex items-center justify-between gap-3 group cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xs shrink-0 group-hover:scale-105 transition-transform">
-                    <i className="fas fa-graduation-cap" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-white group-hover:text-emerald-300 transition-colors truncate flex items-center gap-2">
-                      <span>{t('Youth Academy & Incubator', 'Nachwuchsakademie & Talentschmiede')}</span>
-                      {academyProspects.some(p => (p.timer || 0) <= 0 && !p.isLoanedOut) && (
-                        <span className="text-[9px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <span className="w-1 h-1 rounded-full bg-amber-400 animate-pulse" />
-                          {t('Graduate Ready', 'Graduierung bereit')}
-                        </span>
+                      {onSignVeteranRinger && (
+                        <button
+                          type="button"
+                          disabled={isRingerDisabled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAction(onSignVeteranRinger);
+                          }}
+                          className={`shrink-0 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wide transition flex flex-col items-center justify-center min-w-[144px] border ${
+                            ringerEcon.alreadySigned
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 cursor-not-allowed'
+                              : isRingerDisabled
+                              ? 'bg-white/[0.03] border-white/[0.06] text-zinc-500 cursor-not-allowed'
+                              : 'bg-amber-500 hover:bg-amber-400 text-zinc-950 border-amber-400 shadow-sm cursor-pointer active:scale-[0.98]'
+                          }`}
+                        >
+                          {ringerEcon.alreadySigned ? (
+                            <>
+                              <span>{t('Signed for Season', 'Für 1 Jahr im Kader')}</span>
+                              <span className="text-[10px] font-mono opacity-80">+5 OVR Active</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>{t('Sign Veteran Ringer', 'Altstar Verpflichten')}</span>
+                              <span className="text-[10px] font-mono font-semibold tabular-nums">
+                                {formatMoney(ringerEcon.signingFeeK)} {t('Fee', 'Handgeld')}
+                              </span>
+                            </>
+                          )}
+                        </button>
                       )}
                     </div>
-                    <div className="text-[10px] text-zinc-400 truncate">
-                      {t('Scout talent, review incubator prospects, Pull to Squad, or graduate mature players.', 'Talente scouten, U19-Kader verwalten und Nachwuchsspieler hochziehen.')}
-                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[10px] font-medium text-emerald-400 uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full tabular-nums">
-                    {academyProspects.length} {academyProspects.length === 1 ? t('Prospect', 'Talent') : t('Prospects', 'Talente')}
-                  </span>
-                  <i className="fas fa-arrow-up-right-from-square text-xs text-zinc-500 group-hover:text-emerald-400 transition-colors" />
-                </div>
-              </button>
+                );
+              })()}
             </div>
           )}
 
+          {/* Academy Call-Up Section */}
+          {(activeTab === 'all' || activeTab === 'academy') && state.youthPipeline && state.youthPipeline.length > 0 && (
+            <div className="space-y-3">
+              <div className="text-[10px] font-semibold tracking-wider text-emerald-400 uppercase px-1 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span>{t('Incubator Squad Pull (Cost of OVR)', 'Jugendakademie-Abruf (GES-Integration)')}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold border ${
+                    isCallUpCapped 
+                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30' 
+                      : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  }`}>
+                    {callUpsUsed} / {callUpCap} {t('Call-ups Used', 'Berufungen')} (Lvl {state.club.academyLevel || 1})
+                  </span>
+                </div>
+                <span className="text-zinc-500 font-normal">Zero Transfer Fee</span>
+              </div>
+
+              {isCallUpCapped && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-xs flex items-center gap-2.5">
+                  <i className="fa-solid fa-circle-exclamation text-amber-400 text-sm shrink-0"></i>
+                  <span>
+                    {t(
+                      `Seasonal call-up cap reached (${callUpsUsed}/${callUpCap}). Upgrade your Youth Academy to unlock higher call-up limits each season.`,
+                      `Saison-Limit für Berufungen erreicht (${callUpsUsed}/${callUpCap}). Baue die Jugendakademie aus für mehr Kaderberufungen pro Saison.`
+                    )}
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                {state.youthPipeline.map((p) => {
+                  const isLoaned = p.status === 'loaned';
+                  const isReady = (p.status === 'ready' || (typeof p.timer === 'number' && p.timer <= 0)) && !isLoaned;
+                  const hasNlzBonus = isReady && (state.club.academyLevel || 1) >= 3;
+                  const hasFeederBonus = Boolean(state.prestigeUpgrades?.feederClubPurchased && !(p as any).feederBonusApplied);
+                  const rawBoost = p.boost + (hasNlzBonus ? 1 : 0) + (hasFeederBonus ? 1 : 0);
+                  let netGain = isReady ? rawBoost : Math.max(1, rawBoost - 1);
+                  if (state.currentCoach) {
+                    const cStr = state.currentCoach.strength;
+                    const cWeak = state.currentCoach.weakness;
+                    const cArch = (state.currentCoach as any).archetype;
+                    if (cWeak === 'Youth Apathy' || cArch === 'iron_disciplinarian' || cArch === 'pragmatic_grinder') {
+                      netGain = Math.max(1, Math.floor(netGain / 2));
+                    } else if (cStr === 'Youth Whisperer' || cStr === 'Youth Focus' || cArch === 'youth_visionary') {
+                      netGain += 1;
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-emerald-500/[0.03] hover:bg-emerald-500/[0.06] p-3.5 rounded-2xl border border-emerald-500/20 text-left transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs shrink-0">
+                          <i className="fa-solid fa-graduation-cap"></i>
+                        </div>
+                        <div>
+                          <div className="text-xs sm:text-sm font-semibold text-white flex flex-wrap items-center gap-1.5">
+                            <span>{sanitizePlayerName(p.name)}</span>
+                            {p.position && (
+                              <span className="text-zinc-400 font-mono text-[11px]">· {p.position}</span>
+                            )}
+                            {isLoaned && (
+                              <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[9px] px-1.5 py-0.2 rounded-full font-bold">
+                                {t('On Loan', 'Verliehen')}
+                              </span>
+                            )}
+                            {isReady && (
+                              <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] px-1.5 py-0.2 rounded-full font-bold">
+                                {t('Matured', 'Reif')}
+                              </span>
+                            )}
+                            {hasNlzBonus && (
+                              <span className="bg-sky-500/20 text-sky-300 border border-sky-400/30 text-[9px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+                                {t('+1 NLZ Bonus', '+1 NLZ-Bonus')}
+                              </span>
+                            )}
+                            {hasFeederBonus && (
+                              <span className="bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[9px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+                                {t('+1 Feeder', '+1 Farmteam')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-zinc-400 font-normal flex flex-wrap items-center gap-1.5">
+                            <span className="text-emerald-300 font-medium">+{p.boost} {t('Potential', 'Potenzial')}</span>
+                            {isLoaned ? (
+                              <>
+                                <span className="text-zinc-600">·</span>
+                                <span className="text-sky-300 font-medium">{t('Developing on loan (Returns next season)', 'Auf Ausbildungsleihe (Rückkehr nächste Saison)')}</span>
+                              </>
+                            ) : isReady ? (
+                              <>
+                                <span className="text-zinc-600">·</span>
+                                <span className="text-emerald-400 font-medium">{t('Graduation Ready (0 Penalty)', 'Abschlussbereit (0 Abzug)')}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-zinc-600">·</span>
+                                <span className="text-rose-300/90">{t('-1 OVR Early Promotion Penalty', '-1 GES Vorzeitige Berufung')}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                        <div className="text-right hidden sm:block">
+                          <div className="font-mono font-bold text-emerald-400 text-xs">
+                            +{netGain} {t('Net OVR', 'Netto GES')}
+                          </div>
+                          <div className="font-mono text-[10px] text-zinc-400">
+                            {formatMoney(0)} {t('Fee', 'Ablöse')}
+                          </div>
+                        </div>
+
+                        {onPullYouthToSquad && (
+                          <button
+                            type="button"
+                            disabled={isCallUpCapped || isLoaned || isSquadFull || isLocalProcessing}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAction(() => onPullYouthToSquad(p.id));
+                            }}
+                            className={`font-semibold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm ${
+                              (isCallUpCapped || isLoaned || isSquadFull || isLocalProcessing)
+                                ? 'bg-zinc-800/80 text-zinc-500 border border-white/[0.05] cursor-not-allowed opacity-60'
+                                : 'bg-emerald-500 hover:bg-emerald-400 text-white cursor-pointer active:scale-95'
+                            }`}
+                            title={
+                              isLoaned
+                                ? t('Prospect is currently out on farm loan', 'Talent ist aktuell an Partnerverein verliehen')
+                                : isCallUpCapped
+                                ? `Seasonal call-up cap reached (${callUpsUsed}/${callUpCap})`
+                                : undefined
+                            }
+                          >
+                            <i className="fa-solid fa-arrow-up-from-bracket text-[10px]"></i>
+                            <span>
+                              {isLoaned
+                                ? t('On Loan', 'Verliehen')
+                                : isCallUpCapped
+                                ? t('Cap Reached', 'Limit erreicht')
+                                : t('Pull to Squad', 'In Kader berufen')}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-white/[0.04] bg-[#14151e] shrink-0">
+        {/* Footer */}
+        <div className="p-4 sm:p-5 border-t border-white/[0.06] bg-white/[0.02] shrink-0 relative z-10">
           <button 
             aria-label="Close modal"
             onClick={onClose}
-            className="w-full py-3 px-5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-xs font-medium transition active:scale-[0.99] border border-white/[0.04] cursor-pointer"
+            className="w-full py-3.5 px-6 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white font-semibold text-xs transition border border-white/[0.08] cursor-pointer"
           >
-            {t('Close Window', 'Fenster schließen')}
+            {t('Close Window', 'Fenster Schließen')}
           </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };

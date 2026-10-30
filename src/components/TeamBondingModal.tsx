@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { GameState, Language } from '../types';
 import { formatMoney } from '../data/gameConstants';
 import { t as tr } from '../data/translations';
-import { useModalDismiss } from '../utils/modalUtils';
 
 interface TeamBondingModalProps {
   state: GameState;
@@ -15,129 +14,166 @@ interface TeamBondingModalProps {
 }
 
 export const TeamBondingModal: React.FC<TeamBondingModalProps> = ({ state, lang, cost, onClose, onConfirm, canAfford }) => {
-  const t = (en: string, _de?: string) => en;
-  
-  useModalDismiss(onClose);
+  const isDe = lang === 'de';
+  const t = (en: string, de?: string) => tr(lang, en, de);
 
-  const hasBonded = (state.teamBondingThisSeason || 0) >= 1;
   const currentMorale = state.club.morale ?? 100;
-  const newMorale = Math.min(100, currentMorale + 30);
-  const costScaleInfo = `Camp costs scale based on league tier (Tier ${state.club.tier}).`;
+  const isAlreadyDone = Boolean(state.teamBondingThisSeason);
+  const costScaleInfo = t(`Tier ${state.club.tier} football pricing`, `Skaliert für Liga ${state.club.tier}`);
 
   return (
-    <div 
-      onClick={onClose} 
-      className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-2xl cursor-pointer"
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.1, ease: 'linear' }}
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-2xl text-left cursor-pointer overflow-y-auto overscroll-contain"
     >
       <motion.div 
-        initial={{ scale: 0.95, opacity: 0, y: 12 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.95, opacity: 0, y: 8 }}
-        transition={{ type: 'spring', damping: 26, stiffness: 340 }}
+        initial={{ scale: 0.98, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.98, opacity: 0 }}
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] border border-white/[0.04] rounded-2xl max-w-sm w-full p-6 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.85)] relative overflow-hidden flex flex-col max-h-[92vh] cursor-default"
+        className="bg-[#12141c]/90 backdrop-blur-3xl border border-white/[0.08] w-full max-w-md rounded-[28px] sm:rounded-[32px] shadow-[0_24px_64px_rgba(0,0,0,0.6)] flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shrink-0 overflow-hidden relative cursor-default"
       >
-        {/* Ambient Top Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-purple-400/30 to-transparent pointer-events-none" />
+        {/* Subtle Ambient Sky-Blue Glow */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <button 
-          aria-label="Close modal" 
-          onClick={onClose}
-          className="active:scale-95 absolute top-5 right-5 w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer z-10"
-        >
-          <i className="fas fa-xmark text-sm" />
-        </button>
-
-        <div className="overflow-y-auto custom-scrollbar flex-1 min-h-0 pr-1 -mr-1">
-
-        <div className="flex flex-col items-center text-center">
-          <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-xl mb-3">
-            <i className="fas fa-handshake" />
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-medium uppercase tracking-wider mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-            {t('Squad Chemistry', 'Teammoral & Zusammenhalt')}
-          </div>
-
-          <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tight mb-2">
-            {t('Team Bonding Camp', 'Team-Building Camp')}
-          </h3>
-          
-          <p className="text-xs text-zinc-400 leading-relaxed mb-4 max-w-xs">
-            {t(
-              'Organize a focused training retreat to restore squad morale, unify big personalities, and arrest negative momentum.',
-              'Organisiere ein intensives Teamevent, um die Stimmung zu heben, Egos zu einen und Negativspiralen zu stoppen.'
-            )}
-          </p>
-        </div>
-
-        {/* Morale Delta Bento Card */}
-        <div className="bg-[#181924] rounded-2xl p-4 mb-4 border border-white/[0.04] flex flex-col gap-2.5">
-          <div className="flex justify-between items-center pb-2 border-b border-white/[0.04]">
-            <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Squad Morale</span>
-            <div className="flex items-center gap-2 font-medium text-sm tabular-nums">
-              <span className={currentMorale < 40 ? 'text-rose-400' : currentMorale < 70 ? 'text-amber-400' : 'text-zinc-300'}>
-                {currentMorale}%
-              </span>
-              <i className="fas fa-arrow-right text-zinc-600 text-[10px]" />
-              <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                +{newMorale - currentMorale}% ({newMorale}%)
-              </span>
+        {/* Header */}
+        <div className="p-5 sm:p-6 border-b border-white/[0.06] bg-white/[0.02] flex items-center justify-between shrink-0 relative z-10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-sky-400 text-base shadow-inner shrink-0">
+              <i className="fa-solid fa-users"></i>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-400/90">
+                  {t('Squad Dynamics', 'Kadermoral')}
+                </span>
+                <span className="text-zinc-600 text-xs">·</span>
+                <span className={`text-[10px] font-semibold uppercase tracking-wider ${isAlreadyDone ? 'text-amber-400' : 'text-zinc-400'}`}>
+                  {isAlreadyDone ? t('Held This Season', 'Bereits genutzt') : t('1x Per Season', '1x pro Saison')}
+                </span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight leading-tight">
+                {t('Team Bonding Retreat', 'Team-Building Klausur')}
+              </h2>
             </div>
           </div>
-          
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Camp Cost</span>
-            <span className="font-medium text-white text-sm tabular-nums">{formatMoney(cost)}</span>
+          <button 
+            aria-label="Close modal" 
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center transition border border-white/[0.08] cursor-pointer shrink-0"
+          >
+            <i className="fas fa-xmark text-xs"></i>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 sm:p-6 space-y-4 custom-scrollbar relative z-10">
+          {/* Narrative description */}
+          <div className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-2xl p-3 sm:p-3.5 text-xs text-zinc-300 leading-relaxed font-normal">
+            {t(
+              'Organize an off-site squad retreat to boost dressing-room morale (1x per season).',
+              'Organisiere einen Ausflug für die Mannschaft, um die Kabinenmoral zu stärken (1x pro Saison).'
+            )}
           </div>
-          
-          <div className="text-[10px] text-zinc-500 text-right tabular-nums">
-            {costScaleInfo}
+
+          {/* Gamble Outcome Probabilities Bento */}
+          <div className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-2xl p-4 space-y-3">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                {t('Gamble Outcome Spectrum', 'Mögliche Spannbreite')}
+              </span>
+              <span className="font-mono text-xs font-bold text-sky-400">
+                0% – 40% {t('Morale', 'Moral')}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 pt-1">
+              <div className="bg-black/30 rounded-xl p-2.5 border border-white/[0.04] text-center">
+                <div className="text-[9px] text-zinc-500 font-semibold uppercase">{t('Flop', 'Flop')}</div>
+                <div className="text-sm font-bold text-zinc-400 font-mono mt-0.5">0%</div>
+                <div className="text-[9px] text-zinc-600 mt-0.5">{t('No effect', 'Kein Effekt')}</div>
+              </div>
+              <div className="bg-black/30 rounded-xl p-2.5 border border-white/[0.04] text-center">
+                <div className="text-[9px] text-zinc-500 font-semibold uppercase">{t('Modest', 'Gering')}</div>
+                <div className="text-sm font-bold text-sky-300 font-mono mt-0.5">+5-10%</div>
+                <div className="text-[9px] text-zinc-500 mt-0.5">{t('Small spark', 'Etwas Moral')}</div>
+              </div>
+              <div className="bg-black/30 rounded-xl p-2.5 border border-white/[0.04] text-center">
+                <div className="text-[9px] text-zinc-500 font-semibold uppercase">{t('Solid', 'Solide')}</div>
+                <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">+15-25%</div>
+                <div className="text-[9px] text-emerald-400/80 mt-0.5">{t('Good spirit', 'Guter Geist')}</div>
+              </div>
+              <div className="bg-black/30 rounded-xl p-2.5 border border-amber-400/20 text-center">
+                <div className="text-[9px] text-amber-400 font-semibold uppercase">{t('Jackpot', 'Jackpot')}</div>
+                <div className="text-sm font-bold text-amber-300 font-mono mt-0.5">+30-40%</div>
+                <div className="text-[9px] text-amber-300/80 mt-0.5">{t('Camaraderie', 'Mega-Schub')}</div>
+              </div>
+            </div>
+
+            {/* Current Morale Bar */}
+            <div className="pt-2 border-t border-white/[0.04] space-y-1.5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-[11px] text-zinc-400">{t('Current Squad Morale', 'Aktuelle Kadermoral')}</span>
+                <span className="font-mono font-bold text-white">{currentMorale}%</span>
+              </div>
+              <div className="h-2 w-full bg-white/[0.06] rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-500 ${
+                    currentMorale < 40 ? 'bg-rose-500' : currentMorale < 70 ? 'bg-amber-400' : 'bg-sky-400'
+                  }`}
+                  style={{ width: `${currentMorale}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-white/[0.04] text-xs">
+              <span className="text-zinc-400">{t('Required Investment', 'Erforderliche Investition')}</span>
+              <div className="text-right">
+                <span className="font-mono font-bold text-white">{formatMoney(cost)}</span>
+                <span className="text-[10px] text-zinc-500 ml-1.5 font-normal">· {costScaleInfo}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Benefits Note */}
-        <div className="bg-purple-500/[0.05] border border-purple-500/20 rounded-xl p-3 mb-5 flex gap-2.5 items-start">
-          <i className="fas fa-sparkles text-purple-400 mt-0.5 text-xs shrink-0" />
-          <p className="text-[11px] text-purple-200/90 leading-relaxed font-normal">
-            <strong className="text-purple-300 font-semibold mr-1">{t('Immediate Effect:', 'Soforteffekt:')}</strong>
-            {t('Instantly restores up to +30% Squad Morale, directly strengthening matchday resilience.', 'Stellt sofort bis zu +30% Moral wieder her und stärkt die mentale Spielstärke.')}
-          </p>
-        </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col gap-2.5">
+        {/* Footer */}
+        <div className="p-4 sm:p-5 border-t border-white/[0.06] bg-white/[0.02] flex items-center gap-2.5 shrink-0 relative z-10">
           <button
             onClick={onConfirm}
-            disabled={hasBonded || !canAfford || currentMorale === 100}
-            className={`w-full py-3.5 px-5 rounded-2xl font-semibold text-sm transition-all duration-150 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer ${
-              hasBonded || currentMorale === 100
+            disabled={!canAfford || currentMorale >= 100 || isAlreadyDone}
+            className={`flex-1 py-3.5 px-5 rounded-2xl font-semibold text-xs tracking-wide transition shadow-sm ${
+              isAlreadyDone
+                ? 'bg-white/[0.04] text-zinc-500 border border-white/[0.06] cursor-not-allowed'
+                : currentMorale >= 100
                 ? 'bg-white/[0.04] text-zinc-500 border border-white/[0.06] cursor-not-allowed'
                 : !canAfford
-                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/25 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-500 hover:from-purple-500 hover:to-indigo-500 text-white shadow-[0_8px_25px_rgba(168,85,247,0.35)] border border-purple-400/30'
+                ? 'bg-rose-500/10 text-rose-300 border border-rose-500/20 cursor-not-allowed'
+                : 'bg-sky-500 hover:bg-sky-400 active:scale-[0.98] text-white cursor-pointer'
             }`}
           >
-            {hasBonded
-              ? t('Limit Reached (1 per season)', 'Limit erreicht (1 pro Saison)')
-              : currentMorale === 100
-              ? t('Morale Already Maxed (100%)', 'Moral bereits maximal (100%)')
+            {isAlreadyDone
+              ? t('Already Held This Season (1x/Season)', 'Diese Saison bereits genutzt (1x/Saison)')
+              : currentMorale >= 100
+              ? t('Morale Already Maxed (100%)', 'Moral bereits bei 100%')
               : !canAfford 
               ? t('Insufficient Funds', 'Nicht genügend Budget') 
-              : t('Authorize Camp', 'Camp veranstalten')}
+              : t('Roll The Dice · Authorize Retreat', 'Wagnis eingehen · Klausur starten')}
           </button>
           
           <button 
             aria-label="Close modal"
             onClick={onClose}
-            className="w-full py-2.5 rounded-2xl text-xs font-semibold text-zinc-400 hover:text-white transition active:scale-[0.99] cursor-pointer"
+            className="py-3.5 px-5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white font-semibold text-xs transition border border-white/[0.08] cursor-pointer"
           >
             {t('Decline', 'Abbrechen')}
           </button>
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };

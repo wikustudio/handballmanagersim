@@ -1,28 +1,21 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { getContinentalCupNames } from '../utils/regionHelpers';
 import { getTrophyImage } from '../utils/trophyHelpers';
-import { motion, AnimatePresence } from 'motion/react';
-import { triggerRealisticConfetti } from '../utils/confettiHelper';
+import { motion, animate } from 'motion/react';
+import confetti from 'canvas-confetti';
 import * as htmlToImage from 'html-to-image';
-import { GameState, Language, TrophiesObj, getAcademySlotLimit } from '../types';
-import { getLeagueInfo, getLeagueScaledVal, getDomesticCupInfo, getDomesticSupercupInfo, getEuropeanSupercupInfo, TOURNAMENT_LOGOS, formatMoney, isReserveClub, getLeagueMaxAttendance, getMaxTier, getCountryFlag, getClubCatchmentCeiling, formatOrganicAttendance, getCountryEconomicProfile, calculateClubFinancials, normalizeCountry } from '../data/gameConstants';
-import { getBroadcastingPackage } from '../data/broadcastingPackages';
-import { isAnyModActive } from '../utils/modManager';
-import { BroadcastLogo } from './BroadcastLogo';
-import { ClubLogo } from './ClubLogo';
-import { LeagueTableModal } from './LeagueTableModal';
-import { CountUp } from './CountUp';
-import { t as tr } from '../data/translations';
-import { Club } from "../types";
+import { Club, GameState, Language, TrophiesObj, UniverseMovement } from '../types';
+import { getLeagueInfo, getDomesticCupInfo, TOURNAMENT_LOGOS, formatMoney, isReserveClub, getMinAllowedTierForReserve, getLeagueMaxAttendance, getLeagueScaledVal, getMaxTier, isCanadianMLSClub } from '../data/gameConstants';
 import { ALL_CLUBS } from '../data/clubsData';
-import { getOrGenerateRoadmap } from '../utils/roadmapManager';
-import { getLeagueSize } from '../engine/engine';
-import { useModalDismiss } from '../utils/modalUtils';
+import { ClubLogo } from './ClubLogo';
+import { REAL_CLUB_ALIASES, simplifyClubName } from '../engine/moddingEngine';
+import { PrestigeTrophy } from './PrestigeTrophy';
+import { getAllUniverseMovements, getHeadlineCategory, isMajorUniverseHeadline } from '../utils/universeMovements';
 
 interface SeasonFinishModalProps {
-  clubsDb: Club[];
   state: GameState;
   onShowTable?: () => void;
+  clubsDb?: Club[];
   seasonData: {
     year: number;
     clubName: string;
@@ -38,17 +31,7 @@ interface SeasonFinishModalProps {
     gf: number;
     ga: number;
     revenue: number;
-    sponsorInc?: number;
-    extraSponsorInc?: number;
-    seasonSponsorDeals?: Record<number, {
-      status: 'signed' | 'failed' | 'available';
-      brandName: string;
-      brandLogo: string;
-      payout?: number;
-      bonus?: number;
-    }>;
     wages: number;
-    debtInterest?: number;
     netProfit: number;
     endBudget: number;
     trophiesThisYear: TrophiesObj;
@@ -60,99 +43,835 @@ interface SeasonFinishModalProps {
     transfersOut?: number;
     newBaseOvr?: number;
     startOvr?: number;
-    preSimOvr?: number;
-    rivalryThisSeason?: {
-        name: string;
-        wins: number;
-        draws: number;
-        losses: number;
-        message: string;
-    };
     decayReasons?: string[];
-    rosterUpdates?: {
-      retirements: number;
-      retirementPenalty: number;
-      naturalDecay: number;
-      dramaticDecay?: number;
-      bloatDepartures: number;
-      emergencyCallups: number;
-      callupPenalty: number;
-      loanExpirationPenalty?: number;
-    };
     pointsEarned?: number;
     totalSkillPoints?: number;
     moraleDelta?: number;
     endMorale?: number;
+    rivalData?: { name: string; wins: number; draws: number; losses: number; h2hWins: number; h2hDraws: number; h2hLosses: number; isPaused?: boolean; };
+    coachAtStartOfSim?: any;
+    coachDepartureAlert?: {
+      coachName: string;
+      ovrBoost: number;
+      style: string;
+      reason: string;
+      isPoached: boolean;
+      buyoutFeeK: number;
+    } | null;
+    isSackedRelegation?: boolean;
+    isSacked?: boolean;
     pointsDeducted?: number;
-    nextTier?: number;
-    clubTier: number;
-    finishPos?: number;
-    oldTarget?: number;
-    tactic?: string;
-    consecutiveTitles?: number;
-    worldClubs?: Record<string, Club>;
-    performanceDealResult?: any;
   };
-  lang: Language;
+  lang?: Language;
   onClose: () => void;
-  onShowProfile?: () => void;
+  onRenewCoach?: (years: number) => void;
+  globalHighscores?: { name: string; score: number }[];
+  isModActive?: boolean;
 }
+
+const AnimatedNumber = ({ from = 0, to, duration = 1.2, isMoney = false, prefix = '', suffix = '' }: { from?: number, to: number, duration?: number, isMoney?: boolean, prefix?: string, suffix?: string }) => {
+  const nodeRef = useRef<HTMLSpanElement>(null);
+  
+  useEffect(() => {
+    const node = nodeRef.current;
+    if (!node) return;
+    
+    const controls = animate(from, to, {
+      duration,
+      ease: "easeOut",
+      onUpdate(value) {
+        if (isMoney) {
+          let fm = formatMoney(value);
+          if (value >= 0 && prefix === '+') fm = '+' + fm;
+          node.textContent = `${fm}${suffix}`;
+        } else {
+          node.textContent = `${prefix}${Math.round(value).toLocaleString('en-US')}${suffix}`;
+        }
+      }
+    });
+    
+    return () => controls.stop();
+  }, [from, to, duration, isMoney, prefix, suffix]);
+  
+  let initialText = '';
+  if (isMoney) {
+    let fm = formatMoney(from);
+    if (from >= 0 && prefix === '+') fm = '+' + fm;
+    initialText = fm + suffix;
+  } else {
+    initialText = `${prefix}${Math.round(from).toLocaleString('en-US')}${suffix}`;
+  }
+  
+  return <span ref={nodeRef}>{initialText}</span>;
+};
 
 export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
   state,
-  clubsDb,
   onShowTable,
   seasonData,
-  lang,
+  lang = 'en',
   onClose,
-  onShowProfile,
+  onRenewCoach,
+  globalHighscores,
+  isModActive,
+  clubsDb,
 }) => {
-  useModalDismiss(onClose, true);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const contentBodyRef = useRef<HTMLDivElement>(null);
+  const t = (en: string, ..._ignored: any[]) => en;
+  const [isTop3Leaderboard, setIsTop3Leaderboard] = useState(false);
+  const [top3Rank, setTop3Rank] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'summary' | 'performance' | 'finances' | 'finance' | 'squad' | 'coach' | 'board' | 'universe' | 'table' | 'history'>('summary');
-  const [selectedYearForTable, setSelectedYearForTable] = useState<number>(seasonData.year);
+  const [activeTab, setActiveTab] = useState<'overview' | 'squad' | 'table' | 'world'>('overview');
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (contentBodyRef.current) {
-      contentBodyRef.current.scrollTop = 0;
+  const switchTab = (tab: 'overview' | 'squad' | 'table' | 'world') => {
+    setActiveTab(tab);
+    if (cardRef.current) {
+      cardRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [activeTab]);
-  
-  useEffect(() => {
-    if (seasonData && seasonData.trophiesThisYear && Object.keys(seasonData.trophiesThisYear).length > 0) {
-      triggerRealisticConfetti();
+  };
+
+  const scrollToSection = (tab: string, _elementId?: string) => {
+    if (tab === 'table' || tab === 'sporting') {
+      switchTab('table');
+    } else if (tab === 'squad' || tab === 'coach' || tab === 'finance') {
+      switchTab('squad');
+    } else if (tab === 'universe' || tab === 'world') {
+      switchTab('world');
+    } else {
+      switchTab('overview');
     }
-  }, [seasonData]);
+  };
+
+  const handleScroll = () => {
+    // Clean single-tab view; no multi-section scroll tracking needed
+  };
+
+  const country = state.club.country || 'GER';
+  const league = getLeagueInfo(seasonData.tier, country);
+  const nextTier = seasonData.nextTier !== undefined
+    ? seasonData.nextTier
+    : seasonData.nextLeague !== undefined
+    ? seasonData.nextLeague
+    : Math.max(1, seasonData.tier - (seasonData.pos <= 2 && seasonData.tier > 1 ? 1 : 0));
+  const nextLeague = getLeagueInfo(nextTier, country);
+  const isCanadian = country === 'CAN' || isCanadianMLSClub(state.club.name, state.club.id, country);
+  const natCupCountry = isCanadian ? 'CAN' : country;
+  const cupInfo = getDomesticCupInfo(natCupCountry, seasonData.tier, state.club.name);
+  const t1League = getLeagueInfo(1, country);
+
+  const isTier1Only = getMaxTier(country, clubsDb) === 1;
+  const isBottomTier = seasonData.tier >= getMaxTier(country, clubsDb);
+  const isChamp = seasonData.pos === 1;
+  const isPromoted = nextTier < seasonData.tier;
+  const isRelegated = !isTier1Only && !seasonData.isSackedRelegation && nextTier > seasonData.tier;
+  const isPositiveNetProfit = seasonData.netProfit >= 0;
+
+  // Global Highscore / Leaderboard celebration
+  useEffect(() => {
+    const currentScore = state.careerScore || 0;
+    if (currentScore > 0 && globalHighscores && globalHighscores.length > 0) {
+      const scores = globalHighscores
+        .map(h => h.score)
+        .filter(s => typeof s === 'number' && !isNaN(s));
+      const sortedUnique = Array.from(new Set([...scores, currentScore])).sort((a, b) => b - a);
+      const myRank = sortedUnique.indexOf(currentScore) + 1;
+
+      if (myRank <= 3) {
+        setIsTop3Leaderboard(true);
+        setTop3Rank(myRank);
+
+        const duration = 5 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 35, spread: 360, ticks: 80, zIndex: 999999 };
+        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+        const interval: NodeJS.Timeout = setInterval(() => {
+          const timeLeft = animationEnd - Date.now();
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
+          const particleCount = 60 * (timeLeft / duration);
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+        }, 300);
+
+        return () => {
+          clearInterval(interval);
+          confetti.reset();
+        };
+      }
+    }
+  }, [state.careerScore, globalHighscores]);
+
+  // Haptic feedback & celebration confetti for championships / promotions
+  useEffect(() => {
+    if (isChamp || isPromoted) {
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+      if (navigator.vibrate) {
+        navigator.vibrate([40, 60, 40, 60, 120]);
+      }
+    } else if (isRelegated) {
+      if (navigator.vibrate) {
+        navigator.vibrate([180, 80, 180]);
+      }
+    }
+    return () => {
+      confetti.reset();
+    };
+  }, [isChamp, isPromoted, isRelegated]);
+
+  // Keyboard shortcut: Press Enter to proceed (guarded against duplicate calls or overlapping modals)
+  const hasClosedRef = useRef(false);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !isDownloading && !hasClosedRef.current) {
+        if (typeof document !== 'undefined' && document.querySelector('[data-wc-modal="true"]')) {
+          return;
+        }
+        hasClosedRef.current = true;
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, isDownloading]);
+
+  // Pundit commentary (100% English)
+  const pundit = useMemo(() => {
+    if (isChamp && seasonData.tier === 1) {
+      return {
+        author: "Gareth North",
+        text: `An absolute masterclass. ${state.club.name} just dismantled the league. This sporting directorship is going down in history.`,
+        handle: "@GarethNorth_TV",
+        role: "Lead Analyst"
+      };
+    }
+    if (isPromoted) {
+      return {
+        author: "Mateo Russo",
+        text: `🚨 PROMOTION CONFIRMED! ${state.club.name} secures their spot in the higher tier! What a story, fully deserved! 📈`,
+        handle: "@MateoRusso_Transfers",
+        role: "Transfer Insider"
+      };
+    }
+    if (seasonData.isSackedRelegation) {
+      return {
+        author: "Ray Kearns",
+        text: isTier1Only
+          ? `Ruthless dismissal at ${state.club.name}. In a single-tier system, finishing in the bottom three is immediate grounds for dismissal. Board immunity shields offered zero protection.`
+          : `Brutal dismissal at ${state.club.name}. Finishing in the bottom tier drop-zone leaves the board with no patience: manager sacked on the spot.`,
+        handle: "@RayKearns_Pundit",
+        role: "Pundit"
+      };
+    }
+    if (isRelegated) {
+      return {
+        author: "Ray Kearns",
+        text: `Crushing relegation. ${state.club.name} lacked sharpness in decisive moments. A complete squad reset is required now.`,
+        handle: "@RayKearns_Pundit",
+        role: "Pundit"
+      };
+    }
+    if (seasonData.tier === 1 && seasonData.pos > 10) {
+      return {
+        author: "James Callaghan",
+        text: `Disappointing campaign for ${state.club.name}. The sporting directorship will have to deliver quick answers next term.`,
+        handle: "@JCallaghan_TV",
+        role: "League Correspondent"
+      };
+    }
+    if (seasonData.wins === 0) {
+      return {
+        author: "DataPro",
+        text: `0 wins - A historically challenging campaign for ${state.club.name}. Time to regroup and build back stronger.`,
+        handle: "@DataPro_Sports",
+        role: "Analytics"
+      };
+    }
+    if (seasonData.gf > 80) {
+      return {
+        author: "Theo Henri",
+        text: `The attacking football from ${state.club.name} was pure art. ${seasonData.gf} goals! An absolute treat for the fans.`,
+        handle: "@TheoHenri_14",
+        role: "Tactical Analyst"
+      };
+    }
+    return {
+      author: "Arthur Sterling",
+      text: `A disciplined, by-the-numbers campaign from ${state.club.name}. Expected benchmarks met with calm execution.`,
+      handle: "@ArthurSterling_9",
+      role: "Senior Columnist"
+    };
+  }, [isChamp, isPromoted, isRelegated, seasonData, state.club.name]);
+
+  // Trophy collection
+  const trophyList = useMemo(() => {
+    const list: { type: string; name: string; icon?: string; logo?: string; color: string; badge?: string }[] = [];
+    const { cl, el, ecl } = getContinentalCupNames(country);
+    
+    if (seasonData.trophiesThisYear?.cwc) list.push({ type: 'cwc', name: 'Global Club Cup', logo: TOURNAMENT_LOGOS.cwc || '', color: 'text-amber-400', badge: 'World Champions' });
+    if (seasonData.trophiesThisYear?.cl) list.push({ type: 'cl', name: cl, logo: getTrophyImage('cl', country), color: 'text-yellow-300', badge: 'Continental Champions' });
+    if (seasonData.trophiesThisYear?.el) list.push({ type: 'el', name: el, logo: getTrophyImage('el', country), color: 'text-orange-400', badge: 'Continental Cup' });
+    if (seasonData.trophiesThisYear?.ecl) list.push({ type: 'ecl', name: ecl, logo: getTrophyImage('ecl', country), color: 'text-emerald-400', badge: 'Continental Challenge' });
+    if (seasonData.trophiesThisYear?.bl) list.push({ type: 'title', name: `${t1League.name}`, logo: t1League.logo, color: 'text-amber-400', badge: 'League Champions' });
+    if (seasonData.trophiesThisYear?.lower) list.push({ type: 'lower', name: `${league.name} Title`, logo: league.logo, color: 'text-sky-300', badge: 'League Champions' });
+    if (seasonData.trophiesThisYear?.dfb) list.push({ type: 'dfb', name: cupInfo.name, logo: cupInfo.logo, color: 'text-amber-400', badge: 'National Cup' });
+    if (seasonData.trophiesThisYear?.efl) list.push({ type: 'efl', name: 'League Cup', color: 'text-emerald-400', badge: 'League Cup' });
+    if (seasonData.trophiesThisYear?.reg) list.push({ type: 'reg', name: 'Regional Cup', icon: 'fa-shield-halved', color: 'text-amber-600', badge: 'Regional Cup' });
+
+    // Cross-reference state.cupRunResults for any cup won this year not yet added
+    const sYear = seasonData.year ?? (state.year - 1);
+    const wonCupsThisYear = (state.cupRunResults || []).filter(r => r.year === sYear && r.won);
+    for (const cup of wonCupsThisYear) {
+      if (!list.some(item => item.type === cup.id)) {
+        let cupType = cup.id;
+        let cupName = cup.nameEn || cup.nameDe || 'Cup';
+        let trophyColor = 'text-amber-400';
+        let badge = 'Cup Champions';
+        if (cup.id === 'cl') { trophyColor = 'text-yellow-300'; badge = 'Continental Champions'; }
+        else if (cup.id === 'el') { trophyColor = 'text-orange-400'; badge = 'Continental Cup'; }
+        else if (cup.id === 'ecl') { trophyColor = 'text-emerald-400'; badge = 'Continental Challenge'; }
+        else if (cup.id === 'reg') { trophyColor = 'text-amber-600'; badge = 'Regional Cup'; }
+        else if (cup.id === 'dfb') { badge = 'National Cup'; }
+        list.push({ type: cupType, name: cupName, color: trophyColor, badge });
+      }
+    }
+
+    return list;
+  }, [seasonData.trophiesThisYear, country, t1League, league, cupInfo, state.cupRunResults, seasonData.year, state.year]);
+
+  // Attendance Metrics
+  const leagueMaxAtt = getLeagueMaxAttendance(seasonData.tier, isReserveClub(state.club.name), country, state.club.name);
+  const baseAvgAttendance = Math.min(state.club.fanBase || league.attBase, state.club.stadium, leagueMaxAtt);
+  const sCount = seasonData.year || 2026;
+  const pseudoRandom = Math.abs(Math.sin(sCount * 12.9898 + state.club.baseOvr)) % 1;
+  const seasonalVariance = 0.90 + (pseudoRandom * 0.20);
+  const rawAttendance = Math.round(baseAvgAttendance * seasonalVariance);
+  const nonRoundOffset = (Math.floor(pseudoRandom * 97) - 48);
+  let avgAttendance = Math.min(state.club.stadium, Math.max(10, rawAttendance + nonRoundOffset));
+  if (avgAttendance === state.club.stadium && seasonData.tier > 2) {
+    const noShows = Math.floor(pseudoRandom * (state.club.stadium * 0.03)) + 3;
+    avgAttendance = Math.max(10, avgAttendance - noShows);
+  }
+  const fillPercentage = Math.min(100, Math.round((avgAttendance / state.club.stadium) * 100));
+
+  const goalDiff = seasonData.gf - seasonData.ga;
+  const ovrDelta = (seasonData.newBaseOvr || state.club.baseOvr) - (seasonData.startOvr || state.club.baseOvr);
+  const hasPromotionPlayoffs = seasonData.tier > 1 && getMaxTier(country, clubsDb) > 1;
+
+  const isStaleActive = Boolean(state.staleTactic && state.tactic === state.staleTactic);
+  const isStaleWarning = Boolean(!isStaleActive && (state.consecutiveTitlesWithSameTactic || 0) >= 1 && seasonData.pos === 1);
+  const consecutiveTitles = state.consecutiveTitles || 0;
+  const hasSystemicImmunity = Boolean((state.club.medicalLevel || 1) >= 5 && (state.club.academyLevel || 1) >= 5);
+  const rivalChallengerEvent = seasonData.rivalChallengerEvent || null;
+  const superVillainClub = useMemo(() => {
+    const targetId = rivalChallengerEvent?.clubId || null;
+    if (!targetId) return null;
+    return (clubsDb || ALL_CLUBS).find(c => c.id === targetId) || null;
+  }, [rivalChallengerEvent, clubsDb]);
+  const decayReasons = seasonData.decayReasons || [];
+
+  const tableData = useMemo(() => {
+    const currentTier = seasonData.tier;
+    const currentCountry = country;
+    const currentLeagueInfo = league;
+    const userPos = seasonData.pos;
+    const userWins = seasonData.wins;
+    const userDraws = seasonData.draws;
+    const userLosses = seasonData.losses;
+    const userPts = seasonData.pts;
+    const userGf = seasonData.gf;
+    const userGa = seasonData.ga;
+    const rawGd = userGf - userGa;
+    const userGDStr = rawGd > 0 ? `+${rawGd}` : `${rawGd}`;
+
+    const isReserveTeam = (name: string) => {
+      if (name === 'SSV Jeddeloh II' || name.toLowerCase().includes('jeddeloh ii')) return false;
+      return isReserveClub(name);
+    };
+
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
+
+    const seededRand = (seed: number, min: number, max: number) => {
+      return Math.floor(seededRandom(seed) * (max - min + 1)) + min;
+    };
+
+    const sanitizedClubsDb = clubsDb && clubsDb.length > 0 ? clubsDb : ALL_CLUBS;
+    const isMajorPyramid = ['GER', 'ENG', 'ESP', 'ITA', 'FRA'].includes(currentCountry);
+    const minReserveTier = getMinAllowedTierForReserve(currentCountry);
+    const targetTotalClubs = 18;
+    const targetAiCount = Math.max(0, targetTotalClubs - 1);
+
+    // 1. Direct retrieval from permanent season standings archive if available
+    const archivedRows = state.seasonStandingsArchive?.[seasonData.year]?.[currentTier];
+    if (archivedRows && archivedRows.length > 0) {
+      const mappedRows = archivedRows.slice(0, targetTotalClubs).map((r: any, idx: number) => {
+        const isUserClub = Boolean(
+          r.isUser ||
+          (seasonData.clubName && r.name?.toLowerCase().trim() === seasonData.clubName.toLowerCase().trim()) ||
+          (!seasonData.clubName && r.id === state.club.id)
+        );
+        if (isUserClub) {
+          const rawGd = seasonData.gf - seasonData.ga;
+          return {
+            ...r,
+            isUser: true,
+            pos: idx + 1,
+            pts: seasonData.pts,
+            w: seasonData.wins,
+            d: seasonData.draws,
+            l: seasonData.losses,
+            gf: seasonData.gf,
+            ga: seasonData.ga,
+            gd: rawGd > 0 ? `+${rawGd}` : `${rawGd}`,
+            logo: isModActive ? (r.logo || (r.id ? (clubsDb || ALL_CLUBS).find(c => c.id === r.id)?.logo : undefined)) : undefined
+          };
+        }
+        return {
+          ...r,
+          pos: idx + 1,
+          isUser: false,
+          isRival: Boolean(!seasonData.rivalData?.isPaused && (r.isRival || (seasonData.rivalData?.name && r.name === seasonData.rivalData.name))),
+          logo: isModActive ? (r.logo || (r.id ? (clubsDb || ALL_CLUBS).find(c => c.id === r.id)?.logo : undefined)) : undefined
+        };
+      });
+      mappedRows.sort((a: any, b: any) => {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        const aGd = parseInt(String(a.gd ?? 0), 10) || 0;
+        const bGd = parseInt(String(b.gd ?? 0), 10) || 0;
+        return bGd - aGd;
+      });
+      mappedRows.forEach((r: any, idx: number) => {
+        r.pos = idx + 1;
+      });
+      return mappedRows;
+    }
+
+    const db = clubsDb && clubsDb.length > 0 ? clubsDb : ALL_CLUBS;
+    let leagueClubs = db
+      .filter((c) => c.tier === currentTier && (c.country || 'GER') === currentCountry && c.id !== state.club.id && !(currentTier < minReserveTier && isReserveTeam(c.name)))
+      .map((c) => ({ ...c }));
+
+    // Deduplicate clubs by canonical identity & name (e.g. prune duplicate unmodded Dortmund II when mod is active)
+    const getCanonicalDedupeKey = (clubName: string): string => {
+      const lower = clubName.toLowerCase().trim();
+      if (REAL_CLUB_ALIASES[lower] != null) {
+        return `alias_${REAL_CLUB_ALIASES[lower]}`;
+      }
+      const lowerNoRes = lower.replace(/\s+res\.?$/i, '').replace(/\s+reserve$/i, '').trim();
+      if (REAL_CLUB_ALIASES[lowerNoRes] != null) {
+        return `alias_${REAL_CLUB_ALIASES[lowerNoRes]}`;
+      }
+      const isReserve = isReserveClub(clubName);
+      const cleanParent = clubName
+        .replace(/\s+Res\.?$/i, '')
+        .replace(/\s+Reserve$/i, '')
+        .replace(/\s+II$/, '')
+        .replace(/\s+\(?B\)?$/, '')
+        .replace(/\s+Castilla$/, '')
+        .replace(/\s+B$/, '')
+        .replace(/\s+2$/, '')
+        .trim()
+        .toLowerCase();
+      const parentAlias = REAL_CLUB_ALIASES[cleanParent];
+      if (parentAlias != null) {
+        return `parent_${parentAlias}_${isReserve}`;
+      }
+      return `simp_${simplifyClubName(cleanParent)}_${isReserve}`;
+    };
+
+    if (isModActive) {
+      leagueClubs.sort((a, b) => {
+        const aLower = a.name.toLowerCase().trim();
+        const bLower = b.name.toLowerCase().trim();
+        const aIsFallback = aLower.startsWith('prussia') || aLower.startsWith('bavaria') || aLower.startsWith('baden');
+        const bIsFallback = bLower.startsWith('prussia') || bLower.startsWith('bavaria') || bLower.startsWith('baden');
+        if (!aIsFallback && bIsFallback) return -1;
+        if (aIsFallback && !bIsFallback) return 1;
+        return 0;
+      });
+    }
+
+    const seenIdentities = new Set<string>();
+    const seenClubIds = new Set<number | string>();
+    seenIdentities.add(getCanonicalDedupeKey(state.club.name));
+    if (state.club.id != null) seenClubIds.add(state.club.id);
+
+    leagueClubs = leagueClubs.filter(c => {
+      if (c.id != null && seenClubIds.has(c.id)) return false;
+      const key = isMajorPyramid ? getCanonicalDedupeKey(c.name) : c.name.toLowerCase().trim();
+      if (seenIdentities.has(key)) return false;
+      seenIdentities.add(key);
+      if (c.id != null) seenClubIds.add(c.id);
+      return true;
+    });
+
+    const heavyweightSet = new Set([
+      'Madrid FC', 'Catalonia FC', 'Atlético M.', 'FC Bavaria', 'Borussia West',
+      'Manchester Blue', 'North London Red', 'Merseyside Red', 'London Blue', 'Manchester United', 'PSG', 'Piemonte Calcio', 'Milan Blue', 'AC Milan'
+    ]);
+    if (leagueClubs.length > targetAiCount) {
+      leagueClubs = leagueClubs.slice(0, targetAiCount);
+    }
+
+    const existingClubIds = new Set([state.club.id, ...leagueClubs.map((c) => c.id)]);
+    if (leagueClubs.length < targetAiCount) {
+      const rivalNameLower = (state.currentRival?.name || '').toLowerCase().trim();
+      const sameCountryOtherClubs = db
+        .filter(
+          (c) =>
+            (c.country || 'GER') === currentCountry &&
+            !existingClubIds.has(c.id) &&
+            c.tier === currentTier + 1 &&
+            (currentTier < minReserveTier ? !isReserveTeam(c.name) : true) &&
+            (currentTier === 1 ? c.baseOvr >= 70 : true) &&
+            !heavyweightSet.has(c.name) &&
+            c.id !== state.currentRival?.id &&
+            (!rivalNameLower || c.name.toLowerCase().trim() !== rivalNameLower)
+        )
+        .sort((a, b) => b.baseOvr - a.baseOvr);
+
+      for (const c of sameCountryOtherClubs) {
+        if (leagueClubs.length >= targetAiCount) break;
+        existingClubIds.add(c.id);
+        leagueClubs.push({
+          ...c,
+          tier: currentTier,
+        });
+      }
+    }
+
+    const engFallbackNames = currentTier === 1 ? [
+      'Leeds United', 'Leicester City', 'Southampton', 'Norwich City', 'West Bromwich Albion',
+      'Middlesbrough', 'Coventry City', 'Sunderland', 'Watford', 'Stoke City'
+    ] : [
+      'Scunthorpe United', 'Torquay United', 'Yeovil Town', 'Rochdale', 'Oldham Athletic',
+      'Southend United', 'Maidstone United', 'Kidderminster Harriers', 'Dorking Wanderers', 'York City'
+    ];
+    const gerFallbackNames = currentTier === 1 ? [
+      'FC Schalke 04', 'Hertha BSC', '1. FC Nürnberg', 'Hannover 96', 'Fortuna Düsseldorf',
+      'Hamburger SV', 'SpVgg Greuther Fürth', 'SC Paderborn 07', '1. FC Magdeburg', 'Eintracht Braunschweig'
+    ] : [
+      'VfR Aalen', 'Kickers Offenbach', 'Wuppertaler SV', 'FC Homburg', 'Chemnitzer FC',
+      'Carl Zeiss Jena', 'SV Meppen', 'FSV Zwickau', 'Fortuna Koeln', 'Alemannia Aachen'
+    ];
+    const espFallbackNames = currentTier === 1 ? [
+      'RCD Espanyol', 'Real Valladolid', 'Levante UD', 'Sporting Gijón', 'Real Oviedo',
+      'Real Zaragoza', 'Elche CF', 'CD Tenerife', 'SD Eibar', 'Albacete Balompié'
+    ] : [
+      'CE Europa', 'UE Sant Andreu', 'Marbella FC', 'SD Logroñés', 'Real Avilés Industrial',
+      'CD Guadalajara', 'Yeclano Deportivo', 'CD Tudelano', 'CF Talavera', 'CF Badalona'
+    ];
+    const itaFallbackNames = currentTier === 1 ? [
+      'Parma Calcio', 'Palermo', 'Sampdoria', 'Bari', 'Brescia',
+      'Venezia', 'Spezia', 'Cremonese', 'Modena', 'Catanzaro'
+    ] : [
+      'Virtus Entella', 'Pro Vercelli', 'Triestina', 'Vicenza Calcio', 'Lucchese',
+      'Pescara', 'Foggia', 'SPAL', 'Novara', 'Ancona'
+    ];
+    const fraFallbackNames = currentTier === 1 ? [
+      'Girondins de Bordeaux', 'AS Saint-Étienne', 'AJ Auxerre', 'Angers SCO', 'SM Caen',
+      'EA Guingamp', 'Paris FC', 'Grenoble Foot', 'Rodez AF', 'Pau FC'
+    ] : [
+      'Le Mans FC', 'FC Villefranche', 'LB Châteauroux', 'SAS Épinal', 'GOAL FC',
+      'FC Rouen', 'Red Star FC', 'US Avranches', 'SO Cholet', 'Nîmes Olympique'
+    ];
+    const porFallbackNames = [
+      'SC Lusitânia', 'União de Leiria', 'CD Mafra', 'Varzim SC', 'FC Felgueiras',
+      'Atlético CP', 'AD Sanjoanense', 'SG Sacavenense', 'Belém OS', 'Sertanense FC'
+    ];
+    const ecuFallbackNames = [
+      'Guayaquil City', 'Gualaceo SC', '9 de Octubre', 'Cumbayá FC', 'Imbabura SC',
+      'Independiente Juniors', 'Chacaritas FC', 'Leones del Norte', 'San Antonio FC', 'Vargas Torres'
+    ];
+    const usaFallbackNames = [
+      'Tulsa City FC', 'Austin United', 'Miami Coast FC', 'Denver Peak FC',
+      'Phoenix Rising Stars', 'Seattle Sound SC', 'Boston Breakers SC', 'Chicago Athletic',
+      'Dallas Pioneers', 'Atlanta Metro FC', 'San Antonio Rovers', 'Nashville Sound FC',
+      'Detroit City FC', 'Memphis 901', 'Tampa Bay Sun'
+    ];
+    const scoFallbackNames = [
+      'Airdrieonians', 'Queen of the South', 'Alloa Athletic', 'Montrose FC', 'Kelty Hearts',
+      'Cove Rangers', 'Falkirk FC', 'Hamilton Academical', 'Stirling Albion', 'Peterhead FC'
+    ];
+    const braFallbackNames = [
+      'América Mineiro', 'Coritiba FC', 'Goiás EC', 'Chapecoense', 'Ponte Preta',
+      'Vila Nova', 'Avaí FC', 'CRB', 'Operário Ferroviário', 'Paysandu'
+    ];
+    const argFallbackNames = [
+      'Chacarita Juniors', 'Quilmes AC', 'Ferro Carril Oeste', 'San Martín de Tucumán', 'Colón de Santa Fe',
+      'All Boys', 'Nueva Chicago', 'Defensores de Belgrano', 'Gimnasia y Esgrima', 'Temperley'
+    ];
+    const colFallbackNames = [
+      'Deportes Quindío', 'Cúcuta Deportivo', 'Cortuluá', 'Real Cartagena', 'Valledupar FC',
+      'Bogotá FC', 'Leones FC', 'Barranquilla FC', 'Tigres FC', 'Atlético Huila'
+    ];
+    const jpnFallbackNames = [
+      'Oita Trinita', 'Roasso Kumamoto', 'Ventforet Kofu', 'Renofa Yamaguchi', 'Tochigi SC',
+      'Mito HollyHock', 'Blaublitz Akita', 'Iwaki FC', 'Thespakusatsu Gunma', 'Fujieda MYFC'
+    ];
+    const mexFallbackNames = [
+      'Atlante FC', 'Celaya FC', 'Venados FC', 'Leones Negros', 'Cimarrones de Sonora',
+      'Cancún FC', 'Alebrijes de Oaxaca', 'Mineros de Zacatecas', 'Tepatitlán FC', 'Correcaminos UAT'
+    ];
+    const canFallbackNames = [
+      'Victoria Highlanders', 'Calgary Foothills', 'FC Manitoba', 'Thunder Bay Chill', 'Simcoe County Rovers',
+      'Guelph United', 'Blue Devils FC', 'Vaughan Azzurri', 'TFC Academy', 'FC Laval'
+    ];
+    const turFallbackNames = [
+      'Bursaspor', 'Eskişehirspor', 'Altay SK', 'Giresunspor', 'Menemenspor',
+      'Tuzlaspor', 'Boluspor', 'Adanaspor', 'Bandırmaspor', 'Keçiörengücü'
+    ];
+
+    const fallbackList =
+      currentCountry === 'ENG' ? engFallbackNames :
+      currentCountry === 'POR' ? porFallbackNames :
+      currentCountry === 'ESP' ? espFallbackNames :
+      currentCountry === 'ITA' ? itaFallbackNames :
+      currentCountry === 'FRA' ? fraFallbackNames :
+      currentCountry === 'ECU' ? ecuFallbackNames :
+      currentCountry === 'USA' ? usaFallbackNames :
+      currentCountry === 'SCO' ? scoFallbackNames :
+      currentCountry === 'BRA' ? braFallbackNames :
+      currentCountry === 'ARG' ? argFallbackNames :
+      currentCountry === 'COL' ? colFallbackNames :
+      currentCountry === 'JPN' ? jpnFallbackNames :
+      currentCountry === 'MEX' ? mexFallbackNames :
+      currentCountry === 'CAN' ? canFallbackNames :
+      currentCountry === 'TUR' ? turFallbackNames :
+      (currentCountry === 'GER' ? gerFallbackNames : []);
+
+    const neededFillers = Math.max(0, targetAiCount - leagueClubs.length);
+    const allKnownDbNames = new Set([
+      ...db.map((c) => c.name.toLowerCase().trim()),
+      state.club.name.toLowerCase().trim(),
+      ...(state.currentRival?.name ? [state.currentRival.name.toLowerCase().trim()] : []),
+    ]);
+    for (let i = 0; i < neededFillers; i++) {
+      const existingNames = new Set([
+        ...allKnownDbNames,
+        ...leagueClubs.map((c) => c.name.toLowerCase().trim()),
+      ]);
+      const availableFallback = fallbackList.find((n) => !existingNames.has(n.toLowerCase().trim())) || `Club ${i + 1}`;
+      leagueClubs.push({
+        id: 9900 + i,
+        name: availableFallback,
+        tier: currentTier,
+        baseOvr: currentLeagueInfo.avgOvr + seededRand((seasonData.year || 2024) + i, -5, 5),
+        color: '#' + Math.floor(seededRandom((seasonData.year || 2024) * 10 + i) * 16777215).toString(16).padStart(6, '0'),
+        stadium: 15000,
+        country: currentCountry,
+      });
+    }
+
+    // Safety guard: ensure leagueClubs reaches targetAiCount under all circumstances
+    while (leagueClubs.length < targetAiCount) {
+      const idx = leagueClubs.length;
+      leagueClubs.push({
+        id: 9900 + idx,
+        name: `${country} Club ${idx + 1}`,
+        tier: currentTier,
+        baseOvr: currentLeagueInfo.avgOvr + seededRand((seasonData.year || 2024) + idx, -5, 5),
+        color: '#' + Math.floor(seededRandom((seasonData.year || 2024) * 10 + idx) * 16777215).toString(16).padStart(6, '0'),
+        stadium: 15000,
+        country: currentCountry,
+      });
+    }
+
+    const clubsPool = [...leagueClubs].sort((a, b) => {
+      const bEff = b.baseOvr + seededRand(seasonData.year * 10 + (typeof b.id === 'number' ? b.id : 1), -4, 4);
+      const aEff = a.baseOvr + seededRand(seasonData.year * 10 + (typeof a.id === 'number' ? a.id : 1), -4, 4);
+      return bEff - aEff;
+    });
+
+    const basePtsMap: Record<number, number> = {
+      1: 82, 2: 74, 3: 66, 4: 60, 5: 55, 6: 51,
+      7: 48, 8: 45, 9: 42, 10: 40, 11: 37, 12: 35,
+      13: 33, 14: 31, 15: 28, 16: 25, 17: 21, 18: 16
+    };
+    const getRealisticBasePoints = (p: number) => basePtsMap[p] || 40;
+
+    const isRivalActiveInTier = !seasonData.rivalData?.isPaused;
+    const rivalName = isRivalActiveInTier ? (seasonData.rivalData?.name || state.currentRival?.name) : undefined;
+    const rivalClubIndex = rivalName ? clubsPool.findIndex(c => c.name === rivalName) : -1;
+    let rivalClub: any = null;
+    if (rivalClubIndex !== -1) {
+      rivalClub = clubsPool.splice(rivalClubIndex, 1)[0];
+    }
+
+    const safeUserPos = Math.max(1, Math.min(targetTotalClubs, userPos || 1));
+    let rivalPos = -1;
+    if (rivalClub) {
+      if (safeUserPos === 1) rivalPos = 2;
+      else if (safeUserPos === 2) rivalPos = 1;
+      else if (safeUserPos === 15) rivalPos = 16;
+      else if (safeUserPos === 16) rivalPos = 15;
+      else if (safeUserPos === 3) rivalPos = 4;
+      else if (safeUserPos === 4) rivalPos = 3;
+      else rivalPos = safeUserPos - 1 > 0 ? safeUserPos - 1 : 2;
+    }
+
+    const posPts: number[] = new Array(targetTotalClubs + 1).fill(0);
+    posPts[safeUserPos] = userPts;
+
+    // Fill upwards from safeUserPos - 1 down to 1
+    for (let p = safeUserPos - 1; p >= 1; p--) {
+      let ideal = getRealisticBasePoints(p) + seededRand(seasonData.year * 70 + p, -1, 1);
+      ideal = Math.max(posPts[p + 1] + 1, ideal);
+      posPts[p] = ideal;
+    }
+
+    // Fill downwards from safeUserPos + 1 up to targetTotalClubs
+    for (let p = safeUserPos + 1; p <= targetTotalClubs; p++) {
+      let ideal = getRealisticBasePoints(p) + seededRand(seasonData.year * 70 + p, -1, 1);
+      ideal = Math.min(posPts[p - 1] - 1, ideal);
+      posPts[p] = Math.max(4, ideal);
+    }
+
+    if (rivalClub && rivalPos >= 1 && rivalPos <= 18 && rivalPos <= targetTotalClubs && (seasonData.rivalData as any)?.pts !== undefined) {
+      const rTarget = (seasonData.rivalData as any).pts;
+      posPts[rivalPos] = rivalPos < safeUserPos
+        ? Math.max(posPts[rivalPos + 1] + 1, Math.min(rivalPos > 1 ? posPts[rivalPos - 1] - 1 : 98, rTarget))
+        : Math.min(posPts[rivalPos - 1] - 1, Math.max(rivalPos < targetTotalClubs ? posPts[rivalPos + 1] + 1 : 4, rTarget));
+    }
+
+    const rows: any[] = [];
+    for (let p = 1; p <= targetTotalClubs; p++) {
+      if (p === safeUserPos) {
+        rows.push({
+          pos: safeUserPos,
+          id: state.club.id,
+          name: seasonData.clubName || state.club.name,
+          color: seasonData.clubColor || state.club.color,
+          logo: seasonData.clubLogo || (isModActive ? state.club.logo : undefined),
+          mp: 34,
+          w: userWins,
+          d: userDraws,
+          l: userLosses,
+          gf: userGf,
+          ga: userGa,
+          pts: userPts,
+          gd: userGDStr,
+          isUser: true,
+          isRival: false,
+          pointsDeducted: seasonData.pointsDeducted,
+        });
+      } else if (p === rivalPos && rivalClub) {
+        const rPts = posPts[rivalPos];
+        let w = Math.min(34, Math.max(1, Math.floor(rPts / 3)));
+        let d = Math.max(0, rPts - w * 3);
+        while (d < 4 && w > 2 && w + d < 34) {
+          w -= 1;
+          d += 3;
+        }
+        const l = Math.max(0, 34 - w - d);
+        const gf = Math.max(18, Math.round(w * 1.9 + d * 1.1 + seededRand(seasonData.year * 2, 4, 10)));
+        const ga = Math.max(14, Math.round(l * 1.8 + d * 0.9 + seededRand(seasonData.year * 2 + 10, 4, 10)));
+        const rGd = gf - ga;
+
+        rows.push({
+          pos: rivalPos,
+          id: typeof rivalClub.id === 'number' ? rivalClub.id : undefined,
+          name: rivalClub.name,
+          color: rivalClub.color,
+          logo: isModActive ? rivalClub.logo : undefined,
+          mp: 34,
+          w,
+          d,
+          l,
+          gf,
+          ga,
+          pts: rPts,
+          gd: rGd > 0 ? `+${rGd}` : `${rGd}`,
+          isUser: false,
+          isRival: true,
+        });
+      } else {
+        const club = clubsPool.shift() || {
+          id: 9950 + p,
+          name: `Club ${p}`,
+          color: '#64748b',
+          tier: currentTier,
+          baseOvr: currentLeagueInfo.avgOvr,
+        };
+        const pts = posPts[p];
+        let w = Math.min(34, Math.max(1, Math.floor(pts / 3)));
+        let d = Math.max(0, pts - w * 3);
+        while (d < 4 && w > 2 && w + d < 34) {
+          w -= 1;
+          d += 3;
+        }
+        const l = Math.max(0, 34 - w - d);
+        const gf = Math.max(18, Math.round(w * 1.9 + d * 1.1 + seededRand(seasonData.year * 10 + p, 4, 12)));
+        const ga = Math.max(14, Math.round(l * 1.8 + d * 0.9 + seededRand(seasonData.year * 10 + p + 50, 4, 12)));
+        const gdVal = gf - ga;
+
+        rows.push({
+          pos: p,
+          id: typeof club.id === 'number' ? club.id : undefined,
+          name: club.name,
+          color: club.color,
+          logo: isModActive ? club.logo : undefined,
+          mp: 34,
+          w,
+          d,
+          l,
+          gf,
+          ga,
+          pts,
+          gd: gdVal > 0 ? `+${gdVal}` : `${gdVal}`,
+          isUser: false,
+          isRival: false,
+        });
+      }
+    }
+
+    rows.forEach((r, idx) => {
+      r.pos = idx + 1;
+    });
+
+    return rows;
+  }, [seasonData, country, league, clubsDb, state.club, state.currentRival, state.seasonStandingsArchive, isModActive]);
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!cardRef.current) return;
+    const elem = cardRef.current;
+    if (!elem) return;
+
+    let originalOverflow = '';
+    let originalMaxHeight = '';
+    let originalHeight = '';
+
     try {
       setIsDownloading(true);
-      const fallbackDataUri = 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
-      const blob = await htmlToImage.toBlob(cardRef.current, {
+
+      // Temporarily expand scrollable container so htmlToImage renders the complete content without cropping or blank canvases
+      originalOverflow = elem.style.overflow;
+      originalMaxHeight = elem.style.maxHeight;
+      originalHeight = elem.style.height;
+
+      elem.classList.remove('overflow-y-auto', 'max-h-[92vh]', 'sm:max-h-[88vh]', 'overscroll-contain');
+      elem.style.overflow = 'visible';
+      elem.style.maxHeight = 'none';
+      elem.style.height = 'auto';
+
+      const blob = await htmlToImage.toBlob(elem, {
         quality: 1.0,
-        backgroundColor: '#111218',
+        backgroundColor: '#141416',
         style: { transform: 'scale(1)', transformOrigin: 'top left' },
-        includeQueryParams: true,
-        imagePlaceholder: fallbackDataUri,
-        filter: (node: any) => node.tagName !== 'IMG',
+        filter: (node) => node.tagName !== 'BUTTON' && node.tagName !== 'NAV'
       });
-      if (!blob) throw new Error('Failed to create blob');
-      
-      const filename = `season-${seasonData.year}-${seasonData.clubName}.png`;
+      if (!blob) return;
+
+      const filename = `season-${seasonData.year}-${seasonData.clubName.replace(/\s+/g, '-').toLowerCase()}.png`;
       const file = new File([blob], filename, { type: 'image/png' });
-      
-      const fallbackDownload = () => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.download = filename;
-        link.href = url;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-      };
 
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -160,2470 +879,2061 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
             title: `${seasonData.clubName} Season ${seasonData.year}`,
             files: [file]
           });
-        } catch (shareErr) {
-          console.warn('Share API failed, falling back to download', shareErr);
-          fallbackDownload();
+          return;
+        } catch {
+          // fallback
         }
-      } else {
-        fallbackDownload();
       }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = url;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (err) {
-      console.warn('Failed to export image', err);
+      console.warn('Failed to export season wrap card', err);
     } finally {
+      if (elem) {
+        elem.classList.add('overflow-y-auto', 'overscroll-contain');
+        elem.style.overflow = originalOverflow;
+        elem.style.maxHeight = originalMaxHeight;
+        elem.style.height = originalHeight;
+      }
       setIsDownloading(false);
     }
   };
 
-  const t = (en: string, de?: string, _ignoredEs?: string) => (lang === 'de' ? (de || en) : en);
+  // Living Universe & World Football Movements
+  const universeMovementsList = useMemo(() => {
+    const all = getAllUniverseMovements(state, clubsDb || ALL_CLUBS, isModActive);
+    const yearMoves = all.filter(m => m.year === seasonData.year);
+    return yearMoves.length > 0 ? yearMoves : all.slice(0, 30);
+  }, [state, clubsDb, isModActive, seasonData.year]);
 
-  const country = state.club.country || 'GER';
-  const maxTier = getMaxTier(country);
-  const playedTier = seasonData.tier || 1;
-  let nextTier = seasonData.nextTier || playedTier;
-  if (seasonData.relegated && !seasonData.survived && nextTier <= playedTier && playedTier < maxTier) {
-    nextTier = playedTier + 1;
-  } else if (seasonData.promoted && nextTier >= playedTier && playedTier > 1) {
-    nextTier = playedTier - 1;
-  }
-  const league = getLeagueInfo(playedTier, country);
-  const nextLeague = getLeagueInfo(nextTier, country);
-  const isCanadian = country === 'CAN' || ['Vancouver Blue', 'Montréal', 'Toronto', 'CF Montréal', 'Toronto FC', 'Vancouver FC', 'Pacific FC'].includes(state.club.name);
-  const natCupCountry = isCanadian ? 'CAN' : country;
-  const cupInfo = getDomesticCupInfo(natCupCountry, seasonData.clubTier);
-  const t1League = getLeagueInfo(1, country);
+  const continentalChampions = useMemo(() => {
+    return universeMovementsList.filter(m => m.type === 'cup_champion');
+  }, [universeMovementsList]);
 
-  const isModActive = isAnyModActive();
-  const domSupercupInfo = getDomesticSupercupInfo(country, isModActive);
-  const euroSupercupInfo = getEuropeanSupercupInfo(isModActive);
-  const bPackage = getBroadcastingPackage(country, false, { isModActive, clubName: state.club.name });
-  const isDe = lang === 'de';
+  const leagueChampions = useMemo(() => {
+    return universeMovementsList.filter(m => 
+      m.type === 'title_won' || 
+      (m.pos === 1 && m.type !== 'cup_champion' && m.type !== 'insolvency_drop') ||
+      (typeof m.reason === 'string' && /(?:^|\b)(?:champion|meister|league title)(?:\b|$)/i.test(m.reason) && m.type !== 'cup_champion')
+    );
+  }, [universeMovementsList]);
 
-  const isReserve = isReserveClub(seasonData.clubName || state.club.name);
+  const promotionsList = useMemo(() => {
+    return universeMovementsList.filter(m => m.type === 'promotion');
+  }, [universeMovementsList]);
 
-  // Read newly generated trophy data merging both seasonData.trophiesThisYear and latestHistoryEntry.trophiesThisYear
-  const latestHistoryEntry = (state.history && state.history.length > 0)
-    ? state.history[state.history.length - 1]
-    : undefined;
-  const currentSeasonTrophies: TrophiesObj = {
-    ...(seasonData.trophiesThisYear || {}),
-    ...(latestHistoryEntry?.trophiesThisYear || {}),
-  } as TrophiesObj;
+  const relegationsList = useMemo(() => {
+    return universeMovementsList.filter(m => 
+      m.type === 'relegation' && 
+      m.pos !== 1 && 
+      !(typeof m.reason === 'string' && /(?:^|\b)(?:champion|meister|winner|trophy|glory|triumph)(?:\b|$)/i.test(m.reason))
+    );
+  }, [universeMovementsList]);
 
-  const hasBl = (currentSeasonTrophies.bl || 0) > 0;
-  const hasDfb = (currentSeasonTrophies.dfb || 0) > 0;
-  const hasCl = (currentSeasonTrophies.cl || 0) > 0;
-  const hasEl = (currentSeasonTrophies.el || 0) > 0;
-  const hasEcl = (currentSeasonTrophies.ecl || 0) > 0;
-  const hasCwc = (currentSeasonTrophies.cwc || 0) > 0;
+  const fallenGiantsList = useMemo(() => {
+    return universeMovementsList.filter(m => m.type === 'insolvency_drop');
+  }, [universeMovementsList]);
 
-  const getBroadcasterVerdict = () => {
-    const maxT = getMaxTier(country);
-    const isPromoted = Boolean((seasonData.promoted || (seasonData.pos <= 2 && !(seasonData.tier === 2 && isReserve))) && seasonData.tier > 1 && (!seasonData.nextTier || seasonData.nextTier < seasonData.tier));
-    const isRelegated = !seasonData.survived && Boolean((seasonData.nextTier && seasonData.nextTier > seasonData.tier) || (seasonData.relegated && seasonData.tier < maxT));
-    const isChamp = seasonData.pos === 1;
-    
-    const targetPos = seasonData.oldTarget || state.boardTargetFinish || state.boardTargetPos || 15;
-    const pos = seasonData.pos;
-    const isBottomTierRelegationZone = playedTier >= maxT && (pos >= Math.max(1, (seasonData.numTeams || 18) - 1) || state.isSacked || seasonData.isSacked);
+  const transferSagasList = useMemo(() => {
+    return universeMovementsList.filter(m => m.type === 'transfer_saga');
+  }, [universeMovementsList]);
 
-    let text = '';
-    if (seasonData.wins === 0) {
-      text = `${state.club.name} concludes the campaign without winning a single match. A historic disaster demanding comprehensive overhaul.`;
-    } else if (isChamp && seasonData.tier === 1 && (hasCl || hasEl || hasEcl)) {
-      const euroCupLabel = hasCl ? getContinentalCupNames(state.club.country || 'GER').cl : hasEl ? getContinentalCupNames(state.club.country || 'GER').el : getContinentalCupNames(state.club.country || 'GER').ecl;
-      text = `Unforgettable domestic and continental triumph from ${state.club.name}! Lifting both ${t1League.name} and the ${euroCupLabel} cements an all-time legendary season.`;
-    } else if (hasCl || hasEl || hasEcl) {
-      const euroCupLabel = hasCl ? getContinentalCupNames(state.club.country || 'GER').cl : hasEl ? getContinentalCupNames(state.club.country || 'GER').el : getContinentalCupNames(state.club.country || 'GER').ecl;
-      text = `European glory for ${state.club.name}! Conquering the continent to lift the ${euroCupLabel} makes this campaign an historic triumph.`;
-    } else if (isChamp && seasonData.tier === 1) {
-      text = `Masterclass from ${state.club.name}! With exceptional tactical discipline and sustained dominance, the club deservedly lifts the championship trophy.`;
-    } else if (isPromoted) {
-      text = `Promotion confirmed! ${state.club.name} caps off a phenomenal campaign with a triumphant climb to the higher division!`;
-    } else if (isRelegated) {
-      text = `Painful relegation for ${state.club.name}. Unable to withstand crunch moments, the club now faces a necessary rebuilding cycle.`;
-    } else if (isBottomTierRelegationZone) {
-      text = `Disastrous finish for ${state.club.name} in the relegation zone. While the club remains in ${league.name} as the lowest tier, the board has summarily dismissed the manager.`;
-    } else if (targetPos <= 3 && pos > targetPos + 2) {
-      text = `A notable setback for ${state.club.name}. Entering the campaign with championship ambitions, finishing ${pos}th leaves fans and critics asking tough questions.`;
-    } else if (pos > targetPos + 3) {
-      text = `A testing campaign for ${state.club.name}. Despite bright flashes, the club fell short of their pre-season benchmarks.`;
-    } else if (seasonData.tier === 1 && seasonData.pos > 10) {
-      text = `Inconsistent stretches throughout the year. ${state.club.name} retains top-flight status, but will need targeted summer recruitment.`;
-    } else if (seasonData.gf > 1000) {
-      text = `Attacking spectacle! ${state.club.name} delighted viewers all year long with high-tempo transition play and prolific scoring.`;
-    } else {
-      text = `A composed, highly disciplined campaign from ${state.club.name}. The squad executed their strategic mandate with admirable professionalism.`;
+  // Outcome banner styles (100% English)
+  const outcomeBanner = useMemo(() => {
+    if (isChamp) {
+      return {
+        badge: 'CHAMPIONS',
+        tagline: 'Champions & League Glory',
+        color: 'from-amber-500/25 via-yellow-500/15 to-transparent',
+        border: 'border-amber-500/40',
+        text: 'text-amber-300',
+        icon: 'fa-crown',
+        pillBg: 'bg-amber-400 text-black shadow-[0_0_15px_rgba(251,191,36,0.4)]'
+      };
     }
-
+    if (isPromoted) {
+      return {
+        badge: 'PROMOTION ACHIEVED',
+        tagline: `Promoted to ${nextLeague.name}!`,
+        color: 'from-emerald-500/25 via-teal-500/15 to-transparent',
+        border: 'border-emerald-500/40',
+        text: 'text-emerald-300',
+        icon: 'fa-arrow-trend-up',
+        pillBg: 'bg-emerald-400 text-black shadow-[0_0_15px_rgba(52,211,153,0.4)]'
+      };
+    }
+    if (seasonData.isSackedRelegation) {
+      return {
+        badge: 'MANAGER SACKED',
+        tagline: isTier1Only
+          ? `Contract Terminated · Bottom-3 Finish (No Relegation · Shields Ineffective)`
+          : `Contract Terminated · Bottom-Tier Relegation Sacking`,
+        color: 'from-rose-500/25 via-red-500/15 to-transparent',
+        border: 'border-rose-500/40',
+        text: 'text-rose-300',
+        icon: 'fa-triangle-exclamation',
+        pillBg: 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)]'
+      };
+    }
+    if (isRelegated) {
+      return {
+        badge: 'RELEGATION',
+        tagline: `Relegated to ${nextLeague.name}`,
+        color: 'from-rose-500/25 via-red-500/15 to-transparent',
+        border: 'border-rose-500/40',
+        text: 'text-rose-300',
+        icon: 'fa-arrow-trend-down',
+        pillBg: 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)]'
+      };
+    }
+    if (seasonData.tier === 1 && seasonData.pos <= 4) {
+      return {
+        badge: 'CONTINENTAL QUALIFIED',
+        tagline: 'Elite Continental Stage Secured',
+        color: 'from-sky-500/25 via-blue-500/15 to-transparent',
+        border: 'border-sky-500/40',
+        text: 'text-sky-300',
+        icon: 'fa-star',
+        pillBg: 'bg-sky-400 text-black'
+      };
+    }
     return {
-      network: bPackage.networkName,
-      text,
-      title: 'Broadcaster Summary'
+      badge: `FINISH #${seasonData.pos}`,
+      tagline: `Season completed in ${league.name}`,
+      color: 'from-blue-500/20 via-indigo-500/10 to-transparent',
+      border: 'border-white/10',
+      text: 'text-zinc-200',
+      icon: 'fa-flag-checkered',
+      pillBg: 'bg-white/15 text-white'
     };
-  };
-
-  const broadcasterVerdict = getBroadcasterVerdict();
-
-  const getPosBadge = (pos: number, tier: number, nextT?: number) => {
-    const euroSuffix = hasCl ? ' & CL Winners! ⭐' : hasEl ? ' & EL Winners! 🏆' : hasEcl ? ' & EC Winners! 🏅' : '';
-    if (pos === 1) {
-      if (tier === 1) {
-        return { text: `${t1League.name} Champions${euroSuffix} 🏆`, bg: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
-      }
-      if (tier === 2 && isReserve) {
-        return { text: `${league.name} Champions! 🏆 (Reserve Limit)`, bg: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
-      }
-      return { text: `${league.name} Champions & Promoted! 🏆`, bg: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
-    }
-    if (pos === 2 && tier > 1) {
-      if (tier === 2 && isReserve) {
-        return { text: `Runner-Up in ${league.name} (Reserve Limit)`, bg: 'bg-sky-500/10 text-sky-400 border border-sky-500/20' };
-      }
-      if (nextT && nextT < tier) {
-        return { text: `Promoted to ${nextLeague.name}! ⬆️`, bg: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
-      }
-      return { text: 'Promoted (2nd Place)! ⬆️', bg: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
-    }
-    if (pos === 3 && tier > 1 && (seasonData.promoted || (nextT && nextT < tier))) {
-      return { text: `3rd Place · Promoted to ${nextLeague.name}! ⬆️ (Playoff Winners)`, bg: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
-    }
-    const maxT = getMaxTier(country);
-    if (!seasonData.survived && ((nextT && nextT > tier && tier < maxT) || (seasonData.relegated && tier < maxT && (!nextT || nextT > tier)))) {
-      return { text: `Relegated to ${nextLeague.name} ⬇️`, bg: 'bg-rose-500/10 text-rose-400 border border-rose-500/20' };
-    }
-    const currentLeagueSize = getLeagueSize(tier, country, state.club.id, tier, country, clubsDb);
-    const isSurvivalZone = pos >= Math.max(1, currentLeagueSize - 2);
-    if (tier >= maxT && pos >= Math.max(1, currentLeagueSize - 1)) {
-      if (state.isSacked || seasonData.isSacked) {
-        return { text: `Relegation Zone — Manager Sacked! ⚠️`, bg: 'bg-rose-500/10 text-rose-400 border border-rose-500/20' };
-      }
-      return { text: `Relegation Zone · No Lower Tier ⚠️`, bg: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
-    }
-    if (nextT && nextT === tier && (seasonData.survived || isSurvivalZone) && tier < maxT) {
-      return { text: `Survival Secured! (Retained Status) 🛡️`, bg: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
-    }
-    const isEcu = (state.club.country || 'GER') === 'ECU';
-    const isUsa = (state.club.country || 'GER') === 'USA';
-    if (tier === 1) {
-      if (isEcu) {
-        if (pos <= 2) return { text: `Finish #${pos} · Americas Elite Cup Spot 🌟`, bg: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
-        if (pos <= 5) return { text: `Finish #${pos} · Americas Cup Spot 🌍`, bg: 'bg-orange-500/10 text-orange-400 border border-orange-500/20' };
-        if (pos === 6) return { text: `Finish #${pos} · Americas Challenge Cup Spot 🏅`, bg: 'bg-teal-500/10 text-teal-400 border border-teal-500/20' };
-      } else if (isUsa) {
-        if (pos <= 2) return { text: `Finish #${pos} · North American Elite Cup Spot 🌟`, bg: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
-        if (pos <= 5) return { text: `Finish #${pos} · North American Challenge Cup Spot 🌍`, bg: 'bg-orange-500/10 text-orange-400 border border-orange-400/20' };
-      } else {
-        // European leagues: 1 & 2 -> EHF Champions League; 3, 4, 5 -> EHF European League; 6 -> EHF European Cup (for eligible nations)
-        // If the club won CL/EL (or Domestic Cup) to earn a higher continental tier than league position alone, reflect the upgraded berth!
-        if (pos === 2) return { text: `Runner-Up · EHF Champions League Spot 🥈`, bg: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
-        if (seasonData.euroNextSeason === 'CL' && pos > 2) {
-          return { text: `Finish #${pos} (Cup Holders) · EHF Champions League Spot 🌟`, bg: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
-        }
-        if (pos >= 3 && pos <= 5) return { text: `Finish #${pos} · EHF European League Spot 🌍`, bg: 'bg-orange-500/10 text-orange-400 border border-orange-400/20' };
-        if (seasonData.euroNextSeason === 'EL' && pos > 5) {
-          const viaCup = (seasonData.trophiesThisYear?.dfb || (seasonData.trophiesThisYear as any)?.cup) ? ' (Cup Winners)' : ' (Cup Holders)';
-          return { text: `Finish #${pos}${viaCup} · EHF European League Spot 🌍`, bg: 'bg-orange-500/10 text-orange-400 border border-orange-400/20' };
-        }
-        if (pos === 6) {
-          const excludedCountries = ['HUN', 'GER', 'ESP', 'POR'];
-          if (!excludedCountries.includes(state.club.country || 'GER')) {
-            return { text: `Finish #6 · EHF European Cup Spot 🏅`, bg: 'bg-teal-500/10 text-teal-400 border border-teal-500/20' };
-          }
-        }
-      }
-    }
-    if (seasonData.euroNextSeason === 'CL') {
-      const cNames = getContinentalCupNames(state.club.country);
-      return { text: `Finish #${pos} · ${cNames.cl} Spot 🌟`, bg: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' };
-    }
-    if (seasonData.euroNextSeason === 'EL') {
-      const cNames = getContinentalCupNames(state.club.country);
-      const viaCup = (seasonData.trophiesThisYear?.dfb || (seasonData.trophiesThisYear as any)?.cup) ? ' (Cup Winners)' : '';
-      return { text: `Finish #${pos}${viaCup} · ${cNames.el} Spot 🌍`, bg: 'bg-orange-500/10 text-orange-400 border border-orange-500/20' };
-    }
-    if (seasonData.euroNextSeason === 'ECL') {
-      const cNames = getContinentalCupNames(state.club.country);
-      return { text: `Finish #${pos} · ${cNames.ecl} Spot 🏅`, bg: 'bg-teal-500/10 text-teal-400 border border-teal-500/20' };
-    }
-    return { text: `${pos}. Place in ${league.name}`, bg: 'bg-black/40 text-zinc-400 border border-white/[0.04]' };
-  };
-
-  const posBadge = getPosBadge(seasonData.pos, seasonData.tier, seasonData.nextTier);
-
-  // Strategic Intelligence Metrics & End-Game Dynamics
-  const currentTactic = seasonData.tactic || state.tactic || 'Balanced';
-  const hist = state.history || [];
-  const lastHist = hist.length > 0 ? hist[hist.length - 1] : null;
-  const isCurrentInHist = Boolean(lastHist && (lastHist.year === seasonData.year || (lastHist.year === seasonData.year - 1 && lastHist.pos === seasonData.pos)));
-
-  let consecutiveSeasonsWithTactic = 0;
-  for (let i = hist.length - 1; i >= 0; i--) {
-    if ((hist[i] as any).tactic === currentTactic) {
-      consecutiveSeasonsWithTactic++;
-    } else {
-      break;
-    }
-  }
-
-  // Anti-Metronome: Count recent usage across last 4 seasons
-  const recentHistUsage = hist.slice(-4).filter((h: any) => h.tactic === currentTactic).length;
-  const rawTenure = isCurrentInHist ? Math.max(1, consecutiveSeasonsWithTactic) : consecutiveSeasonsWithTactic + 1;
-  const rawRecent = isCurrentInHist ? Math.max(1, recentHistUsage) : recentHistUsage + 1;
-  const tacticTenure = Math.max(rawTenure, rawRecent);
-  const isTacticStale = tacticTenure >= 2;
-  const isCriticallyStale = tacticTenure >= 3;
-  const teamOvr = seasonData.newBaseOvr || state.club?.baseOvr || 70;
-  const isVeteranCoreAging = teamOvr >= 82;
-  const isRebuildActive = (state.rebuildWageDiscountSeasons || 0) > 0;
-
-  const consecutiveTitles = seasonData.consecutiveTitles !== undefined 
-    ? seasonData.consecutiveTitles 
-    : (state.consecutiveTitles || (seasonData.pos === 1 && seasonData.tier === 1 ? 1 : 0));
-  const rawDynastyTax = Math.min(4.0, consecutiveTitles >= 4 ? Math.max(2.5, consecutiveTitles * 0.75) : consecutiveTitles * 0.5);
-  const medicalLevel = state.club?.medicalLevel || 1;
-  const academyLevel = state.club?.academyLevel || 1;
-  const hasInfrastructureImmunity = medicalLevel >= 5 || academyLevel >= 5;
-  const hasMoraleImmunity = !hasInfrastructureImmunity && ((state.club.morale ?? 100) > 90 || medicalLevel >= 3);
-  const effectiveDynastyTax = hasInfrastructureImmunity ? 0 : (hasMoraleImmunity ? rawDynastyTax / 2 : rawDynastyTax);
-
-  const currentTier = seasonData.tier || 1;
-  const currentCountry = normalizeCountry(state.club?.country || 'GER');
-  const worldClubsObj = (seasonData.worldClubs || state.worldClubs || {}) as Record<string, any>;
-  const activeLeagueRivals: any[] = (Object.values(worldClubsObj) as any[]).filter((c: any) => 
-    c && c.id !== state.club?.id && 
-    c.name !== seasonData.clubName && 
-    c.tier === currentTier && 
-    normalizeCountry(c.country || 'GER') === currentCountry && 
-    !isReserveClub(c.name)
-  );
-  activeLeagueRivals.sort((a: any, b: any) => (b.baseOvr || 0) - (a.baseOvr || 0));
-
-  const allMovements = seasonData.universeMovements || state.universeMovements || [];
-  const takeoverMovement = (allMovements as any[]).find((m: any) => m && m.type === 'takeover');
-  const takeoverClubFromMovement = takeoverMovement ? (worldClubsObj[takeoverMovement.clubId] || Object.values(worldClubsObj).find((c: any) => c.name === takeoverMovement.clubName)) : null;
-
-  const nemesisClub: any = activeLeagueRivals.find((c: any) => Boolean(c.isNemesisActive)) || takeoverClubFromMovement || activeLeagueRivals[0];
-  const isNemesisActive = Boolean(nemesisClub?.isNemesisActive || takeoverMovement || (takeoverClubFromMovement && takeoverClubFromMovement.isNemesisActive));
-  const heritageRebuildingGiant: any = activeLeagueRivals.find((c: any) => c.id !== nemesisClub?.id && (c.baseOvr || 0) >= 82);
-
-  // Dynamic AI-style sporting season narrative
-  const generateSportingSummary = () => {
-    const isDe = false;
-    let base = "";
-    
-    const trophies = seasonData.trophiesThisYear || {};
-    const isDomesticChamp = trophies.bl || trophies.lower;
-    const isIntlChamp = trophies.cl || trophies.el || trophies.ecl;
-    const isCupChamp = trophies.dfb || trophies.reg;
-    const isWorldChamp = trophies.cwc;
-    
-    const wonQuadruple = isDomesticChamp && isIntlChamp && isCupChamp && isWorldChamp;
-    const wonTreble = isDomesticChamp && isIntlChamp && isCupChamp && !wonQuadruple;
-    const wonDouble = (isDomesticChamp && isIntlChamp) || (isDomesticChamp && isCupChamp) || (isIntlChamp && isCupChamp);
-    
-    const variance = (seasonData.wins * 3 + seasonData.pts) % 3; 
-    const leagueSize = Math.max(10, (state.worldClubs ? Object.values(state.worldClubs).filter((c: any) => c.tier === seasonData.tier && normalizeCountry(c.country || "GER") === normalizeCountry(state.club.country || "GER")).length : 18));
-    const safeMidTableThreshold = Math.floor(leagueSize * 0.65);
-    const topTableThreshold = Math.floor(leagueSize * 0.33);
-
-    if (wonQuadruple) {
-      base = isDe 
-        ? `Das vollkommene Jahr! Ein historisches Quadruple für ${seasonData.clubName}. Mit dem Gewinn der Liga, des Pokals, der Elite Cup und der Weltmeisterschaft hat das Team alles abgeräumt, was es zu gewinnen gibt. Absolute Legenden.` 
-        : `The ultimate glory! A historic quadruple for ${seasonData.clubName}. By winning the League, the Cup, the Continental Title, and the Global Club Cup, this team has won everything possible. Absolute legends.`;
-    } else if (wonTreble) {
-      base = isDe 
-        ? `Unglaublich! Eine historische Saison für ${seasonData.clubName}. Mit dem Gewinn des Triples haben sich Manager und Mannschaft unsterblich gemacht. Ein Jahr, das für immer in den Geschichtsbüchern bleibt.` 
-        : `Unbelievable! A historic treble-winning season for ${seasonData.clubName}. The manager and squad have achieved immortality in a campaign that will echo through the ages.`;
-    } else if (wonDouble) {
-      base = isDe 
-        ? `Eine magische Saison! ${seasonData.clubName} holt das Double und krönt eine herausragende Spielzeit. Taktische Meisterleistung gepaart mit absoluter Dominanz auf dem Feld.` 
-        : `A magical season! ${seasonData.clubName} secures the double, crowning an outstanding campaign. Tactical brilliance paired with absolute dominance on the court.`;
-    } else if (seasonData.pos === 1) {
-      if (variance === 0) {
-        base = isDe 
-          ? `Eine absolute Meisterleistung! ${seasonData.clubName} dominierte die Liga und sicherte sich mit ${seasonData.wins} Siegen verdient die Meisterschaft.` 
-          : `An absolute masterclass! ${seasonData.clubName} dominated the league, securing the championship with ${seasonData.wins} wins. The tactical vision was executed flawlessly.`;
-      } else if (variance === 1) {
-        base = isDe 
-          ? `Meister! Nach einem packenden Titelrennen darf ${seasonData.clubName} am Ende die Trophäe in die Höhe stemmen. Ein Triumph des Willens und der klugen Kaderplanung.` 
-          : `Champions! After a thrilling title race, ${seasonData.clubName} lifts the trophy. A triumph of sheer will and composed squad management.`;
-      } else {
-        base = isDe 
-          ? `Titel-Feier! Die Fans feiern eine denkwürdige Meistersaison. Das Team bewies absolute Konstanz und krönt sich verdient zur Nummer 1.` 
-          : `Title celebration! The fans celebrate a memorable championship season. The squad proved exceptional consistency to claim the top spot.`;
-      }
-    } else if (seasonData.pos === 2) {
-      const lastHist = state.history && state.history.length > 0 ? state.history[state.history.length - 1] : null;
-      const finalTable = lastHist?.finalTable;
-      const championClub = finalTable && finalTable.length > 0 ? finalTable[0] : null;
-      const champName = championClub?.name || lastHist?.rivalName || 'the champions';
-      const gap = championClub ? Math.max(0, championClub.pts - seasonData.pts) : (lastHist?.rivalPts ? Math.max(0, lastHist.rivalPts - seasonData.pts) : 99);
-
-      if (gap <= 2) {
-        base = isDe
-          ? `Herzschlagfinale um die Meisterschaft! Nur ${gap === 0 ? 'durch das Torverhältnis' : `${gap} Punkt${gap > 1 ? 'e' : ''}`} von ${champName} getrennt—ein einziges Unentschieden in einen Sieg verwandelt bringt nächste Saison die Krone.`
-          : `Finished just ${gap === 0 ? 'on goal differential' : `${gap} point${gap > 1 ? 's' : ''}`} behind ${champName}—a single draw turned into a win next season claims the crown.`;
-      } else if (seasonData.tier > 1) {
-        if (seasonData.tier === 2 && isReserve) {
-          base = `Outstanding 2nd place finish in ${league.name}! Under federation regulations, reserve squads remain in Tier 2 while developing top talents for the first team.`;
-        } else {
-          base = isDe
-            ? `Sensationell! Als Vizemeister gelingt der Aufstieg. ${seasonData.clubName} hat bewiesen, reif für die nächste Spielklasse zu sein.`
-            : `Sensational! Securing promotion as runners-up, ${seasonData.clubName} proved they are ready for the next level. A massive milestone for the club project.`;
-        }
-      } else {
-        base = isDe
-          ? `Hervorragende Vizemeisterschaft! ${seasonData.clubName} schließt eine starke Spielzeit auf Rang 2 ab und qualifiziert sich direkt für die Champions League.`
-          : `Outstanding runner-up finish! ${seasonData.clubName} concludes a stellar campaign in 2nd place, locking in direct qualification for the Champions League.`;
-      }
-    } else if (seasonData.pos === 4 && playedTier === 1) {
-      const lastHist = state.history && state.history.length > 0 ? state.history[state.history.length - 1] : null;
-      const finalTable = lastHist?.finalTable;
-      const clSpotClub = finalTable && finalTable.length >= 2 ? finalTable[1] : null;
-      const clGap = clSpotClub ? Math.max(0, clSpotClub.pts - seasonData.pts) : 99;
-
-      if (clGap <= 3) {
-        base = isDe
-          ? `Platz 4 im Oberhaus: Denkbar knapp an der Königsklasse vorbei! Nur ${clGap} Punkt${clGap > 1 ? 'e' : ''} fehlten auf ${clSpotClub?.name || 'Rang 2'}—nächste Saison ist der Champions-League-Angriff Pflicht.`
-          : `Finished 4th, agonizingly close to elite European qualification—just ${clGap} point${clGap > 1 ? 's' : ''} shy of ${clSpotClub?.name || '2nd place'} and the Champions League spots.`;
-      } else {
-        base = isDe
-          ? `Starker 4. Platz! ${seasonData.clubName} sichert sich die europäische Qualifikation für die EHF European League.`
-          : `Strong 4th place finish! ${seasonData.clubName} secures qualification for the EHF European League.`;
-      }
-    } else if (!seasonData.survived && ((nextTier > playedTier) || (seasonData.relegated && playedTier < maxTier))) {
-      base = `A difficult season comes to a close. Following a challenging year, ${seasonData.clubName} suffers relegation. Regrouping and focused rebuilding are now the immediate priority.`;
-    } else if (playedTier >= maxTier && (seasonData.pos >= leagueSize - 1 || state.isSacked || seasonData.isSacked)) {
-      base = `A catastrophic campaign in the lowest division. While ${seasonData.clubName} remains in ${league.name} without possibility of further demotion, finishing in the relegation zone has resulted in the board immediately sacking the manager.`;
-    } else if (!seasonData.relegated && playedTier < maxTier && (seasonData.survived || (nextTier === playedTier && seasonData.pos >= leagueSize - 3))) {
-      base = `A nerve-wracking season with a sigh of relief: survival is secured on Decision Day! ${seasonData.clubName} held nerve in the crunch moments to defend their league status.`;
-    } else if (seasonData.pos <= topTableThreshold && seasonData.tier < 4) {
-      if (variance === 0) {
-        base = isDe 
-          ? `Eine sehr starke Saison endet mit einer Spitzenplatzierung. Das Team hat das Potenzial voll ausgeschöpft und blickt optimistisch nach vorn.` 
-          : `A very strong campaign ends with a top-tier finish. The squad extracted great value and looks poised to challenge further next year.`;
-      } else {
-        base = isDe 
-          ? `Starke Saison! ${seasonData.clubName} begeisterte die Anhänger mit dynamischem Handball und belohnt sich mit einer hervorragenden Tabellenposition.` 
-          : `A brilliant showing! ${seasonData.clubName} thrilled the fans with energetic handball, rewarding themselves with an excellent league position.`;
-      }
-    } else if (seasonData.pos <= topTableThreshold || seasonData.pos <= safeMidTableThreshold) {
-      base = isDe 
-        ? `Eine solide, stabile Spielzeit im gesicherten Mittelfeld. Um den nächsten Schritt zu machen, bieten sich im Sommer gezielte Verstärkungen an.` 
-        : `A solid and stable mid-table campaign. To take the next step forward, targeted reinforcements this summer will be key.`;
-    } else {
-      base = isDe 
-        ? `Eine nervenaufreibende Saison mit Happy End: Der Klassenerhalt ist unter Dach und Fach. Im Sommer wartet konstruktive Aufbauarbeit.` 
-        : `A nerve-wracking season with a sigh of relief: survival is secured. The summer window presents a valuable chance to recalibrate.`;
-    }
-
-    const cupRunsThisYear = state.cupRunResults ? state.cupRunResults.filter(r => r.year === seasonData.year) : [];
-    const getContCupName = (id: string) => {
-        if (id === 'CL') return country === 'USA' ? 'North American Elite Cup' : country === 'ECU' ? 'Americas Elite Cup' : 'EHF Champions League';
-        if (id === 'EL') return country === 'USA' ? 'North American Challenge Cup' : country === 'ECU' ? 'Americas Cup' : 'EHF European League';
-        if (id === 'ECL') return country === 'USA' ? 'North American Regional Cup' : country === 'ECU' ? 'Americas Youth Cup' : 'EHF European Cup';
-        return id;
-    };
-
-    const isEuro = !['USA', 'ECU'].includes(state.club.country || 'GER');
-    const nightsEn = isEuro ? 'European nights' : 'continental nights';
-
-    const hadContinentalDeepRun = cupRunsThisYear.some(run => ['cl', 'el', 'ecl', 'intl', 'euro_cup'].includes(run.id));
-    if (seasonData.euroThisSeason && !isIntlChamp && !hadContinentalDeepRun) {
-      base += ` The international journey in the ${getContCupName(seasonData.euroThisSeason)} concluded prior to the championship finals.`;
-    }
-
-    const lostFinalRuns = cupRunsThisYear.filter(run => !run.won && run.exitRound === 'Final');
-    lostFinalRuns.forEach(run => {
-      const compName = isDe ? (run.nameDe || run.nameEn) : (run.nameEn || run.nameDe);
-      if (run.winnerName) {
-        base += isDe
-          ? ` Im Finale des Wettbewerbs (${compName}) musste man sich nach großem Kampf ${run.winnerName} geschlagen geben und wurde Vizemeister.`
-          : ` Reached the ${compName} Final, finishing as Runner-Up after a hard-fought showpiece won by ${run.winnerName}.`;
-      } else {
-        base += isDe
-          ? ` Im ${compName} erreichte das Team das große Finale.`
-          : ` Reached the ${compName} Final to cap a memorable cup campaign.`;
-      }
-    });
-
-    const lostSfRuns = cupRunsThisYear.filter(run => !run.won && run.exitRound === 'Semi-Final');
-    lostSfRuns.forEach(run => {
-      const compName = isDe ? (run.nameDe || run.nameEn) : (run.nameEn || run.nameDe);
-      base += isDe
-        ? ` Im ${compName} gelang der Vorstoß bis ins Halbfinale${run.winnerName ? ` (Turniersieger: ${run.winnerName})` : ''}.`
-        : ` Advanced to the ${compName} Semi-Finals${run.winnerName ? ` (eventual champions: ${run.winnerName})` : ''}.`;
-    });
-    
-    if (seasonData.euroNextSeason) {
-      base += ` Next season, the club can look forward to ${nightsEn} in the ${getContCupName(seasonData.euroNextSeason)}!`;
-    }
-    
-    if (seasonData.pointsDeducted && seasonData.pointsDeducted > 0) {
-      base += ` The campaign was influenced by financial fair-play point deductions (-${seasonData.pointsDeducted} pts).`;
-    }
-
-    return base;
-  };
-
-  // Replicate combo logic from SeasonHistoryTable:
-  // If bl + dfb + cl + cwc = 🏆 Quadruple
-  // If bl + dfb + cl = 🏆 Triple
-  // If bl + dfb + el = 🏆 Euro Triple
-  // If bl + dfb = 🏆 Domestic Double
-  type ComboType = 'quadruple' | 'triple' | 'euro_triple' | 'euro_cl_double' | 'euro_el_double' | 'euro_ecl_double' | 'double';
-  let comboType: ComboType | null = null;
-
-  if (hasBl && hasDfb && hasCl && hasCwc) {
-    comboType = 'quadruple';
-  } else if (hasBl && hasDfb && hasCl) {
-    comboType = 'triple';
-  } else if (hasBl && hasDfb && hasEl) {
-    comboType = 'euro_triple';
-  } else if (hasBl && hasCl) {
-    comboType = 'euro_cl_double';
-  } else if (hasBl && hasEl) {
-    comboType = 'euro_el_double';
-  } else if (hasBl && hasEcl) {
-    comboType = 'euro_ecl_double';
-  } else if (hasBl && hasDfb) {
-    comboType = 'double';
-  }
-
-  const { cl, el, ecl } = getContinentalCupNames(state.club.country || 'GER');
-
-  const comboDefinitions: Record<ComboType, {
-    label: string;
-    tag: string;
-    fullTitle: string;
-    description: string;
-    color: string;
-    borderColor: string;
-    badgeStyle: string;
-    bannerStyle: string;
-  }> = {
-    quadruple: {
-      label: '🏆 Quadruple',
-      tag: 'Quadruple',
-      fullTitle: isDe ? 'Historisches Quadruple' : 'Historic Quadruple Champion',
-      description: isDe
-        ? `${t1League.name}, ${cupInfo.name}, ${cl} und IHF Super Globe in einer Traumsaison gewonnen!`
-        : `Lifting ${t1League.name}, ${cupInfo.name}, ${cl}, and the IHF Super Globe in a single legendary sweep.`,
-      color: 'text-zinc-200',
-      borderColor: 'border-white/[0.08] bg-white/[0.02]',
-      badgeStyle: 'text-zinc-300 bg-white/[0.03] border border-white/[0.06]',
-      bannerStyle: 'bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md'
-    },
-    triple: {
-      label: '🏆 Triple',
-      tag: 'Triple',
-      fullTitle: isDe ? 'Kontinentales Triple' : 'Continental Treble Champion',
-      description: isDe
-        ? `Meisterschaft (${t1League.name}), Pokalsieg (${cupInfo.name}) und Triumph in der ${cl}!`
-        : `Historic treble: ${t1League.name}, ${cupInfo.name}, and the prestigious ${cl}.`,
-      color: 'text-zinc-200',
-      borderColor: 'border-white/[0.08] bg-white/[0.02]',
-      badgeStyle: 'text-zinc-300 bg-white/[0.03] border border-white/[0.06]',
-      bannerStyle: 'bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md'
-    },
-    euro_triple: {
-      label: '🏆 Euro Triple',
-      tag: 'Euro Triple',
-      fullTitle: isDe ? 'Europäisches Triple' : 'European Treble Winner',
-      description: isDe
-        ? `${t1League.name}, ${cupInfo.name} und ${el} in einer überragenden Saison.`
-        : `Sensational campaign: ${t1League.name}, ${cupInfo.name}, and the ${el}.`,
-      color: 'text-zinc-200',
-      borderColor: 'border-white/[0.08] bg-white/[0.02]',
-      badgeStyle: 'text-zinc-300 bg-white/[0.03] border border-white/[0.06]',
-      bannerStyle: 'bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md'
-    },
-    euro_cl_double: {
-      label: '🏆⭐ European & League Double',
-      tag: 'Euro Double',
-      fullTitle: isDe ? 'Meisterschaft & Champions-League-Double' : 'League & Champions League Double',
-      description: isDe
-        ? `Triumph in der ${t1League.name} und Krönung in der ${cl}!`
-        : `Crowned champions of both ${t1League.name} and the ${cl}!`,
-      color: 'text-amber-200',
-      borderColor: 'border-amber-500/20 bg-amber-500/[0.04]',
-      badgeStyle: 'text-amber-300 bg-amber-500/10 border border-amber-500/20',
-      bannerStyle: 'bg-[#10121a]/90 border border-amber-500/20 backdrop-blur-md'
-    },
-    euro_el_double: {
-      label: '🏆🥇 League & European League Double',
-      tag: 'Euro Double',
-      fullTitle: isDe ? 'Meisterschaft & European-League-Double' : 'League & European League Double',
-      description: isDe
-        ? `Meistertitel in der ${t1League.name} und Europapokalsieg in der ${el}!`
-        : `Lifting both the ${t1League.name} title and the ${el} trophy!`,
-      color: 'text-amber-200',
-      borderColor: 'border-amber-500/20 bg-amber-500/[0.04]',
-      badgeStyle: 'text-amber-300 bg-amber-500/10 border border-amber-500/20',
-      bannerStyle: 'bg-[#10121a]/90 border border-amber-500/20 backdrop-blur-md'
-    },
-    euro_ecl_double: {
-      label: '🏆🏅 League & European Cup Double',
-      tag: 'Euro Double',
-      fullTitle: isDe ? 'Meisterschaft & Europapokal-Double' : 'League & European Cup Double',
-      description: isDe
-        ? `Meistertitel in der ${t1League.name} und Triumph im ${ecl}!`
-        : `Celebrating both the ${t1League.name} championship and the ${ecl}!`,
-      color: 'text-amber-200',
-      borderColor: 'border-amber-500/20 bg-amber-500/[0.04]',
-      badgeStyle: 'text-amber-300 bg-amber-500/10 border border-amber-500/20',
-      bannerStyle: 'bg-[#10121a]/90 border border-amber-500/20 backdrop-blur-md'
-    },
-    double: {
-      label: '🏆 Domestic Double',
-      tag: 'Domestic Double',
-      fullTitle: isDe ? 'Nationales Double' : 'Domestic Double Champion',
-      description: isDe
-        ? `Souveräner Triumph in Liga (${t1League.name}) und Pokal (${cupInfo.name}).`
-        : `Dominated domestic handball: ${t1League.name} & ${cupInfo.name} Champions.`,
-      color: 'text-zinc-200',
-      borderColor: 'border-white/[0.08] bg-white/[0.02]',
-      badgeStyle: 'text-zinc-300 bg-white/[0.03] border border-white/[0.06]',
-      bannerStyle: 'bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md'
-    }
-  };
-
-  const activeCombo = comboType ? comboDefinitions[comboType] : null;
-
-  const trophyList: {
-    icon?: string;
-    logo?: string;
-    name: string;
-    color: string;
-    count: number;
-    subtitle?: string;
-    isCombo?: boolean;
-    borderStyle?: string;
-    badgeStyle?: string;
-    badgeText?: string;
-  }[] = [];
-
-  if (activeCombo) {
-    trophyList.push({
-      name: activeCombo.label,
-      subtitle: activeCombo.description,
-      color: activeCombo.color,
-      count: 1,
-      isCombo: true,
-      borderStyle: activeCombo.borderColor,
-      badgeStyle: activeCombo.badgeStyle,
-      badgeText: activeCombo.tag,
-      icon: 'fa-trophy'
-    });
-  }
-
-  // Always show the League Title and European Trophy cards alongside each other so both are celebrated side-by-side
-  if (currentSeasonTrophies.bl) {
-    trophyList.push({ logo: t1League.logo, name: t1League.name, color: 'text-amber-300', count: Number(currentSeasonTrophies.bl) || 1 });
-  }
-  if (currentSeasonTrophies.lower) {
-    trophyList.push({ logo: league.logo, name: `${league.name} Champion`, color: 'text-zinc-200', count: Number(currentSeasonTrophies.lower) || 1 });
-  }
-  if (currentSeasonTrophies.cl) {
-    trophyList.push({ logo: getTrophyImage('cl', state.club.country || 'GER'), name: cl, color: 'text-amber-300', count: Number(currentSeasonTrophies.cl) || 1 });
-  }
-  if (currentSeasonTrophies.el) {
-    trophyList.push({ logo: getTrophyImage('el', state.club.country || 'GER'), name: el, color: 'text-amber-300', count: Number(currentSeasonTrophies.el) || 1 });
-  }
-  if (currentSeasonTrophies.ecl) {
-    trophyList.push({ logo: getTrophyImage('ecl', state.club.country || 'GER'), name: ecl, color: 'text-amber-300', count: Number(currentSeasonTrophies.ecl) || 1 });
-  }
-  if (currentSeasonTrophies.cwc) {
-    trophyList.push({ logo: TOURNAMENT_LOGOS.cwc || '', name: 'IHF Super Globe · Club World Championship', color: 'text-amber-300', count: Number(currentSeasonTrophies.cwc) || 1 });
-  }
-  if (currentSeasonTrophies.dfb) {
-    trophyList.push({ logo: cupInfo.logo, name: cupInfo.name, color: 'text-zinc-200', count: Number(currentSeasonTrophies.dfb) || 1 });
-  }
-  if (currentSeasonTrophies.sc) {
-    trophyList.push({ icon: 'fa-trophy', name: domSupercupInfo.name, color: 'text-amber-300', count: Number(currentSeasonTrophies.sc) || 1 });
-  }
-  if (currentSeasonTrophies.reg) {
-    trophyList.push({ icon: 'fa-shield-halved', name: t('Regional Cup', 'Regionalpokal'), color: 'text-zinc-200', count: Number(currentSeasonTrophies.reg) || 1 });
-  }
-
-  const totalSilverwareThisCampaign = (hasBl ? 1 : 0) + (hasDfb ? 1 : 0) + (hasCl ? 1 : 0) + (hasEl ? 1 : 0) + (hasEcl ? 1 : 0) + (hasCwc ? 1 : 0) + (currentSeasonTrophies.lower ? 1 : 0) + (currentSeasonTrophies.reg ? 1 : 0) + (currentSeasonTrophies.sc ? 1 : 0);
-
-  // Render combo & individual trophy badges replicating SeasonHistoryTable logic with 2026/2027 broadcast styling
-  const renderSeasonTrophyBadges = (trophiesObj?: TrophiesObj) => {
-    if (!trophiesObj) return null;
-    const badges: React.ReactNode[] = [];
-
-    const tBl = (trophiesObj.bl || 0) > 0;
-    const tDfb = (trophiesObj.dfb || 0) > 0;
-    const tCl = (trophiesObj.cl || 0) > 0;
-    const tEl = (trophiesObj.el || 0) > 0;
-    const tEcl = (trophiesObj.ecl || 0) > 0;
-    const tCwc = (trophiesObj.cwc || 0) > 0;
-
-    if (tBl && tDfb && tCl && tCwc) {
-      badges.push(
-        <span key="quadruple" className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
-          🏆 Quadruple
-        </span>
-      );
-    } else if (tBl && tDfb && tCl) {
-      badges.push(
-        <span key="triple" className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
-          🏆 Triple
-        </span>
-      );
-    } else if (tBl && tDfb && tEl) {
-      badges.push(
-        <span key="euro-triple" className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
-          🏆 Euro Triple
-        </span>
-      );
-    } else if (tBl && tDfb) {
-      badges.push(
-        <span key="double" className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0">
-          🏆 Domestic Double
-        </span>
-      );
-    }
-
-    // Celebrate League Title & European Trophies right next to each other
-    if (tBl) badges.push(<span key="bl" className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0" title="League Champions">🥇 {t1League.tag || 'League'}</span>);
-    if (trophiesObj.lower) badges.push(<span key="lower" className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0" title="Division Champions">🥇 Champion</span>);
-    if (tCl) badges.push(<span key="cl" className="text-[10px] font-medium text-sky-300 bg-sky-500/10 border border-sky-500/25 px-1.5 py-0.5 rounded shrink-0" title={cl}>⭐ {cl}</span>);
-    if (tEl) badges.push(<span key="el" className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded shrink-0" title={el}>🏆 {el}</span>);
-    if (tEcl) badges.push(<span key="ecl" className="text-[10px] font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded shrink-0" title={ecl}>🏅 {ecl}</span>);
-    if (tCwc) badges.push(<span key="cwc" className="text-[10px] font-medium text-purple-300 bg-purple-500/10 border border-purple-500/25 px-1.5 py-0.5 rounded shrink-0" title="IHF Super Globe">🌐 Super Globe</span>);
-    if (tDfb && !(tBl && tDfb)) badges.push(<span key="dfb" className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded shrink-0" title={cupInfo.name}>🛡️ Cup</span>);
-    if (trophiesObj.sc) badges.push(<span key="sc" className="text-[10px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0" title={domSupercupInfo.name}>⚡ Supercup</span>);
-    if (trophiesObj.reg) badges.push(<span key="reg" className="text-[10px] font-medium text-zinc-400 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded shrink-0" title="Regional Cup">🏆 Reg-Cup</span>);
-
-    if (badges.length === 0) return null;
-    return <div className="flex items-center gap-1.5 flex-wrap shrink-0">{badges}</div>;
-  };
-
-  const currentHist: any = {
-    ...(latestHistoryEntry || seasonData),
-    country: state.club.country || 'GER',
-    trophiesThisYear: currentSeasonTrophies
-  };
-  const renderTrophyBadges = renderSeasonTrophyBadges;
-
-  // Verified Handball Points Calculation: seasonData.pts already accounts for any pointsDeducted
-  const displayPts = typeof seasonData.pts === 'number' ? seasonData.pts : Math.max(0, ((seasonData.wins * 2) + seasonData.draws) - (seasonData.pointsDeducted || 0));
-
-  // All-time trophies won under this specific club across the entire career
-  const clubHistory = (state.history || []).filter(h => h.clubName === seasonData.clubName);
-  
-  // Track specific lower tier division titles by their authentic league name
-  const lowerTitlesByLeagueName: Record<string, number> = {};
-  let totalBlTitles = 0;
-  let totalCwcTitles = 0;
-  let totalClTitles = 0;
-  let totalElTitles = 0;
-  let totalEclTitles = 0;
-  let totalEscTitles = 0;
-  let totalDfbTitles = 0;
-  let totalScTitles = 0;
-  let totalRegTitles = 0;
-
-  const processTrophiesFromSeason = (hTrophies: any, hTier?: number, hPromoted?: boolean, hCountry?: string, hPos?: number) => {
-    if (!hTrophies) return;
-    const sCountry = hCountry || country;
-    if (hTrophies.cwc) totalCwcTitles += (hTrophies.cwc || 1);
-    if (hTrophies.cl) totalClTitles += (hTrophies.cl || 1);
-    if (hTrophies.el) totalElTitles += (hTrophies.el || 1);
-    if (hTrophies.ecl) totalEclTitles += (hTrophies.ecl || 1);
-    if (hTrophies.esc) totalEscTitles += (hTrophies.esc || 1);
-    if (hTrophies.dfb) totalDfbTitles += (hTrophies.dfb || 1);
-    if (hTrophies.sc) totalScTitles += (hTrophies.sc || 1);
-    if (hTrophies.reg) totalRegTitles += (hTrophies.reg || 1);
-
-    // League Titles:
-    // A season with a promotion or tier > 1 was strictly a lower division campaign
-    const isLower = Boolean(hPromoted || (hTier && hTier > 1));
-    const isChamp = hPos === undefined || hPos === 1;
-    const hasBl = Boolean(hTrophies.bl && !isLower && hTier === 1 && !hPromoted && isChamp);
-    const hasLower = Boolean((hTrophies.lower || (isLower && hTrophies.bl) || (hTrophies.bl && hTier && hTier > 1) || (hTrophies.bl && hPromoted)) && isChamp);
-
-    if (hasBl) {
-      totalBlTitles += (hTrophies.bl || 1);
-    } else if (hasLower) {
-      // Lower division championship: resolve authentic league division
-      const actualPlayedTier = (hTier && hTier > 1) ? hTier : (isLower ? 2 : 1);
-      const leagueInfo = getLeagueInfo(actualPlayedTier, sCountry);
-      const titleName = `${leagueInfo.name} Champion`;
-      const count = (hTrophies.lower || 0) + (isLower ? (hTrophies.bl || 0) : 0);
-      lowerTitlesByLeagueName[titleName] = (lowerTitlesByLeagueName[titleName] || 0) + (count > 0 ? count : 1);
-    }
-  };
-
-  const dbClub = (clubsDb || ALL_CLUBS).find(c => c.name === seasonData.clubName) || (clubsDb || ALL_CLUBS).find(c => c.id === state.club.id) || ALL_CLUBS.find(c => c.name === seasonData.clubName) || ALL_CLUBS.find(c => c.id === state.club.id);
-  const clubStartTier = (state.startClubName === seasonData.clubName && state.startTier)
-    ? state.startTier
-    : (state.club?.name === seasonData.clubName && state.startTier
-      ? state.startTier
-      : (dbClub?.tier || (state.club.name === seasonData.clubName ? (state.club.originalStartLeague || (state.club.tier > 1 ? state.club.tier : undefined)) : undefined) || 1));
-
-  // Reconstruct chronological tiers for prior seasons under this club
-  const sortedClubHistory = [...clubHistory].sort((a, b) => a.year - b.year);
-  let trackedTier = clubStartTier;
-  const seasonsWithResolvedTier = sortedClubHistory.map((h) => {
-    let resolvedTier = (h.tier && h.tier > 1) ? h.tier : (trackedTier > 1 ? trackedTier : (h.tier || 1));
-    const isHistReserve = isReserveClub(h.clubName || seasonData.clubName);
-    const isPromoted = Boolean((h.promoted || (h.pos <= 2 && resolvedTier > 1) || (h.nextTier && h.nextTier < resolvedTier)) && !(resolvedTier === 2 && isHistReserve));
-    const isRelegated = Boolean(h.relegated || (!(h as any).survived && h.nextTier && h.nextTier > resolvedTier));
-    
-    // If the season resulted in promotion, the played division could not have been top flight Tier 1
-    if (isPromoted && resolvedTier <= 1) {
-      resolvedTier = 2;
-    }
-
-    // Update trackedTier for next season
-    if (isPromoted && resolvedTier > 1) {
-      trackedTier = Math.max(1, resolvedTier - 1);
-    } else if (isRelegated && resolvedTier < maxTier) {
-      trackedTier = Math.min(maxTier, resolvedTier + 1);
-    } else {
-      trackedTier = resolvedTier;
-    }
-
-    return {
-      ...h,
-      resolvedTier,
-      isPromoted
-    };
-  });
-
-  seasonsWithResolvedTier.forEach(h => {
-    if (h.year !== seasonData.year) {
-      processTrophiesFromSeason(h.trophiesThisYear, h.resolvedTier, h.isPromoted, h.country, h.pos);
-    }
-  });
-
-  // Always include this completed season's silverware
-  processTrophiesFromSeason(currentSeasonTrophies, seasonData.tier, seasonData.promoted, state.club.country, seasonData.pos);
-
-  const allTimeClubTrophyList: { key: string; name: string; count: number; icon: string; color: string }[] = [];
-  if (totalCwcTitles > 0) allTimeClubTrophyList.push({ key: 'cwc', name: 'IHF Super Globe · Club World Championship', count: totalCwcTitles, icon: 'fa-globe', color: 'text-amber-400' });
-  if (totalClTitles > 0) allTimeClubTrophyList.push({ key: 'cl', name: cl, count: totalClTitles, icon: 'fa-trophy', color: 'text-amber-300' });
-  if (totalElTitles > 0) allTimeClubTrophyList.push({ key: 'el', name: el, count: totalElTitles, icon: 'fa-trophy', color: 'text-orange-400' });
-  if (totalEclTitles > 0) allTimeClubTrophyList.push({ key: 'ecl', name: ecl, count: totalEclTitles, icon: 'fa-trophy', color: 'text-emerald-400' });
-  if (totalBlTitles > 0) allTimeClubTrophyList.push({ key: 'bl', name: `${t1League.name} Champion`, count: totalBlTitles, icon: 'fa-medal', color: 'text-amber-300' });
-
-  // Add lower division champions broken down by specific division name
-  Object.entries(lowerTitlesByLeagueName).forEach(([name, count], idx) => {
-    allTimeClubTrophyList.push({
-      key: `lower-${idx}`,
-      name,
-      count,
-      icon: 'fa-award',
-      color: 'text-sky-300'
-    });
-  });
-
-  if (totalDfbTitles > 0) allTimeClubTrophyList.push({ key: 'dfb', name: cupInfo.name, count: totalDfbTitles, icon: 'fa-shield-halved', color: 'text-amber-400' });
-  if (totalScTitles > 0) allTimeClubTrophyList.push({ key: 'sc', name: domSupercupInfo.name, count: totalScTitles, icon: 'fa-bolt', color: 'text-amber-300' });
-  if (totalRegTitles > 0) allTimeClubTrophyList.push({ key: 'reg', name: t('Regional Cup', 'Regionalpokal'), count: totalRegTitles, icon: 'fa-shield-cat', color: 'text-amber-500' });
-
-  const totalClubSilverware = allTimeClubTrophyList.reduce((sum, item) => sum + item.count, 0);
-
-  // Attendance Metrics
-  const stadiumCap = (seasonData as any).stadium || state.club.stadium || 2000;
-  const catchment = getClubCatchmentCeiling(state.club, state);
-  const leagueMaxAtt = getLeagueMaxAttendance(seasonData.tier, isReserveClub(state.club.name), state.club.country || 'GER', state.club.name, stadiumCap, state.club.fanBase, catchment.isMegaClub);
-  
-  let avgAttendance = (seasonData as any).att || (seasonData as any).avgAttendance;
-  if (!avgAttendance) {
-    const financials = calculateClubFinancials(state);
-    avgAttendance = Math.min(stadiumCap, leagueMaxAtt, financials.expectedAtt || 500);
-  }
-  avgAttendance = formatOrganicAttendance(avgAttendance, stadiumCap, seasonData.year || 2024);
-  const fillPercentage = Math.min(100, Math.round((avgAttendance / stadiumCap) * 100));
-
-  const goalDiff = seasonData.gf - seasonData.ga;
-  const ovrDelta = (seasonData.newBaseOvr || state.club.baseOvr) - (seasonData.startOvr || state.club.baseOvr);
+  }, [isChamp, isPromoted, isRelegated, seasonData, nextLeague, league]);
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }} 
-      animate={{ opacity: 1 }} 
-      exit={{ opacity: 0 }} 
-      transition={{ duration: 0.2 }} 
-      className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 z-[9999] bg-black/85 backdrop-blur-xl overflow-y-auto cursor-pointer"
-      onClick={onClose}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.1, ease: 'linear' }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-2 sm:p-4 md:p-6 bg-black/80 backdrop-blur-2xl overflow-y-auto overscroll-contain"
     >
-      <motion.div 
-        initial={{ scale: 0.95, y: 16, opacity: 0 }} 
-        animate={{ scale: 1, y: 0, opacity: 1 }} 
-        exit={{ scale: 0.95, y: 16, opacity: 0 }} 
-        transition={{ type: "spring", damping: 28, stiffness: 350 }} 
-        onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-4xl lg:max-w-5xl flex flex-col h-auto max-h-[92vh] my-auto cursor-default transition-all duration-150`}
+      <motion.div
+        initial={{ scale: 0.98, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.98, opacity: 0 }}
+        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-5xl xl:max-w-6xl bg-[#12141c]/95 rounded-[28px] sm:rounded-[32px] border border-white/[0.08] shadow-[0_24px_70px_rgba(0,0,0,0.85)] backdrop-blur-xl flex flex-col h-[90vh] sm:h-auto max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto overflow-hidden relative shrink-0"
       >
+        {/* Subtle Ambient Accent Glow */}
         <div 
-          ref={cardRef} 
-          className="bg-[#14151e] text-white rounded-2xl w-full h-auto max-h-[92vh] shadow-[0_25px_70px_rgba(0,0,0,0.85)] border border-white/[0.04] flex flex-col m-0 overflow-hidden relative"
-        >
-          {/* Top Ambient Highlight */}
-          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/30 to-transparent pointer-events-none" />
+          className="absolute -top-24 -right-24 w-80 h-80 rounded-full blur-3xl opacity-15 pointer-events-none"
+          style={{ backgroundColor: state.club.color || '#38bdf8' }}
+        />
 
-          {/* Redesigned Compact Top Header */}
-          <div className="relative shrink-0 border-b border-white/[0.04] px-3.5 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 bg-transparent">
-            {/* Left side: Club crest, "SEASON WRAP-UP - [YEAR] • [LEAGUE TAG]", Club Name, FINISH #[POS] badge */}
-            <div className="flex items-start sm:items-center gap-3 min-w-0 w-full sm:w-auto">
-              <ClubLogo
-                name={seasonData.clubName}
-                color={seasonData.clubColor || state.club.color}
-                logo={seasonData.clubLogo || state.club.logo}
-                fallbackLogo={state.club.fallbackLogo}
-                className="w-9 h-9 sm:w-10 sm:h-10 object-contain shrink-0 drop-shadow mt-0.5 sm:mt-0"
-                fallbackClassName="w-9 h-9 sm:w-10 sm:h-10 text-xs rounded-xl border border-white/10 flex items-center justify-center font-semibold text-white shrink-0 mt-0.5 sm:mt-0"
-              />
-              <div className="flex flex-col min-w-0 flex-1">
-                <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 truncate">
-                  SEASON WRAP-UP - {seasonData.year} • {league.tag || league.name}
-                </span>
-                <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                  <span className="text-base sm:text-lg font-semibold text-white tracking-tight leading-tight truncate max-w-full">
-                    {seasonData.clubName}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-zinc-300 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.04] shrink-0">
-                    <span className={`w-1.5 h-1.5 rounded-full ${seasonData.pos === 1 ? 'bg-amber-400' : seasonData.pos <= 3 ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
-                    <span>FINISH #{seasonData.pos}</span>
-                  </span>
-                </div>
-                {(hasBl || currentSeasonTrophies.lower || hasCl || hasEl || hasEcl || hasCwc || hasDfb) && (
-                  <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
-                    {(hasBl || currentSeasonTrophies.lower) && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 max-w-full">
-                        <span className="truncate">🏆 {hasBl ? t1League.name : league.name} Champions</span>
-                      </span>
-                    )}
-                    {hasCl && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-300 px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 max-w-full">
-                        <span className="truncate">⭐ {cl} Winners</span>
-                      </span>
-                    )}
-                    {hasEl && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 max-w-full">
-                        <span className="truncate">🏆 {el} Winners</span>
-                      </span>
-                    )}
-                    {hasEcl && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 max-w-full">
-                        <span className="truncate">🏅 {ecl} Winners</span>
-                      </span>
-                    )}
-                    {hasCwc && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-300 px-2 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/30 max-w-full">
-                        <span className="truncate">🌐 Super Globe Winners</span>
-                      </span>
-                    )}
-                    {hasDfb && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-200 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.1] max-w-full">
-                        <span className="truncate">🛡️ {cupInfo.name}</span>
-                      </span>
-                    )}
+        {/* TOP BRANDING & OUTCOME HEADER */}
+        <div className="relative p-4 sm:p-5 border-b border-white/[0.08] bg-white/[0.02] overflow-hidden shrink-0">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Club Identity & Outcome */}
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 shadow-md p-2 relative">
+                <ClubLogo
+                  name={seasonData.clubName || state.club.name}
+                  id={state.club.id}
+                  color={seasonData.clubColor || state.club.color}
+                  logo={state.club.logo}
+                  fallbackLogo={state.club.fallbackLogo}
+                  isModActive={isModActive}
+                  className="w-10 h-10 object-contain drop-shadow"
+                  fallbackClassName="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white text-base"
+                />
+                {isChamp && (
+                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-400 text-black flex items-center justify-center text-[10px] shadow-md font-bold">
+                    <i className="fas fa-crown"></i>
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Right side: Three compact data blocks for PTS, W-D-L, and GD */}
-            <div className="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-2 sm:gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.05] shrink-0">
-              <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
-                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">PTS</span>
-                <span className="text-base sm:text-lg font-semibold text-zinc-200 leading-tight tabular-nums mt-0.5 sm:mt-0">
-                  <CountUp value={displayPts} duration={850} />
-                </span>
-              </div>
-              <div className="hidden sm:block h-6 w-[1px] bg-white/[0.06]" />
-              <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
-                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">W-D-L</span>
-                <div className="text-base sm:text-lg font-semibold leading-tight tabular-nums flex items-center gap-0.5 text-zinc-200 mt-0.5 sm:mt-0">
-                  <span>{seasonData.wins}</span>
-                  <span className="text-zinc-500 font-normal">-</span>
-                  <span>{seasonData.draws}</span>
-                  <span className="text-zinc-500 font-normal">-</span>
-                  <span>{seasonData.losses}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    Season Wrap-Up · {seasonData.year}
+                  </span>
+                  <span className="text-white/20">•</span>
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-sky-400 uppercase tracking-wide">
+                    {league.name}
+                  </span>
+                </div>
+
+                <h1 className="text-xl sm:text-2xl font-bold text-white break-words leading-tight tracking-tight">
+                  {seasonData.clubName}
+                </h1>
+
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide ${outcomeBanner.text}`}>
+                    <i className={`fas ${outcomeBanner.icon} text-[10px]`}></i>
+                    {outcomeBanner.badge}
+                  </span>
+                  <span className="text-zinc-600 hidden sm:inline">·</span>
+                  <span className="text-xs text-zinc-300 font-normal hidden sm:inline truncate">
+                    {outcomeBanner.tagline}
+                  </span>
                 </div>
               </div>
-              <div className="hidden sm:block h-6 w-[1px] bg-white/[0.06]" />
-              <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
-                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">GD</span>
-                <span className="text-base sm:text-lg font-semibold leading-tight tabular-nums text-zinc-200 mt-0.5 sm:mt-0">
-                  {goalDiff > 0 ? `+${goalDiff}` : goalDiff}
-                </span>
+            </div>
+
+            {/* Quick Record Ribbon */}
+            <div className="flex items-center gap-2 sm:gap-3 bg-white/[0.03] backdrop-blur-md border border-white/[0.08] rounded-2xl p-2.5 sm:p-3 self-start md:self-auto shrink-0 shadow-sm">
+              <div className="text-center px-2">
+                <div className="text-[9px] uppercase font-semibold text-zinc-400 tracking-wider">Pts</div>
+                <div className="text-base sm:text-lg font-bold text-amber-300 tabular-nums">{seasonData.pts}</div>
               </div>
+              <div className="w-px h-6 bg-white/[0.08]" />
+              <div className="text-center px-2">
+                <div className="text-[9px] uppercase font-semibold text-zinc-400 tracking-wider">W-D-L</div>
+                <div className="text-xs sm:text-sm font-semibold text-white tabular-nums">
+                  <span className="text-emerald-400">{seasonData.wins}</span>-
+                  <span className="text-zinc-300">{seasonData.draws}</span>-
+                  <span className="text-rose-400">{seasonData.losses}</span>
+                </div>
+              </div>
+              <div className="w-px h-6 bg-white/[0.08]" />
+              <div className="text-center px-2">
+                <div className="text-[9px] uppercase font-semibold text-zinc-400 tracking-wider">GD</div>
+                <div className={`text-xs sm:text-sm font-semibold tabular-nums ${goalDiff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {goalDiff > 0 ? `+${goalDiff}` : goalDiff}
+                </div>
+              </div>
+              {trophyList.length > 0 && (
+                <>
+                  <div className="w-px h-6 bg-white/[0.08]" />
+                  <div className="text-center px-2">
+                    <div className="text-[9px] uppercase font-semibold text-amber-300 tracking-wider">Trophies</div>
+                    <div className="text-sm sm:text-base font-bold text-amber-300 flex items-center justify-center gap-1 tabular-nums">
+                      <span>{trophyList.length}</span>
+                      <span className="text-xs">🏆</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Pill-based horizontal scroll menu with Ambient Tints */}
-          <div className="shrink-0 px-4 py-2 sm:px-6 border-b border-white/[0.04] bg-black/20 flex items-center overflow-x-auto custom-scrollbar gap-2">
-            {[
-              { id: 'summary', label: 'Exec. Summary', badge: (isTacticStale || consecutiveTitles > 0 || isNemesisActive) ? t('Alerts', 'Meldungen') : null, badgeColor: 'bg-amber-500/10 text-amber-300 border-amber-500/20' },
-              { id: 'performance', label: 'Performance' },
-              { id: 'finances', label: 'Finances & Arena' },
-              { id: 'squad', label: 'Squad' },
-              { id: 'coach', label: 'Coach', badge: isCriticallyStale ? t(`Stale: Yr ${tacticTenure}`, `Abnutzung ${tacticTenure}. J.`) : isTacticStale ? t(`Stale: Yr ${tacticTenure}`, `Abnutzung ${tacticTenure}. J.`) : null, badgeColor: isCriticallyStale ? 'bg-rose-500/10 text-rose-300 border-rose-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20' },
-              { id: 'board', label: 'Board', badge: consecutiveTitles > 0 ? t(`Tax: -${effectiveDynastyTax.toFixed(1)}`, `Steuer: -${effectiveDynastyTax.toFixed(1)}`) : null, badgeColor: 'bg-rose-500/10 text-rose-300 border-rose-500/20' },
-              { id: 'universe', label: 'Universe & World', badge: isNemesisActive ? t('Rival Takeover', 'Rivalen-Übernahme') : null, badgeColor: 'bg-purple-500/10 text-purple-200 border-purple-500/20' },
-            ].map((tab) => {
-              const isActive = activeTab === tab.id || (tab.id === 'finances' && activeTab === 'finance');
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                    isActive
-                      ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm'
-                      : 'text-zinc-400 hover:text-white hover:bg-white/[0.03] border border-transparent'
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span className={`px-1.5 py-0.5 text-[9px] font-mono font-medium rounded border ${tab.badgeColor}`}>
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+          {/* 4 Clean, Punchy Segmented Navigation Tabs */}
+          <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-white/[0.06] overflow-x-auto custom-scrollbar">
+            <button
+              type="button"
+              onClick={() => switchTab('overview')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'overview'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-400/40 shadow-sm'
+                  : 'bg-white/[0.03] text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-compass text-[10px]"></i>
+              <span>Overview</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => switchTab('squad')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'squad'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-400/40 shadow-sm'
+                  : 'bg-white/[0.03] text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-users text-[10px]"></i>
+              <span>Club & Squad</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => switchTab('table')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'table'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-400/40 shadow-sm'
+                  : 'bg-white/[0.03] text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-table text-[10px]"></i>
+              <span>League Table</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => switchTab('world')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'world'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40 shadow-sm'
+                  : 'bg-white/[0.03] text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-earth-americas text-[10px]"></i>
+              <span>World Digest</span>
+            </button>
           </div>
+        </div>
 
-          {/* Scrollable Content Body */}
-          <div ref={contentBodyRef} className={`min-h-0 ${activeTab === 'table' ? 'p-2 sm:p-3 overflow-hidden h-[580px]' : 'p-4 sm:p-5 overflow-y-auto custom-scrollbar'} flex flex-col gap-3.5`}>
-            <AnimatePresence mode="wait">
-              {activeTab === 'summary' ? (
-                <motion.div
-                  key="summary-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="flex flex-col gap-3 sm:gap-4"
-                >
-                  {/* 🏆 CHAMPIONSHIP & EUROPEAN GLORY HERO BANNER 🏆 */}
-                  {(currentHist.pos === 1 || hasCl || hasEl || hasEcl || hasCwc) && (() => {
-                    const tty = currentHist.trophiesThisYear || {};
-                    const bBl = tty.bl > 0;
-                    const bDfb = tty.dfb > 0;
-                    const bCl = tty.cl > 0;
-                    const bEl = tty.el > 0;
-                    const bEcl = tty.ecl > 0;
-                    const bCwc = tty.cwc > 0;
-
-                    let bannerTitle = "LEAGUE TITLE GLORY!";
-                    let bannerDesc = `Historic triumph! ${currentHist.clubName} lifts the championship trophy after dominating the season with ${currentHist.pts} points!`;
-                    let bannerSuperTitle = `${getLeagueInfo(currentHist.tier, currentHist.country).name} CHAMPION`;
-
-                    if (bBl && bDfb && bCl && bCwc) {
-                      bannerTitle = "HISTORIC QUADRUPLE!";
-                      bannerDesc = `Unprecedented dominance! ${currentHist.clubName} completes the ultimate quadruple, sweeping the League, Cup, ${cl}, and Super Globe!`;
-                      bannerSuperTitle = "🏆 🏆 🏆 🏆 QUADRUPLE WINNERS";
-                    } else if (bBl && bDfb && bCl) {
-                      bannerTitle = "LEGENDARY TRIPLE!";
-                      bannerDesc = `A season for the history books! ${currentHist.clubName} conquers Europe and domestic competitions to secure the legendary Triple!`;
-                      bannerSuperTitle = `🏆 🏆 ⭐ LEAGUE, CUP & ${cl.toUpperCase()} WINNERS`;
-                    } else if (bBl && bDfb && bEl) {
-                      bannerTitle = "EURO TRIPLE GLORY!";
-                      bannerDesc = `An extraordinary campaign! ${currentHist.clubName} secures the domestic double and captures the ${el} title!`;
-                      bannerSuperTitle = `🏆 🏆 🥇 LEAGUE, CUP & ${el.toUpperCase()} WINNERS`;
-                    } else if (bBl && bCl) {
-                      bannerTitle = "EUROPEAN & LEAGUE DOUBLE!";
-                      bannerDesc = `Supreme continental and domestic glory! ${currentHist.clubName} lifts both ${t1League.name} and the prestigious ${cl}!`;
-                      bannerSuperTitle = `🏆 ⭐ ${t1League.name.toUpperCase()} & ${cl.toUpperCase()} CHAMPIONS`;
-                    } else if (bBl && bEl) {
-                      bannerTitle = "EUROPEAN & LEAGUE DOUBLE!";
-                      bannerDesc = `A monumental campaign! ${currentHist.clubName} celebrates both the ${t1League.name} title and the ${el} trophy!`;
-                      bannerSuperTitle = `🏆 🥇 ${t1League.name.toUpperCase()} & ${el.toUpperCase()} CHAMPIONS`;
-                    } else if (bBl && bEcl) {
-                      bannerTitle = "EUROPEAN & LEAGUE DOUBLE!";
-                      bannerDesc = `Double silverware celebration! ${currentHist.clubName} claims the ${t1League.name} crown alongside the ${ecl}!`;
-                      bannerSuperTitle = `🏆 🏅 ${t1League.name.toUpperCase()} & ${ecl.toUpperCase()} CHAMPIONS`;
-                    } else if (bBl && bDfb) {
-                      bannerTitle = "DOMESTIC DOUBLE WINNERS!";
-                      bannerDesc = `Total domestic supremacy! ${currentHist.clubName} secures the prestigious double, lifting both the league championship and the national cup!`;
-                      bannerSuperTitle = `🏆 🏆 DOMESTIC DOUBLE WINNERS`;
-                    } else if (bCl) {
-                      bannerTitle = "CHAMPIONS OF EUROPE!";
-                      bannerDesc = `Continental kings! ${currentHist.clubName} conquers Europe's elite to lift the prestigious ${cl} trophy!`;
-                      bannerSuperTitle = `⭐ ${cl.toUpperCase()} WINNERS${bDfb ? ' & CUP CHAMPIONS' : ''}`;
-                    } else if (bEl) {
-                      bannerTitle = "EUROPEAN LEAGUE GLORY!";
-                      bannerDesc = `European triumph! ${currentHist.clubName} marches through the continent to lift the ${el} trophy!`;
-                      bannerSuperTitle = `🏆 ${el.toUpperCase()} WINNERS${bDfb ? ' & CUP CHAMPIONS' : ''}`;
-                    } else if (bEcl) {
-                      bannerTitle = "EUROPEAN CUP CHAMPIONS!";
-                      bannerDesc = `Continental silverware secured! ${currentHist.clubName} triumphs in the final to lift the ${ecl}!`;
-                      bannerSuperTitle = `🏅 ${ecl.toUpperCase()} WINNERS${bDfb ? ' & CUP CHAMPIONS' : ''}`;
-                    } else if (bCwc && currentHist.pos !== 1) {
-                      bannerTitle = "CLUB WORLD CHAMPIONS!";
-                      bannerDesc = `Global supremacy! ${currentHist.clubName} lifts the IHF Super Globe as Club World Champions!`;
-                      bannerSuperTitle = "🌐 IHF SUPER GLOBE WINNERS";
-                    }
-
-                    return (
-                      <div className="bg-[#10121a]/90 border border-white/[0.08] backdrop-blur-md rounded-2xl p-3.5 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
-                        
-                        {/* Left Side: Trophy Icon & Text */}
-                        <div className="flex items-start sm:items-center gap-3 sm:gap-5 min-w-0">
-                          {/* Trophy Icon Box */}
-                          <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-xl sm:text-2xl shrink-0 mt-0.5 sm:mt-0">
-                            {bCl ? '⭐' : '🏆'}
-                          </div>
-
-                          {/* Text Content */}
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-amber-300/90 mb-0.5 leading-snug break-words">
-                              {bannerSuperTitle}
-                            </span>
-                            <h3 className="text-lg sm:text-2xl font-bold text-white tracking-tight leading-tight uppercase mb-1 break-words">
-                              {bannerTitle}
-                            </h3>
-                            <p className="text-xs sm:text-[13px] text-zinc-400 font-normal leading-relaxed max-w-xl">
-                              {bannerDesc}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Right Side: Side-by-Side League & European Trophy Pills + Prize Money */}
-                        <div className="flex flex-col sm:items-end gap-1.5 shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-white/[0.06]">
-                          <div className="flex items-center gap-1.5 flex-wrap sm:justify-end">
-                            {currentHist.pos === 1 && (
-                              <span className="bg-amber-500/10 border border-amber-500/25 text-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
-                                🏆 {currentHist.tier === 1 ? t1League.tag || 'LEAGUE' : '1ST PLACE'}
-                              </span>
-                            )}
-                            {bCl && (
-                              <span className="bg-sky-500/15 border border-sky-500/30 text-sky-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
-                                ⭐ {cl.toUpperCase()}
-                              </span>
-                            )}
-                            {bEl && (
-                              <span className="bg-amber-500/15 border border-amber-500/30 text-amber-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
-                                🏆 {el.toUpperCase()}
-                              </span>
-                            )}
-                            {bEcl && (
-                              <span className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
-                                🏅 {ecl.toUpperCase()}
-                              </span>
-                            )}
-                            {bCwc && (
-                              <span className="bg-purple-500/15 border border-purple-500/30 text-purple-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider inline-flex items-center gap-1">
-                                🌐 SUPER GLOBE
-                              </span>
-                            )}
-                          </div>
-                          {currentHist.pos === 1 && (
-                            <span className="text-[11px] text-zinc-300 font-medium tabular-nums">
-                              +{formatMoney(getLeagueScaledVal(currentHist.tier, ({ 1: 350000, 2: 120000, 3: 45000, 4: 15000, 5: 5000 } as Record<number, number>)[currentHist.tier] || 5000, currentHist.country || 'GER'))} League Prize
-                            </span>
-                          )}
-                        </div>
-
-                      </div>
-                    );
-                  })()}
-
-                  {/* Media & Broadcaster Verdict Card */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col gap-3">
-                    <div className="flex items-center justify-between gap-2 border-b border-white/[0.04] pb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-5 h-5 rounded-md bg-white/[0.03] border border-white/[0.06] text-zinc-400 flex items-center justify-center shrink-0">
-                          <i className="fas fa-satellite-dish text-[9px]" />
-                        </div>
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 truncate">
-                          MEDIA & BROADCASTER VERDICT
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest shrink-0">
-                        OFFICIAL WRAP
-                      </span>
+        {/* SCROLLABLE BENTO BODY */}
+        <div ref={cardRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 custom-scrollbar bg-[#12141c]/60">
+          <div className="space-y-6">
+            {/* Top 3 Global Leaderboard Milestone Banner */}
+            {isTop3Leaderboard && (
+              <div className="bg-gradient-to-r from-amber-500/15 via-yellow-400/20 to-amber-500/15 border border-yellow-400/30 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-yellow-400/20 border border-yellow-400/30 flex items-center justify-center text-yellow-400 text-xl font-bold">
+                    🏆
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-yellow-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full bg-yellow-400 animate-ping"></span>
+                      Top 3 Global Leaderboard!
                     </div>
-
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-black/30 rounded-lg px-3 py-2 border border-white/[0.04]">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <BroadcastLogo packageOrKey={bPackage} size="sm" isModActive={isModActive} className="shrink-0" />
-                        <div className="h-4 w-[1px] bg-white/10 shrink-0 hidden sm:block" />
-                        <div className="min-w-0 flex flex-col">
-                          <span className="font-semibold text-white text-xs truncate">
-                            {broadcasterVerdict.network}
-                          </span>
-                          <span className="text-[10px] text-zinc-400 leading-none">
-                            {broadcasterVerdict.title}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="shrink-0 flex items-center gap-1.5 text-[10px] font-mono text-zinc-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80 shrink-0" />
-                        <span className="uppercase tracking-wider">VERIFIED BROADCAST</span>
-                      </div>
-                    </div>
-
-                    <div className="relative pl-3 border-l-2 border-white/20 py-0.5">
-                      <p className="text-xs sm:text-[13px] text-zinc-300 leading-relaxed font-normal italic">
-                        "{broadcasterVerdict.text}"
-                      </p>
+                    <div className="text-xs sm:text-sm font-semibold text-white mt-0.5">
+                      Historic achievement! Rank #{top3Rank} globally with {(state.careerScore || 0).toLocaleString()} pts!
                     </div>
                   </div>
+                </div>
+                <div className="text-xl sm:text-2xl font-bold text-yellow-300 px-3 py-1 bg-yellow-400/10 rounded-xl border border-yellow-400/25 tabular-nums">
+                  #{top3Rank}
+                </div>
+              </div>
+            )}
 
-                  {/* Season Narrative Executive Summary */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
-                        <i className="fas fa-file-contract text-zinc-400" />
-                        <span>EXECUTIVE CAMPAIGN SUMMARY</span>
+            {/* Grand League Champions & Multi-Trophy Celebration Banner */}
+            {activeTab === 'overview' && (isChamp || trophyList.length > 0) && (
+              <div className="relative overflow-hidden bg-gradient-to-r from-amber-500/20 via-yellow-400/25 to-amber-500/20 border border-yellow-400/40 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-[0_0_50px_rgba(250,204,21,0.25)] flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="absolute -top-12 -left-12 w-48 h-48 bg-yellow-400/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="flex items-center gap-4 text-center sm:text-left relative z-10">
+                  {/* Visual Trophies Display */}
+                  <div className="flex items-center justify-center gap-1 sm:gap-1.5 p-2 sm:p-2.5 bg-gradient-to-br from-yellow-400/20 via-amber-500/30 to-yellow-600/20 border border-yellow-400/30 rounded-2xl shadow-lg shrink-0">
+                    {trophyList.length > 0 ? (
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        {trophyList.map((tr, i) => (
+                          <div key={i} className="transform hover:scale-110 transition-transform" title={tr.name}>
+                            <PrestigeTrophy
+                              type={tr.type}
+                              size={trophyList.length >= 4 ? 40 : trophyList.length > 1 ? 48 : 56}
+                              showStars={false}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-3xl">🏆</span>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-amber-300 flex items-center justify-center sm:justify-start gap-1.5 mb-1">
+                      <span>★</span>
+                      <span>
+                        {trophyList.length >= 6
+                          ? 'HISTORIC SEXTUPLE WINNERS'
+                          : trophyList.length === 5
+                          ? 'HISTORIC QUINTUPLE WINNERS'
+                          : trophyList.length === 4
+                          ? 'HISTORIC QUADRUPLE WINNERS'
+                          : trophyList.length === 3
+                          ? 'HISTORIC TREBLE WINNERS'
+                          : trophyList.length === 2
+                          ? (isChamp ? 'DOMESTIC DOUBLE WINNERS' : 'CUP DOUBLE WINNERS')
+                          : isChamp
+                          ? (country === 'ECU' ? 'LigaPro Serie A Champion' : `${league.name} Champion`)
+                          : 'CUP CHAMPIONS'}
                       </span>
-                      <span className="text-[10px] font-mono text-zinc-400">
-                        OFFICIAL CLUB REPORT
-                      </span>
+                      <span>★</span>
                     </div>
-
-                    <p className="text-xs sm:text-[13px] text-zinc-300 leading-relaxed font-normal">
-                      {generateSportingSummary()}
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                      {trophyList.length >= 6
+                        ? 'HISTORIC SEXTUPLE GLORY!'
+                        : trophyList.length === 5
+                        ? 'HISTORIC QUINTUPLE GLORY!'
+                        : trophyList.length === 4
+                        ? 'HISTORIC QUADRUPLE GLORY!'
+                        : trophyList.length === 3
+                        ? 'HISTORIC TREBLE GLORY!'
+                        : trophyList.length === 2
+                        ? (isChamp ? 'DOMESTIC DOUBLE GLORY!' : 'CUP DOUBLE GLORY!')
+                        : isChamp
+                        ? (country === 'ECU' ? 'CAMPEÓN NACIONAL DEL ECUADOR!' : 'LEAGUE TITLE GLORY!')
+                        : 'SILVERWARE & CUP GLORY!'}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-yellow-100/90 mt-1 max-w-lg font-medium leading-relaxed">
+                      {trophyList.length > 1
+                        ? `Historic multi-trophy triumph! ${seasonData.clubName} lifts ${trophyList.map(t => t.name).join(' & ')} in an extraordinary campaign!`
+                        : isChamp
+                        ? `Historic triumph! ${seasonData.clubName} lifts the championship trophy after dominating the season with ${seasonData.pts} points!`
+                        : `Historic cup triumph! ${seasonData.clubName} lifts the ${trophyList[0]?.name || 'cup'} silverware!`
+                      }
                     </p>
+                  </div>
+                </div>
+                <div className="flex sm:flex-col items-center sm:items-end justify-center gap-1.5 shrink-0 relative z-10">
+                  <span className="text-xs uppercase font-bold tracking-wider px-3.5 py-1 rounded-full bg-yellow-400 text-black shadow-md">
+                    {trophyList.length >= 6
+                      ? 'Sextuple'
+                      : trophyList.length === 5
+                      ? 'Quintuple'
+                      : trophyList.length === 4
+                      ? 'Quadruple'
+                      : trophyList.length === 3
+                      ? 'Treble'
+                      : trophyList.length === 2
+                      ? 'Double'
+                      : isChamp
+                      ? '1st Place'
+                      : 'Winners'}
+                  </span>
+                  <span className="text-[11px] text-amber-200 font-semibold tabular-nums mt-0.5">
+                    +{formatMoney(getLeagueScaledVal(1, trophyList.length >= 6 ? 30000 : trophyList.length === 5 ? 25000 : trophyList.length === 4 ? 20000 : 15000, country))} Prize
+                  </span>
+                </div>
+              </div>
+            )}
 
-                    {/* Integrated Sponsor Performance Deal Banner */}
-                    {seasonData.performanceDealResult && (
-                      <div className="mt-1 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
-                        <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white/[0.04] text-zinc-300 mt-0.5 sm:mt-0">
-                            <i className={`fas ${seasonData.performanceDealResult.success ? 'fa-check text-emerald-400' : 'fa-xmark text-rose-400'}`} />
-                          </div>
-                          <div className="flex flex-col text-left min-w-0">
-                            <span className="text-[11px] font-semibold uppercase tracking-wider text-white">
-                              {isDe ? 'Kommerzielle Leistungsklausel' : 'Sponsor Performance Deal'}
-                            </span>
-                            <span className="text-[11px] text-zinc-400 leading-snug">
-                              {seasonData.performanceDealResult.success ? (
-                                isDe 
-                                  ? `Obere Tabellenhälfte erreicht (Platz ${seasonData.performanceDealResult.pos}). Leistungsprämie ausgezahlt!`
-                                  : `Top-Half Finish achieved (Pos ${seasonData.performanceDealResult.pos}). Performance incentive unlocked!`
-                              ) : (
-                                isDe
-                                  ? `Platz ${seasonData.performanceDealResult.pos} verfehlt Zielkorridor (Ziel: Platz ${seasonData.performanceDealResult.target}).`
-                                  : `Position ${seasonData.performanceDealResult.pos} missed contractual target (Target: Pos ${seasonData.performanceDealResult.target}).`
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        {seasonData.performanceDealResult.success && (
-                          <span className="text-xs font-semibold text-zinc-200 bg-white/[0.03] px-2.5 py-1 rounded-lg border border-white/[0.06] shrink-0 font-mono self-start sm:self-auto">
-                            +{formatMoney(seasonData.performanceDealResult.payout)}
+            {/* ================= 1. OVERVIEW: POSITION, TROPHIES, BOARD & DYNASTY ================= */}
+            {activeTab === 'overview' && (
+              <div id="section-exec" className="space-y-4 scroll-mt-6">
+                {/* Silverware & Trophy Cabinet (Featured directly in Executive Summary whenever trophies are won!) */}
+                {trophyList.length > 0 && (
+                  <div className="bg-gradient-to-br from-amber-500/10 via-yellow-950/20 to-amber-950/10 border border-amber-400/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-[0_0_30px_rgba(245,158,11,0.15)]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.08] pb-3 mb-4">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-amber-300 flex items-center gap-1.5">
+                          <i className="fa-solid fa-crown text-amber-400 text-xs"></i>
+                          <span>
+                            {trophyList.length >= 6
+                              ? 'Historic Sextuple / Multiple Honours'
+                              : trophyList.length === 5
+                              ? 'Historic Quintuple / Multiple Honours'
+                              : trophyList.length === 4
+                              ? 'Historic Quadruple / Multiple Honours'
+                              : trophyList.length === 3
+                              ? 'Historic Treble / Multiple Honours'
+                              : trophyList.length === 2
+                              ? 'Domestic / Continental Double'
+                              : 'Silverware & Championship Honours'}
                           </span>
-                        )}
+                        </div>
+                        <h3 className="text-base sm:text-lg font-black text-white tracking-tight mt-0.5">
+                          {trophyList.length === 1
+                            ? '1 Trophy Lifted This Season'
+                            : `${trophyList.length} Trophies Lifted This Season!`}
+                        </h3>
                       </div>
-                    )}
-                    {/* Prestigious Double / Triple / Quadruple Hero Banner */}
-                    {activeCombo && (
-                      <div className="mt-2 p-3.5 rounded-xl border border-white/[0.06] bg-[#10121a]/90 backdrop-blur-md flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-lg shrink-0">
-                            🏆
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs uppercase font-bold tracking-wider px-3 py-1 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30">
+                          {trophyList.length >= 6
+                            ? 'Sextuple Winners'
+                            : trophyList.length === 5
+                            ? 'Quintuple Winners'
+                            : trophyList.length === 4
+                            ? 'Quadruple Winners'
+                            : trophyList.length === 3
+                            ? 'Treble Winners'
+                            : trophyList.length === 2
+                            ? 'Double Winners'
+                            : 'Champions'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Trophy Display Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {trophyList.map((tr, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-white/[0.03] hover:bg-white/[0.06] border border-amber-400/25 rounded-2xl p-3.5 flex flex-col items-center justify-between text-center transition-all shadow-sm group"
+                        >
+                          <div className="py-2 transform group-hover:scale-105 transition-transform">
+                            <PrestigeTrophy type={tr.type} size={64} showStars={false} />
                           </div>
-                          <div className="flex flex-col min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs sm:text-sm font-semibold text-white tracking-tight">
-                                {activeCombo.fullTitle}
-                              </span>
-                              <span className="text-[10px] font-medium uppercase px-2 py-0.5 rounded border border-white/[0.06] bg-white/[0.03] text-zinc-300 font-mono">
-                                {activeCombo.tag}
-                              </span>
+                          <div className="mt-2 w-full">
+                            <div className="text-[9px] uppercase font-semibold tracking-wider text-amber-300/80 truncate">
+                              {tr.badge || 'Silverware'}
                             </div>
-                            <span className="text-xs text-zinc-400 mt-0.5 leading-snug">
-                              {activeCombo.description}
-                            </span>
+                            <div className="text-xs font-bold text-white tracking-tight truncate mt-0.5" title={tr.name}>
+                              {tr.name}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 4 Quick Executive Bento Blocks */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-3 flex flex-col justify-between">
-                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">FINAL FINISH</span>
-                      <span className="text-lg font-semibold text-white mt-1">#{seasonData.pos}</span>
-                      <span className="text-[11px] text-zinc-400 truncate">{league.name}</span>
-                    </div>
-                    <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-3 flex flex-col justify-between">
-                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">MATCH RECORD</span>
-                      <span className="text-lg font-semibold text-white mt-1 tabular-nums">{seasonData.wins}W-{seasonData.draws}D-{seasonData.losses}L</span>
-                      <span className="text-[11px] text-zinc-300 font-medium tabular-nums">{displayPts} Points</span>
-                    </div>
-                    <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-3 flex flex-col justify-between">
-                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">SILVERWARE</span>
-                      {activeCombo ? (
-                        <div className="mt-1 flex flex-col min-w-0">
-                          <span className="text-sm sm:text-base font-semibold truncate leading-tight text-zinc-200">
-                            {activeCombo.label}
-                          </span>
-                          <span className="text-[11px] text-zinc-400 font-normal">
-                            {totalSilverwareThisCampaign} Titles ({totalClubSilverware} all-time)
-                          </span>
-                        </div>
-                      ) : (
-                        <>
-                          <span className="text-lg font-semibold text-zinc-200 mt-1 tabular-nums">{totalSilverwareThisCampaign} Titles</span>
-                          <span className="text-[11px] text-zinc-400 font-normal">{totalClubSilverware} all-time</span>
-                        </>
-                      )}
-                    </div>
-                    <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-3 flex flex-col justify-between">
-                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">NET TREASURY</span>
-                      <span className="text-lg font-semibold text-white mt-1 tabular-nums">
-                        {formatMoney(seasonData.endBudget)}
-                      </span>
-                      <span className="text-[11px] text-zinc-400 font-medium tabular-nums">
-                        {seasonData.netProfit >= 0 ? '+' : ''}{formatMoney(seasonData.netProfit)} net
-                      </span>
+                      ))}
                     </div>
                   </div>
+                )}
 
-                  {/* Active Alerts Ribbon */}
-                  {(isTacticStale || consecutiveTitles > 0 || isNemesisActive) && (
-                    <div className="flex items-center gap-2 flex-wrap pt-1">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 font-bold mr-1 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                        <span>{t('Active Alerts:', 'Aktive Warnungen:')}</span>
-                      </span>
-
-                      {isTacticStale && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('coach')}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer active:scale-95 ${
-                            isCriticallyStale
-                              ? 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border-rose-500/30'
-                              : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
-                          }`}
-                          title={t('View details in Coach tab', 'Details im Trainer-Tab ansehen')}
-                        >
-                          <i className="fas fa-chess-rook text-[10px]" />
-                          <span>{t(`Tactic Stale (${isCriticallyStale ? '-1.0' : '-0.5'} OVR)`, `Taktik abgenutzt (${isCriticallyStale ? '-1,0' : '-0,5'} GES)`)}</span>
-                          <i className="fas fa-arrow-right text-[9px] opacity-60 ml-0.5" />
-                        </button>
-                      )}
-
-                      {consecutiveTitles > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('board')}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 transition cursor-pointer active:scale-95"
-                          title={t('View details in Board tab', 'Details im Vorstands-Tab ansehen')}
-                        >
-                          <i className="fas fa-crosshairs text-[10px]" />
-                          <span>{t(`Dynasty Tax (-${effectiveDynastyTax.toFixed(1)} OVR)`, `Dynastie-Steuer (-${effectiveDynastyTax.toFixed(1)} GES)`)}</span>
-                          <i className="fas fa-arrow-right text-[9px] opacity-60 ml-0.5" />
-                        </button>
-                      )}
-
-                      {isNemesisActive && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('universe')}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/35 transition cursor-pointer active:scale-95 animate-pulse"
-                          title={t('View details in Universe tab', 'Details im Universums-Tab ansehen')}
-                        >
-                          <i className="fas fa-bolt text-[10px]" />
-                          <span>{t(`Takeover: ${nemesisClub?.name || 'Rival'}`, `Übernahme: ${nemesisClub?.name || 'Rival'}`)}</span>
-                          <i className="fas fa-arrow-right text-[9px] opacity-60 ml-0.5" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </motion.div>
-              ) : activeTab === 'performance' ? (
-                /* 2-column grid: Left card 'Final Position' and 'Arch Rival Derby'. Right card 'Silverware & Honours' */
-                <motion.div
-                  key="performance-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"
-                >
-                  {/* Left Card: Final Position & Arch Rival Derby */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between gap-4">
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          FINAL POSITION & STANDINGS
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-zinc-300 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.06]">
-                          <span className={`w-1.5 h-1.5 rounded-full ${seasonData.pos === 1 ? 'bg-amber-400' : seasonData.pos <= 3 ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
-                          <span>{posBadge.text}</span>
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl sm:text-3xl font-semibold text-white tracking-tight leading-none tabular-nums">
-                          #{seasonData.pos}
-                        </span>
-                        <span className="text-xs text-zinc-400 font-normal">in {league.name}</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 py-2 border-y border-white/[0.04] text-center">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">POINTS</span>
-                          <span className="text-sm font-medium text-zinc-200 tabular-nums">{displayPts} pts</span>
+                {/* Promotion Showcase Card (Prominently featured exclusively in Executive Summary for Promoted Clubs) */}
+                {isPromoted && !isChamp && (
+                  <div className="bg-gradient-to-br from-emerald-500/15 via-teal-950/25 to-sky-950/15 border border-emerald-400/35 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-[0_0_35px_rgba(16,185,129,0.2)] relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+                    
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-4 mb-4 relative z-10">
+                      <div className="flex items-center gap-3.5">
+                        <div className="flex items-center justify-center p-2.5 bg-gradient-to-br from-emerald-400/25 via-teal-500/35 to-emerald-600/25 border border-emerald-400/40 rounded-2xl shadow-lg shrink-0">
+                          <PrestigeTrophy type="promotion" size={44} showStars={false} />
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">RECORD</span>
-                          <span className="text-sm font-medium text-zinc-200 tabular-nums">{seasonData.wins}W-{seasonData.draws}D-{seasonData.losses}L</span>
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">GOAL DIFF</span>
-                          <span className="text-sm font-medium tabular-nums text-zinc-200">
-                            {goalDiff > 0 ? `+${goalDiff}` : goalDiff}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-[11px] text-zinc-400 flex items-center justify-between">
-                        <span>Target Benchmark:</span>
-                        <span className="font-medium text-zinc-300">Top #{seasonData.oldTarget || 15} Finish</span>
-                      </div>
-                    </div>
-
-                    {/* Arch Rival Derby Sub-Card */}
-                    <div className="pt-3 border-t border-white/[0.04] flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
-                          <i className="fas fa-hand-fist text-zinc-400 text-[10px]" />
-                          ARCH RIVAL DERBY
-                        </span>
-                        {seasonData.rivalryThisSeason && (
-                          <span className="text-[10px] font-medium text-zinc-300">
-                            {seasonData.rivalryThisSeason.name}
-                          </span>
-                        )}
-                      </div>
-
-                      {seasonData.rivalryThisSeason ? (
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex items-center justify-between text-xs bg-black/30 rounded-lg p-2 border border-white/[0.04]">
-                            <span className="text-zinc-400 text-[11px]">This Season:</span>
-                            <span className="font-medium text-zinc-200">
-                              <span>{seasonData.rivalryThisSeason.wins}W</span>
-                              <span className="text-zinc-500 mx-1">·</span>
-                              <span>{seasonData.rivalryThisSeason.draws}D</span>
-                              <span className="text-zinc-500 mx-1">·</span>
-                              <span>{seasonData.rivalryThisSeason.losses}L</span>
-                            </span>
+                        <div>
+                          <div className="text-[10px] uppercase font-bold tracking-wider text-emerald-300 flex items-center gap-1.5 mb-0.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <i className="fa-solid fa-arrow-trend-up text-xs text-emerald-400"></i>
+                            <span>{seasonData.pos === 2 ? t('Runner-Up Promotion', 'Vizemeister-Aufstieg') : t('Promotion Achieved', 'Aufstieg gesichert')}</span>
                           </div>
-                          <p className="text-xs text-zinc-400 italic leading-relaxed">
-                            "{seasonData.rivalryThisSeason.message}"
+                          <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                            {t(`Promotion Secured! Ascending to ${nextLeague.name}`, `Aufstieg geschafft! Aufstieg in die ${nextLeague.name}`)}
+                          </h3>
+                          <p className="text-xs text-zinc-300 mt-1 max-w-xl leading-relaxed">
+                            {`${state.club.name} finishes #${seasonData.pos} in ${league.name} and secures promotion to ${nextLeague.name} (Tier ${nextTier})!`}
                           </p>
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-between text-xs bg-black/30 rounded-lg p-2 border border-white/[0.04]">
-                          <span className="text-zinc-400 text-[11px]">All-Time Rivalry H2H:</span>
-                          <span className="font-medium text-zinc-200">
-                            <span>{state.rivalH2HWins || 0}W</span>
-                            <span className="text-zinc-500 mx-1">·</span>
-                            <span>{state.rivalH2HDraws || 0}D</span>
-                            <span className="text-zinc-500 mx-1">·</span>
-                            <span>{state.rivalH2HLosses || 0}L</span>
-                          </span>
-                        </div>
-                      )}
+                      </div>
+
+                      <div className="flex sm:flex-col items-center sm:items-end gap-1.5 shrink-0">
+                        <span className="text-xs uppercase font-bold tracking-wider px-3.5 py-1.5 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/35 shadow-sm">
+                          {seasonData.pos === 2 ? t('Runner-Up · Promoted', 'Vizemeister · Aufsteiger') : t('Promotion Secured', 'Aufstieg gesichert')}
+                        </span>
+                        <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
+                          Tier {seasonData.tier} ➔ Tier {nextTier}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Key Promotion Parameters */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 relative z-10">
+                      <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 text-center">
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">New Division</div>
+                        <div className="text-xs sm:text-sm font-bold text-white truncate mt-0.5">{nextLeague.name}</div>
+                      </div>
+                      <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 text-center">
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">New Tier Level</div>
+                        <div className="text-xs sm:text-sm font-bold text-sky-400 mt-0.5">Tier {nextTier}</div>
+                      </div>
+                      <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 text-center">
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Avg League OVR</div>
+                        <div className="text-xs sm:text-sm font-bold text-amber-300 font-mono mt-0.5">{nextLeague.avgOvr || 70} OVR</div>
+                      </div>
+                      <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 text-center">
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Next Season Target</div>
+                        <div className="text-xs sm:text-sm font-bold text-emerald-400 mt-0.5">Top {state.boardTargetFinish || 15} Mandate</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Compact Twin Bento: Position & Board Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Position KPI Tile */}
+                  <div 
+                    onClick={() => {
+                      switchTab('table');
+                    }}
+                    className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-sky-400/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between text-zinc-400 mb-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-400/90">Final Position</span>
+                        <span className="text-[11px] text-sky-400 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                          <span>Standings & Table</span>
+                          <i className="fa-solid fa-arrow-right text-[9px]"></i>
+                        </span>
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-bold text-white tracking-tight tabular-nums">
+                        #{seasonData.pos} <span className="text-xs text-zinc-400 font-sans font-normal">in {league.name}</span>
+                      </div>
+                      <div className="text-xs text-zinc-300 mt-1.5 tabular-nums">
+                        {seasonData.pts} Pts · {seasonData.wins}W-{seasonData.draws}D-{seasonData.losses}L ({seasonData.gf}:{seasonData.ga})
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-white/[0.05] text-xs flex items-center justify-between text-zinc-400">
+                      <span>Target: Top {state.boardTargetFinish || 15}</span>
+                      <span className={`font-semibold tabular-nums ${seasonData.pos <= (state.boardTargetFinish || 15) ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {seasonData.pos <= (state.boardTargetFinish || 15) ? 'Target Met ✓' : 'Target Missed ✗'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Right Card: Silverware & Honours */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between gap-3.5">
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          SILVERWARE & HONOURS
-                        </span>
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-white/[0.06] bg-white/[0.03] text-zinc-300">
-                          {activeCombo ? `${activeCombo.tag} · ` : ''}{totalSilverwareThisCampaign} This Campaign
+                  {/* Board Trust & Mandate Tile */}
+                  <div 
+                    onClick={() => scrollToSection('board', 'section-board')}
+                    className="bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-sky-400/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 transition-all duration-200 cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between text-zinc-400 mb-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-400/90">Board Status & Trust</span>
+                        <span className="text-[11px] text-sky-400 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                          <span>Board Review</span>
+                          <i className="fa-solid fa-arrow-right text-[9px]"></i>
                         </span>
                       </div>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-2xl sm:text-3xl font-bold text-white tabular-nums">
+                          {state.clubImpactScore ?? 50}<span className="text-sm text-zinc-500 font-normal">/100</span>
+                        </span>
+                        <span className={`text-xs font-semibold ${
+                          (state.clubImpactScore ?? 50) >= 70 ? 'text-emerald-400' : (state.clubImpactScore ?? 50) >= 40 ? 'text-sky-300' : 'text-rose-400'
+                        }`}>
+                          {(state.clubImpactScore ?? 50) >= 70 ? 'Untouchable' : (state.clubImpactScore ?? 50) >= 40 ? 'Stable Standing' : 'Under Pressure'}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden mt-3">
+                        <div 
+                          className={`h-full transition-all duration-500 ${
+                            (state.clubImpactScore ?? 50) >= 70 ? 'bg-emerald-400' : (state.clubImpactScore ?? 50) >= 40 ? 'bg-sky-400' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(0, state.clubImpactScore ?? 50))}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-white/[0.05] text-xs flex items-center justify-between text-zinc-400">
+                      <span>Shields: <strong className="text-white tabular-nums">{state.immunityShields ?? 0}</strong></span>
+                      <span>Next Mandate: <strong className="text-white">Top {state.boardTargetFinish || 15}</strong></span>
+                    </div>
+                  </div>
+                </div>
 
-                      {trophyList.length > 0 ? (
-                        <div className="flex flex-col gap-2">
-                          {trophyList.map((trItem, idx) => (
-                            <div 
-                              key={`perf-trophy-${trItem.name}-${idx}`} 
-                              className="rounded-lg px-3 py-2.5 flex items-center justify-between border bg-white/[0.02] border-white/[0.04]"
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                {trItem.isCombo ? (
-                                  <span className="text-base shrink-0">🏆</span>
-                                ) : trItem.logo ? (
-                                  <img src={trItem.logo} alt="" className="w-5 h-5 object-contain shrink-0" />
-                                ) : (
-                                  <i className={`fas ${trItem.icon || 'fa-trophy'} text-zinc-400 text-xs`} />
-                                )}
-                                <div className="flex flex-col min-w-0">
-                                  <span className="text-xs font-medium truncate text-zinc-200">
-                                    {trItem.name}
-                                  </span>
-                                  {trItem.subtitle && (
-                                    <span className="text-[10px] text-zinc-500 truncate">
-                                      {trItem.subtitle}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <span className="text-[11px] font-medium shrink-0 text-zinc-300">
-                                {trItem.isCombo ? trItem.badgeText : `${trItem.count || 1}x Winner`}
-                              </span>
-                            </div>
-                          ))}
+                {/* ================= STRATEGIC INTELLIGENCE & DYNASTY RADAR ================= */}
+                <div className="space-y-3 pt-2">
+                  {/* Head Coach Poached / Departed Alert */}
+                  {seasonData.coachDepartureAlert && (
+                    <div className="bg-gradient-to-r from-rose-950/50 via-amber-950/35 to-rose-950/40 border border-rose-500/40 rounded-2xl p-3.5 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start sm:items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-400 text-sm shrink-0">
+                          <i className="fa-solid fa-person-walking-dashed-line-arrow-right"></i>
                         </div>
-                      ) : (
-                        <div className="p-3 bg-black/20 rounded-lg border border-white/[0.04] text-center">
-                          <span className="text-xs text-zinc-500">No silverware captured this campaign.</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] uppercase font-bold text-rose-300 flex items-center gap-2 flex-wrap">
+                            <span>
+                              {seasonData.coachDepartureAlert.isPoached
+                                ? 'Breaking: Head Coach Poached (Release Clause Triggered)'
+                                : 'Breaking: Head Coach Resigned'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-400/30 text-[9px] text-rose-200">
+                              {seasonData.coachDepartureAlert.ovrBoost >= 0 ? `-${seasonData.coachDepartureAlert.ovrBoost}` : `+${Math.abs(seasonData.coachDepartureAlert.ovrBoost)}`} OVR Impact
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-200 mt-0.5 leading-relaxed">
+                            <strong className="text-white">{seasonData.coachDepartureAlert.coachName}</strong> ({seasonData.coachDepartureAlert.style}, {seasonData.coachDepartureAlert.ovrBoost >= 0 ? `+${seasonData.coachDepartureAlert.ovrBoost}` : seasonData.coachDepartureAlert.ovrBoost} OVR) departed at the end of the campaign due to {seasonData.coachDepartureAlert.reason}. Appoint a replacement in the Staff Market before next season!
+                          </p>
+                        </div>
+                      </div>
+                      {seasonData.coachDepartureAlert.isPoached && seasonData.coachDepartureAlert.buyoutFeeK > 0 && (
+                        <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-bold shrink-0 self-start sm:self-center">
+                          +{formatMoney(seasonData.coachDepartureAlert.buyoutFeeK)} Buyout
                         </div>
                       )}
-
-                      {(() => {
-                        const nonWinningCupRuns = (state.cupRunResults || []).filter(
-                          r => r.year === seasonData.year && !r.won
-                        );
-                        if (nonWinningCupRuns.length === 0) return null;
-                        return (
-                          <div className="flex flex-col gap-1.5 pt-1">
-                            {nonWinningCupRuns.map((run, rIdx) => {
-                              const isFinalist = run.exitRound === 'Final';
-                              const displayCompName = run.id === 'nat_cup'
-                                ? cupInfo.name
-                                : (isDe ? (run.nameDe || run.nameEn) : (run.nameEn || run.nameDe));
-                              return (
-                                <div
-                                  key={`cup-run-summary-${run.id}-${rIdx}`}
-                                  className="rounded-lg px-3 py-2 flex items-center justify-between gap-2 border bg-white/[0.02] border-white/[0.04]"
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="text-xs shrink-0">{isFinalist ? '🥈' : '🏟️'}</span>
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="text-xs font-medium text-zinc-200 truncate">
-                                        {displayCompName}
-                                      </span>
-                                      {run.winnerName && (
-                                        <span className="text-[10px] text-zinc-400 truncate">
-                                          {isFinalist ? `Final won by ${run.winnerName}` : `Champions: ${run.winnerName}`}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded border shrink-0 ${
-                                    isFinalist
-                                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                                      : 'bg-white/[0.03] text-zinc-400 border-white/[0.06]'
-                                  }`}>
-                                    {isFinalist ? 'Runner-Up' : run.exitRound}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
                     </div>
+                  )}
 
-                    {/* All-Time Cabinet */}
-                    <div className="pt-3 border-t border-white/[0.04] flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          ALL-TIME CLUB CABINET
-                        </span>
-                        <span className="text-[10px] font-medium text-zinc-300">
-                          {totalClubSilverware} Total Honours
+                  {/* Active Tactical Staleness Warning */}
+                  {isStaleActive && (
+                    <div className="bg-gradient-to-r from-rose-950/40 via-red-900/30 to-amber-950/30 border border-rose-500/40 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-400/40 flex items-center justify-center text-rose-400 text-sm shrink-0">
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] uppercase font-bold text-rose-300">Tactical Obsolescence · System Decoded</div>
+                        <p className="text-xs text-zinc-300 mt-0.5">
+                          The league has decoded your tactic ({state.tactic})! You face an unavoidable <strong className="text-rose-400">-4 OVR penalty</strong> next season unless you reinvent or switch your philosophy in the Coach room (<span className="text-amber-300 font-semibold">-5 MP</span>).
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Impending Tactical Staleness Warning (1 title away) */}
+                  {isStaleWarning && (
+                    <div className="bg-gradient-to-r from-amber-950/30 via-yellow-900/20 to-orange-950/20 border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 text-sm shrink-0">
+                        <i className="fa-solid fa-crosshairs"></i>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] uppercase font-bold text-amber-300">Tactical Surveillance Notice</div>
+                        <p className="text-xs text-zinc-300 mt-0.5">
+                          Back-to-back league titles with {state.tactic} have drawn heavy scrutiny; winning again triggers Tactical Obsolescence (-4 OVR penalty).
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Diverse Rival Challenger Storyline (Only shown in seasons when a challenger event triggers) */}
+                  {superVillainClub && rivalChallengerEvent && (
+                    <div className="bg-gradient-to-r from-purple-950/40 via-fuchsia-950/30 to-indigo-950/30 border border-fuchsia-500/40 rounded-2xl p-3.5 sm:p-4 shadow-sm flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-fuchsia-500/20 border border-fuchsia-400/30 flex items-center justify-center p-1.5 shrink-0">
+                          {superVillainClub.logo ? (
+                            <ClubLogo name={superVillainClub.name} club={superVillainClub} size={28} />
+                          ) : (
+                            <span className="text-base">⚔️</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[10px] uppercase font-bold text-fuchsia-300">
+                            {rivalChallengerEvent.badge || 'League Challenger · Title Threat'}
+                          </div>
+                          <p className="text-xs text-zinc-300 mt-0.5 truncate sm:whitespace-normal">
+                            {rivalChallengerEvent.desc || `${superVillainClub.name} (${superVillainClub.baseOvr} OVR) has mounted a major title challenge for next season.`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] font-bold text-fuchsia-300 bg-fuchsia-500/20 px-2.5 py-1 rounded-full border border-fuchsia-400/30">
+                          {rivalChallengerEvent.clubOvr || superVillainClub.baseOvr} OVR
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {allTimeClubTrophyList.slice(0, 6).map((item) => (
-                          <div key={`perf-alltime-${item.key}`} className="bg-white/[0.02] border border-white/[0.04] rounded-lg px-2 py-1 flex items-center justify-between text-[11px]">
-                            <span className="text-zinc-300 truncate pr-1">{item.name}</span>
-                            <span className="font-medium text-zinc-300 shrink-0">x{item.count}</span>
+                    </div>
+                  )}
+
+                  {/* Dynasty Target on the Back (When consecutiveTitles >= 2) */}
+                  {consecutiveTitles >= 2 && (
+                    <div className="bg-gradient-to-r from-amber-500/10 via-yellow-950/20 to-amber-950/15 border border-amber-400/25 rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-400 text-sm shrink-0">
+                          <i className="fa-solid fa-crown"></i>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[10px] uppercase font-bold text-amber-300">Dynasty Target · {consecutiveTitles}x Consecutive Champion</div>
+                          <p className="text-xs text-zinc-300 mt-0.5 truncate sm:whitespace-normal">
+                            The entire continent is gunned to knock you off the summit; opponents treat every clash against you as their cup final.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-amber-300 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/25 shrink-0">
+                        {consecutiveTitles}x Champion
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Sacking Resolution Banner if Sacked */}
+                  {(seasonData.isSackedRelegation || seasonData.isSacked) && (
+                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 sm:p-5">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 text-base shrink-0">
+                          <i className="fas fa-triangle-exclamation"></i>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase font-semibold tracking-wider text-rose-400">Board Resolution</div>
+                          <div className="text-base font-bold text-white">Managerial Contract Terminated</div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-zinc-300 leading-relaxed">
+                        {isTier1Only
+                          ? `Following a bottom-3 finish in ${league.name}, the Board of Directors has immediately dismissed management for sporting failure. Since this country has no lower tier, the club remains in the league, but managerial immunity shields offer no protection against bottom-tier collapse.`
+                          : isBottomTier
+                          ? `Following drop-zone failure in ${league.name}, the Board of Directors has immediately terminated your contract. With no lower league to absorb the fall, management has been relieved of duties.`
+                          : `Following the conclusion of the campaign, the Board of Directors has officially relieved management of sporting duties.`}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Arch Rival Derby Record */}
+                  {seasonData.rivalData && (
+                    <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/[0.06] shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] uppercase font-semibold tracking-wider text-rose-400 flex items-center gap-1.5">
+                          <i className="fas fa-fire text-rose-400"></i>
+                          <span>Arch Rival Derby · {seasonData.rivalData.name}</span>
+                        </div>
+                        {seasonData.rivalData.isPaused && (
+                          <span className="text-[9px] uppercase font-semibold text-zinc-400 bg-white/[0.04] px-2 py-0.5 rounded-full">
+                            Paused
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                        <div className="p-2 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                          <span className="text-[9px] text-zinc-400 uppercase block">This Season</span>
+                          <span className="font-bold text-emerald-400">{seasonData.rivalData.wins}W</span>{' '}
+                          <span className="text-zinc-500">·</span>{' '}
+                          <span className="font-bold text-zinc-300">{seasonData.rivalData.draws}D</span>{' '}
+                          <span className="text-zinc-500">·</span>{' '}
+                          <span className="font-bold text-rose-400">{seasonData.rivalData.losses}L</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                          <span className="text-[9px] text-zinc-400 uppercase block">All-Time H2H</span>
+                          <span className="font-bold text-emerald-400">{seasonData.rivalData.h2hWins}W</span>{' '}
+                          <span className="text-zinc-500">·</span>{' '}
+                          <span className="font-bold text-zinc-300">{seasonData.rivalData.h2hDraws}D</span>{' '}
+                          <span className="text-zinc-500">·</span>{' '}
+                          <span className="font-bold text-rose-400">{seasonData.rivalData.h2hLosses}L</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* OVR Decay & Roster Audit Breakdown (if any deductions happened) */}
+                  {decayReasons.length > 0 && (
+                    <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl p-3.5 sm:p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-rose-400 flex items-center gap-1.5">
+                          <i className="fa-solid fa-arrow-trend-down text-rose-400 text-xs"></i>
+                          <span>Off-Season OVR Audit & Attrition Breakdown</span>
+                        </div>
+                        <span className="text-xs text-zinc-400 font-mono tabular-nums">
+                          {seasonData.startOvr || state.club.baseOvr} ➔ {seasonData.newBaseOvr || state.club.baseOvr} OVR
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {decayReasons.map((reason, idx) => (
+                          <div key={idx} className="bg-rose-500/10 border border-rose-500/25 rounded-lg px-2.5 py-1 text-xs text-rose-200 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></span>
+                            <span>{reason}</span>
                           </div>
                         ))}
                       </div>
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ================= 3. LEAGUE TABLE: DIRECT INLINE STANDINGS ================= */}
+            {activeTab === 'table' && (
+              <div id="section-sporting" className="space-y-4 scroll-mt-6">
+                <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-sky-400/90 px-1">
+                  <span className="flex items-center gap-2">
+                    <i className="fas fa-chart-line text-[11px]"></i>
+                    {league.name} · Final Standings & Campaign Review
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-mono">Matchday 34 Final Table</span>
+                </div>
+
+                {/* League Campaign Results */}
+                <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-5 border border-white/[0.06] shadow-sm">
+                  <div className="text-[10px] uppercase font-semibold tracking-wider text-zinc-400 mb-1">
+                    Campaign Summary
                   </div>
-                </motion.div>
-              ) : (activeTab === 'finances' || activeTab === 'finance') ? (
-                /* 3-column grid for 'Financial Audit', 'Stadium & Attendance', and 'Club Infrastructure' */
-                <motion.div
-                  key="finances-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4"
-                >
-                  {/* Card 1: Financial Audit */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
+                  <h3 className="text-lg font-bold text-white tracking-tight">
+                    {league.name}
+                  </h3>
+
+                  {/* Primary Stats Grid */}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-white/[0.02] p-3 rounded-2xl border border-white/[0.05] my-3 text-center">
+                    <div className="bg-white/[0.02] rounded-xl p-2">
+                      <div className="text-[9px] text-zinc-400 uppercase font-semibold">Position</div>
+                      <div className="text-base sm:text-lg font-bold text-amber-300 tabular-nums">#{seasonData.pos}</div>
+                    </div>
+                    <div className="bg-white/[0.02] rounded-xl p-2">
+                      <div className="text-[9px] text-zinc-400 uppercase font-semibold">Points</div>
+                      <div className="text-base sm:text-lg font-bold text-white tabular-nums">{seasonData.pts}</div>
+                    </div>
+                    <div className="bg-white/[0.02] rounded-xl p-2">
+                      <div className="text-[9px] text-zinc-400 uppercase font-semibold">Wins</div>
+                      <div className="text-base sm:text-lg font-bold text-emerald-400 tabular-nums">{seasonData.wins}</div>
+                    </div>
+                    <div className="bg-white/[0.02] rounded-xl p-2">
+                      <div className="text-[9px] text-zinc-400 uppercase font-semibold">Draws</div>
+                      <div className="text-base sm:text-lg font-bold text-zinc-300 tabular-nums">{seasonData.draws}</div>
+                    </div>
+                    <div className="bg-white/[0.02] rounded-xl p-2">
+                      <div className="text-[9px] text-zinc-400 uppercase font-semibold">Losses</div>
+                      <div className="text-base sm:text-lg font-bold text-rose-400 tabular-nums">{seasonData.losses}</div>
+                    </div>
+                    <div className="bg-white/[0.02] rounded-xl p-2">
+                      <div className="text-[9px] text-zinc-400 uppercase font-semibold">Goals</div>
+                      <div className="text-sm font-bold text-white tabular-nums">
+                        {seasonData.gf}:{seasonData.ga}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/[0.05] flex items-center justify-between text-xs text-zinc-400">
+                    <span>Goal Difference</span>
+                    <span className={`tabular-nums font-semibold ${goalDiff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {goalDiff > 0 ? `+${goalDiff}` : goalDiff}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Direct Full League Standings Table (Inline without toggle) */}
+                <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-white/[0.08] shadow-lg overflow-hidden">
+                  <div className="flex items-center justify-between pb-3 border-b border-white/[0.06] mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-400/25 flex items-center justify-center text-sky-400 text-xs">
+                        <i className="fa-solid fa-table-list"></i>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white tracking-tight">
+                          {league.name} · Final Standings
+                        </h4>
+                        <span className="text-[10px] text-zinc-400">Matchday 34 Final Table</span>
+                      </div>
+                    </div>
+                  </div>
+
+                    <div className="overflow-x-auto custom-scrollbar">
+                      <div className="min-w-[560px]">
+                        {/* Table Header */}
+                        <div className="flex items-center py-1.5 px-3 text-[10px] uppercase font-semibold text-zinc-400 border-b border-white/[0.04]">
+                          <div className="w-8 text-center shrink-0">#</div>
+                          <div className="flex-1 px-2">Club</div>
+                          <div className="w-9 text-center shrink-0">MP</div>
+                          <div className="w-8 text-center shrink-0 text-emerald-400">W</div>
+                          <div className="w-8 text-center shrink-0 text-zinc-300">D</div>
+                          <div className="w-8 text-center shrink-0 text-rose-400">L</div>
+                          <div className="w-14 text-center shrink-0">GF:GA</div>
+                          <div className="w-10 text-center shrink-0">GD</div>
+                          <div className="w-12 text-center shrink-0 font-bold text-white">Pts</div>
+                        </div>
+
+                        {/* Table Rows */}
+                        <div className="divide-y divide-white/[0.02]">
+                          {tableData.map((r, i) => {
+                            const isTier1Only = getMaxTier(country, clubsDb) === 1;
+                            const isBottomTier = seasonData.tier >= getMaxTier(country, clubsDb);
+                            const isContinental = seasonData.tier === 1 && i < 4;
+                            const isUserPromoted = r.isUser && seasonData.tier > 1 && (seasonData.pos <= 2 || nextTier < seasonData.tier);
+                            const isUserChamp = r.isUser && seasonData.pos === 1;
+                            const isPromo = (seasonData.tier > 1 && i < 2) || isUserPromoted;
+                            const isPlayoff = !isUserPromoted && seasonData.tier > 1 && ((['ENG', 'ESP', 'ITA', 'USA', 'FRA'].includes(country) && i >= 2 && i < 6) || i === 2);
+                            const numRelegationSpots = (country === 'TUR' && seasonData.tier === 3) ? 2 : 3;
+                            const isManagerSackingZone = (isTier1Only || isBottomTier) && (i >= tableData.length - numRelegationSpots);
+                            const isRelegation = !isBottomTier && !isTier1Only && (i >= tableData.length - numRelegationSpots);
+                            const isRelegationPlayoff = !isBottomTier && !isTier1Only && (i === tableData.length - numRelegationSpots);
+                            const isDirectRelegation = !isBottomTier && !isTier1Only && (i > tableData.length - numRelegationSpots);
+
+                            const rowBg = r.isUser
+                              ? isUserChamp
+                                ? 'bg-amber-500/15 border-amber-400/40 shadow-[0_0_12px_rgba(251,191,36,0.15)]'
+                                : isUserPromoted
+                                ? 'bg-emerald-500/15 border-emerald-400/40'
+                                : 'bg-sky-500/15 border-sky-400/40'
+                              : r.isRival
+                              ? 'bg-rose-500/10'
+                              : isManagerSackingZone
+                              ? 'bg-rose-950/20'
+                              : i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.015]';
+
+                            return (
+                              <div
+                                key={`${r.name}-${r.pos}`}
+                                className={`flex items-center py-2 px-3 transition-colors relative text-xs ${rowBg} ${r.isUser ? (isUserChamp ? 'border-l-4 border-l-amber-400' : isUserPromoted ? 'border-l-4 border-l-emerald-400' : 'border-l-4 border-l-sky-400') : isContinental ? 'border-l-2 border-l-emerald-400/60' : isPromo ? 'border-l-2 border-l-emerald-400/60' : isPlayoff ? 'border-l-2 border-l-amber-400/60' : isRelegationPlayoff ? 'border-l-2 border-l-amber-500/80' : isDirectRelegation ? 'border-l-2 border-l-rose-500/60' : isManagerSackingZone ? 'border-l-2 border-l-rose-500/80 shadow-[0_0_8px_rgba(244,63,94,0.7)]' : ''}`}
+                              >
+                                {/* Position */}
+                                <div className={`w-8 text-center font-bold tabular-nums shrink-0 ${
+                                  r.isUser ? (isUserChamp ? 'text-amber-300 font-black' : isUserPromoted ? 'text-emerald-300 font-extrabold' : 'text-sky-300') : r.isRival ? 'text-rose-300' : isContinental ? 'text-emerald-400' : isPromo ? 'text-emerald-400' : isPlayoff ? 'text-amber-400' : isRelegationPlayoff ? 'text-amber-400 font-bold' : (isDirectRelegation || isManagerSackingZone) ? 'text-rose-400 font-extrabold' : 'text-zinc-400'
+                                }`}>
+                                  {r.pos}
+                                </div>
+
+                                {/* Club Crest & Name */}
+                                <div className="flex-1 flex items-center gap-2 px-2 min-w-0 py-0.5">
+                                  <ClubLogo
+                                    name={r.name}
+                                    id={typeof r.id === 'number' ? r.id : undefined}
+                                    color={r.color}
+                                    logo={r.logo}
+                                    isModActive={isModActive}
+                                    className="w-5 h-5 object-contain shrink-0"
+                                    fallbackClassName="w-5 h-5 text-[8px] rounded-md"
+                                  />
+                                  <span className={`truncate font-semibold text-xs py-0.5 leading-normal ${r.isUser ? 'text-white font-extrabold' : r.isRival ? 'text-rose-200 font-bold' : 'text-zinc-200'}`}>
+                                    {r.name}
+                                  </span>
+
+                                  {r.isUser && (
+                                    <span className="px-1.5 py-0.5 text-[8px] font-black bg-sky-500/25 text-sky-300 border border-sky-400/40 rounded tracking-wider uppercase shrink-0">
+                                      YOU
+                                    </span>
+                                  )}
+
+                                  {r.isRival && (
+                                    <span className="px-1.5 py-0.5 text-[8px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded tracking-wider uppercase shrink-0">
+                                      Rival ⚔️
+                                    </span>
+                                  )}
+
+                                  {/* FM-style Outcome Badge (C / P / R) */}
+                                  {(() => {
+                                    const badge = r.status || (
+                                      r.pos === 1 ? 'C' :
+                                      (r.isUser && isUserPromoted && !isUserChamp) ? 'P' :
+                                      (!r.isUser && seasonData.tier > 1 && r.pos === 2 && !r.isReserve) ? 'P' :
+                                      (!isBottomTier && !isTier1Only && isDirectRelegation) ? 'R' :
+                                      undefined
+                                    );
+                                    if (!badge) return null;
+                                    return (
+                                      <span
+                                        className={`px-1.5 py-0.5 text-[8px] font-black uppercase rounded tracking-wider shrink-0 shadow-sm ${
+                                          badge === 'C'
+                                            ? 'bg-amber-400 text-black'
+                                            : badge === 'P'
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-rose-600 text-white'
+                                        }`}
+                                        title={badge === 'C' ? (seasonData.tier > 1 ? 'Division Champion & Promoted' : 'League Champion') : badge === 'P' ? 'Promoted' : 'Relegated'}
+                                      >
+                                        {badge}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+
+                                {/* Numbers */}
+                                <div className="w-9 text-center text-zinc-400 tabular-nums shrink-0">{r.mp}</div>
+                                <div className="w-8 text-center text-emerald-400 font-semibold tabular-nums shrink-0">{r.w}</div>
+                                <div className="w-8 text-center text-zinc-300 tabular-nums shrink-0">{r.d}</div>
+                                <div className="w-8 text-center text-rose-400 tabular-nums shrink-0">{r.l}</div>
+                                <div className="w-14 text-center text-zinc-300 tabular-nums shrink-0">{r.gf}:{r.ga}</div>
+                                {(() => {
+                                  const gdStr = String(r.gd ?? '0');
+                                  const isPosGd = gdStr.startsWith('+') || (typeof r.gd === 'number' && r.gd > 0);
+                                  const isNegGd = gdStr.startsWith('-') || (typeof r.gd === 'number' && r.gd < 0);
+                                  const gdDisplay = (typeof r.gd === 'number' && r.gd > 0) ? `+${r.gd}` : gdStr;
+                                  return (
+                                    <div className={`w-10 text-center font-medium tabular-nums shrink-0 ${isPosGd ? 'text-emerald-400' : isNegGd ? 'text-rose-400' : 'text-zinc-400'}`}>
+                                      {gdDisplay}
+                                    </div>
+                                  );
+                                })()}
+                                <div className="w-12 text-center font-bold text-white tabular-nums shrink-0">{r.pts}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Table Legend Footer */}
+                        {(() => {
+                          const isTier1Only = getMaxTier(country, clubsDb) === 1;
+                          const isBottomTier = seasonData.tier >= getMaxTier(country, clubsDb);
+                          return (
+                            <div className="p-3 bg-white/[0.02] border-t border-white/[0.06] flex items-center justify-between text-[11px] text-zinc-400 gap-3 flex-wrap shrink-0">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                                  <span>{seasonData.tier === 1 ? getContinentalCupNames(country).cl : 'Promotion (Top 2)'}</span>
+                                </span>
+
+                                {hasPromotionPlayoffs && (
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                                    <span>Promotion Playoff</span>
+                                  </span>
+                                )}
+
+                                {(isTier1Only || isBottomTier) ? (
+                                  <span className="flex items-center gap-1.5 text-rose-300 font-medium">
+                                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                                    <span>{country === 'TUR' && seasonData.tier === 3 ? 'Spots 17–18' : 'Spots 16–18'}: Sporting Relegation · Pyramid Floor ({isTier1Only ? 'No Club Relegation' : 'Clubs Retained'} · Manager Dismissal Only)</span>
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                      <span>16th: Relegation Playoff</span>
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                      <span>{country === 'TUR' && seasonData.tier === 3 ? '18th: Direct Relegation' : 'Bottom 2: Direct Relegation'}</span>
+                                    </span>
+                                  </>
+                                )}
+
+                                <span className="flex items-center gap-1.5 border-l border-white/10 pl-2">
+                                  <span className="px-1 py-0.2 rounded text-[7px] font-black bg-amber-400 text-black">C</span>
+                                  <span>Champion</span>
+                                  <span className="px-1 py-0.2 rounded text-[7px] font-black bg-emerald-500 text-white ml-0.5">P</span>
+                                  <span>Promoted</span>
+                                  <span className="px-1 py-0.2 rounded text-[7px] font-black bg-rose-600 text-white ml-0.5">R</span>
+                                  <span>Relegated</span>
+                                </span>
+                              </div>
+
+                              <div className="text-[10px] text-zinc-500 font-medium tabular-nums">
+                                {tableData.length} Clubs · 34 Matches Played
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Editorial Pundit Review */}
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3.5 sm:p-4 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-sky-400 shrink-0 text-xs">
+                    <i className="fas fa-quote-left"></i>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-xs font-bold text-white">{pundit.author}</span>
+                      <span className="text-[10px] text-zinc-500">{pundit.handle}</span>
+                    </div>
+                    <p className="text-xs text-zinc-300 italic font-normal line-clamp-2">
+                      "{pundit.text}"
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================= 3. PILLAR 2: FINANCE & TREASURY ================= */}
+            {activeTab === 'squad' && (
+              <div id="section-finance" className="space-y-3 scroll-mt-6">
+                <div className="text-xs font-semibold uppercase tracking-wider text-sky-400/90 px-1 flex items-center gap-2">
+                  <i className="fas fa-coins text-[11px]"></i>
+                  Finance & Treasury · Fiscal Audit & Facilities
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Financial Audit */}
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-5 border border-white/[0.06] shadow-sm flex flex-col justify-between">
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          FINANCIAL AUDIT
-                        </span>
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.06] text-zinc-300">
-                          {seasonData.netProfit >= 0 ? '+' : ''}{formatMoney(seasonData.netProfit)}
-                        </span>
+                      <div className="text-[10px] uppercase font-semibold tracking-wider text-emerald-400 mb-1">
+                        Financial Audit
                       </div>
-                      <div className="flex items-baseline gap-1.5 mb-1">
-                        <span className="text-2xl font-semibold tracking-tight tabular-nums text-white">
-                          {formatMoney(seasonData.endBudget)}
-                        </span>
-                      </div>
-                      <span className="text-xs text-zinc-400 block mb-3">Closing Treasury</span>
+                      <h3 className="text-lg font-bold text-white tracking-tight">
+                        {isPositiveNetProfit ? 'Profitable Campaign' : 'Fiscal Deficit'}
+                      </h3>
                     </div>
 
-                    <div className="flex flex-col gap-1.5 text-xs text-zinc-300 border-t border-white/[0.04] pt-2.5">
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Total Revenue:</span>
-                        <span className="text-zinc-200 font-medium">+{formatMoney(seasonData.revenue)}</span>
+                    <div className="space-y-2 my-3">
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs">
+                        <span className="text-zinc-400 flex items-center gap-1.5">
+                          <i className="fas fa-arrow-up text-emerald-400 text-[10px]"></i>
+                          Revenue
+                        </span>
+                        <span className="font-semibold text-emerald-400 tabular-nums">
+                          +{formatMoney(seasonData.revenue)}
+                        </span>
                       </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Commercial & Pitched Sponsors:</span>
-                        <span className="text-sky-300 font-medium">+{formatMoney((seasonData.sponsorInc ?? currentHist.sponsorInc ?? 0) + (seasonData.extraSponsorInc ?? currentHist.extraSponsorInc ?? 0))}</span>
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs">
+                        <span className="text-zinc-400 flex items-center gap-1.5">
+                          <i className="fas fa-arrow-down text-rose-400 text-[10px]"></i>
+                          Expenses & Wages
+                        </span>
+                        <span className="font-semibold text-rose-400 tabular-nums">
+                          -{formatMoney(seasonData.wages)}
+                        </span>
                       </div>
-                      {(() => {
-                        const sDeals: any = seasonData.seasonSponsorDeals || currentHist.seasonSponsorDeals || state.seasonSponsorDeals;
-                        if (!sDeals) return null;
-                        const items = [
-                          { k: 'Std', d: sDeals[0] || sDeals.standard },
-                          { k: 'Mega', d: sDeals[1] || sDeals.mega },
-                          { k: 'Perf', d: sDeals[2] || sDeals.perf }
-                        ].filter(x => x.d);
-                        if (items.length === 0) return null;
-                        return (
-                          <div className="flex flex-wrap gap-1 py-0.5">
-                            {items.map(item => {
-                              const bName = item.d?.brandName || item.d?.brand || 'Partner';
-                              return (
-                                <span
-                                  key={item.k}
-                                  className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${
-                                    item.d?.status === 'signed'
-                                      ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
-                                      : item.d?.status === 'failed'
-                                      ? 'text-zinc-500 bg-white/[0.02] border-white/[0.06]'
-                                      : 'text-amber-300/90 bg-amber-500/10 border-amber-500/20'
-                                  }`}
-                                >
-                                  {item.k}: {item.d?.status === 'failed' ? 'Empty' : bName} ({item.d?.status === 'signed' ? 'Signed' : item.d?.status === 'failed' ? 'Empty' : 'Unpitched'})
+                    </div>
+
+                    <div className="pt-3 border-t border-white/[0.05] flex items-end justify-between">
+                      <div>
+                        <div className="text-[9px] uppercase font-semibold text-zinc-500 mb-0.5">
+                          Net Profit
+                        </div>
+                        <div className={`text-2xl font-bold tracking-tight tabular-nums ${isPositiveNetProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          <AnimatedNumber from={0} to={seasonData.netProfit} isMoney duration={1.2} prefix={isPositiveNetProfit ? '+' : ''} />
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] uppercase font-semibold text-zinc-500 mb-0.5">
+                          Ending Treasury
+                        </div>
+                        <div className={`text-base font-bold tabular-nums ${seasonData.endBudget >= 0 ? 'text-white' : 'text-rose-400'}`}>
+                          {formatMoney(seasonData.endBudget)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stadium & Attendance */}
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-5 border border-white/[0.06] shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase font-semibold tracking-wider text-sky-400 mb-1">
+                        Stadium & Attendance
+                      </div>
+                      <h3 className="text-lg font-bold text-white tracking-tight">
+                        Matchday Utilization
+                      </h3>
+                    </div>
+
+                    <div className="space-y-3 my-3">
+                      <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                        <div className="flex justify-between items-center text-xs mb-1.5">
+                          <span className="text-zinc-400">Average Turnout</span>
+                          <span className="font-semibold text-white tabular-nums">
+                            {Math.round(avgAttendance).toLocaleString()} / {state.club.stadium.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden mb-1">
+                          <div
+                            className={`h-full transition-all duration-500 ${
+                              fillPercentage >= 90 ? 'bg-emerald-400' : fillPercentage >= 70 ? 'bg-sky-400' : 'bg-amber-400'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(5, fillPercentage))}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-zinc-400">
+                          <span>Capacity Occupancy</span>
+                          <span className="font-semibold text-zinc-300 tabular-nums">{fillPercentage}% Full</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs">
+                        <span className="text-zinc-400">Est. Gate Revenue</span>
+                        <span className="font-semibold text-emerald-400 tabular-nums">
+                          +{formatMoney(Math.round((avgAttendance * 17 * (country === 'ENG' ? 45 : country === 'GER' ? 35 : 30)) / 1000))}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-white/[0.05] flex items-center justify-between text-xs text-zinc-400">
+                      <span>Ground Capacity</span>
+                      <span className="tabular-nums font-semibold text-white">
+                        {state.club.stadium.toLocaleString()} seats
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Club Infrastructure */}
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-5 border border-white/[0.06] shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase font-semibold tracking-wider text-sky-400 mb-1">
+                        Club Infrastructure
+                      </div>
+                      <h3 className="text-lg font-bold text-white tracking-tight">
+                        Academy & Medical
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 my-3">
+                      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex flex-col justify-between">
+                        <div>
+                          <div className="text-[9px] uppercase font-semibold text-zinc-400 flex items-center gap-1">
+                            <i className="fas fa-graduation-cap text-sky-400"></i>
+                            <span>Academy</span>
+                          </div>
+                          <div className="text-lg font-bold text-white tabular-nums mt-1">
+                            Lvl {state.club.academyLevel || 1}<span className="text-xs text-zinc-500 font-normal">/5</span>
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-sky-300 font-normal mt-1">
+                          {(state.club.academyLevel || 1) >= 5 ? 'World-Class Complex' : (state.club.academyLevel || 1) >= 3 ? 'National Academy (NLZ)' : 'Grassroots'}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex flex-col justify-between">
+                        <div>
+                          <div className="text-[9px] uppercase font-semibold text-zinc-400 flex items-center gap-1">
+                            <i className="fas fa-heart-pulse text-emerald-400"></i>
+                            <span>Medical</span>
+                          </div>
+                          <div className="text-lg font-bold text-white tabular-nums mt-1">
+                            Lvl {state.club.medicalLevel || 1}<span className="text-xs text-zinc-500 font-normal">/5</span>
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-emerald-300 font-normal mt-1">
+                          {(state.club.medicalLevel || 1) >= 5 ? 'Longevity Institute' : (state.club.medicalLevel || 1) >= 3 ? 'Biomechanics Lab' : 'Basic Rehab'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-white/[0.05] flex items-center justify-between text-xs text-zinc-400">
+                      <span>Maintenance</span>
+                      <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                        <i className="fas fa-circle-check text-[10px]"></i> Operational
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Public Equity / IPO Performance */}
+                {state.isPublic && (
+                  <div className="bg-white/[0.03] border border-amber-500/20 rounded-2xl p-4 sm:p-5 mt-3 shadow-[0_0_15px_rgba(245,158,11,0.05)]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1.5 mb-0.5">
+                          <i className="fa-solid fa-chart-line text-xs"></i>
+                          <span>{t('Public Shareholder Equity', 'Börsenwert & Aktionäre')}</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-white">
+                          {t('Stock Exchange Performance', 'Aktienkurs-Entwicklung')}
+                        </h4>
+                        <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+                          {t('Your club is publicly traded. The stock price adjusted to', 'Der Verein ist börsennotiert. Der Aktienkurs reagierte auf die sportliche Saisonleistung und steht nun bei')} <strong className="text-white">€{state.stockPrice?.toFixed(2)}</strong>.
+                        </p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <div className="bg-black/40 border border-white/10 p-2.5 rounded-xl text-center min-w-[90px]">
+                          <div className="text-[9px] text-zinc-400 uppercase font-semibold">{t('IPO Base', 'Ausgabepreis')}</div>
+                          <div className="text-sm font-bold text-white tabular-nums mt-0.5">€{state.ipoPrice?.toFixed(2)}</div>
+                        </div>
+                        <div className="bg-black/40 border border-white/10 p-2.5 rounded-xl text-center min-w-[90px]">
+                          <div className="text-[9px] text-zinc-400 uppercase font-semibold">{t('Current Price', 'Aktueller Kurs')}</div>
+                          <div className={`text-sm font-bold tabular-nums mt-0.5 ${(state.stockPrice || 0) >= (state.ipoPrice || 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            €{state.stockPrice?.toFixed(2)}
+                          </div>
+                          <div className={`text-[9px] font-bold mt-0.5 ${(state.stockPrice || 0) >= (state.ipoPrice || 0) ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {((((state.stockPrice || 0) - (state.ipoPrice || 1)) / (state.ipoPrice || 1)) * 100).toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Financial Restructuring & Austerity Advisory */}
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5 mt-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-sky-400 tracking-wider flex items-center gap-1.5 mb-0.5">
+                        <i className="fa-solid fa-scale-balanced text-xs"></i>
+                        <span>Treasury & Wage Restructuring Advisory</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white">
+                        Fiscal Blueprint & Debt Service
+                      </h4>
+                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+                        {state.bankLoan && state.bankLoan.yearsLeft > 0 ? (
+                          <span>
+                            Active bank debt requires <strong className="text-rose-300">{formatMoney(state.bankLoan.annualPayment)}/year</strong> in debt service ({state.bankLoan.yearsLeft} years left). Paying down debt early in the Ledger frees up cash flow for infrastructure development.
+                          </span>
+                        ) : seasonData.endBudget < 10000 ? (
+                          <span>
+                            Treasury reserves stand at {formatMoney(seasonData.endBudget)}. Building a €10M+ cash buffer cushions wage inflation from high-OVR veterans and funds Level 5+ upgrades.
+                          </span>
+                        ) : (
+                          <span>
+                            Excellent financial cushion ({formatMoney(seasonData.endBudget)}). High cash liquidity enables fearless transitions and systemic facility investments.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {state.bankLoan && state.bankLoan.yearsLeft > 0 && (
+                      <div className="shrink-0 bg-rose-500/10 border border-rose-500/20 p-3 rounded-xl sm:text-right">
+                        <div className="text-[10px] text-zinc-400 uppercase font-semibold">Active Bank Loan</div>
+                        <div className="text-sm font-bold text-rose-300 tabular-nums">-{formatMoney(state.bankLoan.annualPayment)}/yr</div>
+                        <div className="text-[10px] text-zinc-400">{state.bankLoan.yearsLeft} yrs remaining</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================= 4. PILLAR 3: SQUAD PROGRESSION ================= */}
+            {activeTab === 'squad' && (
+              <div id="section-squad" className="space-y-3 scroll-mt-6">
+                <div className="text-xs font-semibold uppercase tracking-wider text-sky-400/90 px-1 flex items-center gap-2">
+                  <i className="fas fa-users text-[11px]"></i>
+                  Squad Progression · Roster & Academy
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* First-Team Progression */}
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-5 border border-white/[0.06] shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase font-semibold tracking-wider text-sky-400 mb-1">
+                        Squad Report
+                      </div>
+                      <h3 className="text-lg font-bold text-white tracking-tight">
+                        First-Team Progression
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 my-3">
+                      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                        <div className="text-[9px] uppercase font-semibold text-zinc-400">Squad OVR</div>
+                        <div className="flex items-center gap-1.5 mt-1 tabular-nums">
+                          <span className="text-sm font-semibold text-zinc-400">{seasonData.startOvr || state.club.baseOvr}</span>
+                          <i className="fas fa-arrow-right text-[10px] text-zinc-600"></i>
+                          <span className="text-xl font-bold text-white">{seasonData.newBaseOvr || state.club.baseOvr}</span>
+                          {ovrDelta !== 0 && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded tabular-nums ${ovrDelta > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                              {ovrDelta > 0 ? `+${ovrDelta}` : ovrDelta}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                        <div className="text-[9px] uppercase font-semibold text-zinc-400">Squad Morale</div>
+                        <div className="text-xl font-bold text-emerald-400 tabular-nums mt-1">
+                          {seasonData.endMorale ?? state.club.morale ?? 100}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Youth Pipeline & Graduates */}
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-5 border border-white/[0.06] shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase font-semibold tracking-wider text-sky-400 mb-1">
+                        Academy Pipeline
+                      </div>
+                      <h3 className="text-lg font-bold text-white tracking-tight">
+                        Youth Pipeline & Graduates
+                      </h3>
+                    </div>
+
+                    <div className="space-y-2.5 my-3">
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs">
+                        <span className="text-zinc-400">Academy Facility</span>
+                        <span className="font-semibold text-sky-300 tabular-nums">
+                          Level {state.club.academyLevel || 1}/5
+                        </span>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                        <div className="text-[9px] uppercase font-semibold text-zinc-400 mb-1">
+                          Promoted Graduates
+                        </div>
+                        <div className="text-xs text-white">
+                          {seasonData.graduatedYouths && seasonData.graduatedYouths.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {seasonData.graduatedYouths.map((y, idx) => (
+                                <span key={idx} className="px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-300 text-[10px] font-semibold border border-sky-400/25">
+                                  {y.split(',')[0]}
                                 </span>
-                              );
-                            })}
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-zinc-400 italic text-[11px]">No graduates promoted to first team this season</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-white/[0.05] flex items-center justify-between text-xs text-zinc-400">
+                      <span>Youth Pipeline</span>
+                      <span className="tabular-nums font-semibold text-white">
+                        {state.youthPipeline?.length || 0} Talents Enrolled
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Squad Attrition Audit Breakdown */}
+                {decayReasons.length > 0 && (
+                  <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 sm:p-5 mt-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-rose-400 flex items-center gap-1.5">
+                        <i className="fa-solid fa-arrow-trend-down text-rose-400 text-xs"></i>
+                        <span>Off-Season Squad Attrition Breakdown</span>
+                      </div>
+                      <span className="text-xs text-zinc-400 font-mono tabular-nums">
+                        Net: {(seasonData.newBaseOvr || state.club.baseOvr) - (seasonData.startOvr || state.club.baseOvr)} OVR
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      {decayReasons.map((reason, idx) => (
+                        <div key={idx} className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-200 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></span>
+                          <span>{reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tactical Status within Squad Tab */}
+                <div className={`p-4 rounded-2xl border mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  isStaleActive 
+                    ? 'bg-rose-500/10 border-rose-500/30' 
+                    : isStaleWarning 
+                    ? 'bg-amber-500/10 border-amber-500/30' 
+                    : 'bg-white/[0.03] border-white/[0.06]'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm shrink-0 ${
+                      isStaleActive ? 'bg-rose-500/20 text-rose-400' : isStaleWarning ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-400'
+                    }`}>
+                      <i className={`fa-solid ${isStaleActive ? 'fa-triangle-exclamation' : isStaleWarning ? 'fa-crosshairs' : 'fa-chess'}`}></i>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-zinc-400">Tactical System Status</div>
+                      <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                        <span>{state.tactic || 'Balanced'}</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                          isStaleActive 
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
+                            : isStaleWarning 
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        }`}>
+                          {isStaleActive 
+                            ? 'Stale (-4 OVR Penalty)' 
+                            : isStaleWarning 
+                            ? 'Under League Surveillance' 
+                            : 'Tactically Fresh'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-zinc-400 sm:text-right">
+                    {isStaleActive ? (
+                      <span className="text-rose-300 font-semibold">Adapt philosophy in Headquarters for 5 MP to clear penalty.</span>
+                    ) : isStaleWarning ? (
+                      <span className="text-amber-300">Winning again with this tactic triggers staleness.</span>
+                    ) : (
+                      <span className="text-zinc-400">Tactics are effective and unpredictable.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================= 5. PILLAR 4: HEAD COACH REVIEW ================= */}
+            {activeTab === 'squad' && (
+              <div id="section-coach" className="space-y-3 scroll-mt-6">
+                <div className="text-xs font-semibold uppercase tracking-wider text-sky-400/90 px-1 flex items-center gap-2">
+                  <i className="fas fa-user-tie text-[11px]"></i>
+                  Head Coach Review · Leadership & Contract
+                </div>
+
+                {(state.currentCoach || seasonData.coachAtStartOfSim) ? (() => {
+                  const coach = state.currentCoach || seasonData.coachAtStartOfSim;
+                  const isExpiring = (coach.contractYearsLeft ?? 0) <= 0;
+                  return (
+                    <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-white/[0.06] shadow-sm flex flex-col justify-between">
+                      <div>
+                        <div className="text-[10px] uppercase font-semibold tracking-wider text-sky-400 mb-1 flex items-center justify-between">
+                          <span>Head Coach Tenure</span>
+                          {isExpiring && (
+                            <span className="text-[9px] uppercase font-semibold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-400/30">
+                              Expiring!
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-lg font-bold text-white tracking-tight flex items-center justify-between">
+                          <span>{coach.name}</span>
+                          <span className="text-xs font-semibold text-zinc-400">{coach.style}</span>
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 my-3">
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                          <div className="text-[9px] uppercase font-semibold text-zinc-400">Contract Remaining</div>
+                          <div className={`text-base font-bold tabular-nums mt-0.5 ${isExpiring ? 'text-rose-400' : 'text-white'}`}>
+                            {coach.contractYearsLeft ?? 0} Years
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                          <div className="text-[9px] uppercase font-semibold text-zinc-400">Tactical Boost</div>
+                          <div className={`text-base font-bold tabular-nums mt-0.5 ${coach.ovrBoost >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {coach.ovrBoost >= 0 ? `+${coach.ovrBoost}` : coach.ovrBoost} OVR
+                          </div>
+                        </div>
+                      </div>
+
+                      {onRenewCoach && (() => {
+                        const currentYears = coach.contractYearsLeft ?? 0;
+                        const isMaxed = currentYears >= 5;
+                        const canPlus1 = currentYears + 1 <= 5;
+                        const canPlus2 = currentYears + 2 <= 5;
+
+                        return (
+                          <div className="pt-3 border-t border-white/[0.05] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="text-xs text-zinc-400">
+                              <span className="font-semibold text-white block">
+                                {isMaxed ? 'Max Contract Length (5 Yrs)' : 'Extend Contract (Max 5 Yrs)'}
+                              </span>
+                              <span>{formatMoney(coach.cost)} / yr</span>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                disabled={!canPlus1}
+                                onClick={() => canPlus1 && onRenewCoach(1)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                                  canPlus1
+                                    ? 'bg-sky-500 hover:bg-sky-400 text-white cursor-pointer shadow-sm'
+                                    : 'bg-white/[0.04] text-zinc-600 border border-white/[0.06] cursor-not-allowed opacity-50'
+                                }`}
+                              >
+                                +1 Yr
+                              </button>
+                              <button
+                                disabled={!canPlus2}
+                                onClick={() => canPlus2 && onRenewCoach(2)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
+                                  canPlus2
+                                    ? 'bg-white/[0.06] hover:bg-white/[0.12] text-white border border-white/[0.1] cursor-pointer'
+                                    : 'bg-white/[0.04] text-zinc-600 border border-white/[0.06] cursor-not-allowed opacity-50'
+                                }`}
+                              >
+                                +2 Yrs
+                              </button>
+                            </div>
                           </div>
                         );
                       })()}
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Payroll & Operations:</span>
-                        <span className="text-zinc-400 font-medium">-{formatMoney(Math.max(0, seasonData.wages - (seasonData.debtInterest || 0)))}</span>
-                      </div>
-                      {(seasonData.debtInterest || 0) > 0 && (
-                        <div className="flex justify-between items-center text-[11px]">
-                          <span className="text-zinc-400">Debt Interest:</span>
-                          <span className="text-zinc-400 font-medium">-{formatMoney(seasonData.debtInterest || 0)}</span>
+                    </div>
+                  );
+                })() : seasonData.coachDepartureAlert ? (
+                  <div className="bg-rose-500/[0.06] rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-rose-500/30 shadow-sm">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold tracking-wider text-rose-300 mb-0.5">
+                          {seasonData.coachDepartureAlert.isPoached
+                            ? 'Head Coach Poached · Release Clause Triggered'
+                            : 'Head Coach Departed · Resignation'}
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Card 2: Stadium & Attendance */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          STADIUM & ATTENDANCE
-                        </span>
-                        <span className="text-xs font-medium text-zinc-300">{fillPercentage}% Full</span>
-                      </div>
-                      <div className="flex items-baseline gap-1.5 mb-1">
-                        <span className="text-2xl font-semibold text-white tracking-tight tabular-nums">
-                          {avgAttendance.toLocaleString()}
-                        </span>
-                        <span className="text-xs text-zinc-400">/ {stadiumCap.toLocaleString()}</span>
-                      </div>
-                      <span className="text-xs text-zinc-400 block mb-2">Avg Attendance Per Match</span>
-
-                      <div className="w-full bg-white/[0.06] rounded-full h-1.5 overflow-hidden mb-3">
-                        <div className={`h-full ${fillPercentage > 90 ? 'bg-emerald-500' : fillPercentage > 70 ? 'bg-blue-500' : 'bg-amber-500'}`} style={{ width: `${fillPercentage}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5 text-xs text-zinc-300 border-t border-white/[0.04] pt-2.5">
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Est. Gate Revenue:</span>
-                        <span className="text-zinc-200 font-medium">
-                          +{formatMoney(
-                            (seasonData as any).matchdayIncome ??
-                              Math.floor(avgAttendance * (getCountryEconomicProfile(state.club.country || 'GER').baseTicketYield[seasonData.tier] || 3) * 17)
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Club Fanbase:</span>
-                        <span className="text-zinc-200 font-medium">{(state.club.fanBase || 1000).toLocaleString()} fans</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Club Infrastructure */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          CLUB INFRASTRUCTURE
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                            <i className="fas fa-graduation-cap text-[9px] text-zinc-400" />
-                            <span>Lvl {state.club.academyLevel ?? state.club.youthAcademy ?? 1}/5</span>
+                        <h3 className="text-base sm:text-lg font-bold text-white">
+                          {seasonData.coachDepartureAlert.coachName}{' '}
+                          <span className="text-xs font-semibold text-rose-300">
+                            ({seasonData.coachDepartureAlert.ovrBoost >= 0 ? `+${seasonData.coachDepartureAlert.ovrBoost}` : seasonData.coachDepartureAlert.ovrBoost} OVR · {seasonData.coachDepartureAlert.style})
                           </span>
-                          <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                            <i className="fas fa-kit-medical text-[9px] text-zinc-400" />
-                            <span>Lvl {state.club.medicalLevel ?? 1}/5</span>
+                        </h3>
+                      </div>
+                      {seasonData.coachDepartureAlert.isPoached && seasonData.coachDepartureAlert.buyoutFeeK > 0 && (
+                        <span className="px-2.5 py-1 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-xs font-bold shrink-0">
+                          +{formatMoney(seasonData.coachDepartureAlert.buyoutFeeK)} Buyout Paid
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      Departed at season end due to {seasonData.coachDepartureAlert.reason}. Visit the Staff Market in pre-season to appoint a new Head Coach.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-6 sm:p-8 border border-white/[0.06] shadow-sm text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-zinc-400 text-lg mx-auto mb-3">
+                      <i className="fas fa-user-tie"></i>
+                    </div>
+                    <h3 className="text-base font-bold text-white mb-1">No Head Coach Appointed</h3>
+                    <p className="text-xs text-zinc-400 max-w-md mx-auto">
+                      Your squad navigated this campaign under interim management. Review and hire a specialist tactician in the pre-season staff market to elevate tactical strength.
+                    </p>
+                  </div>
+                )}
+
+                {/* Philosophical Pivot & Rebuild Advisory */}
+                <div className="bg-white/[0.03] rounded-2xl p-4 sm:p-5 border border-white/[0.06] mt-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1.5 mb-0.5">
+                        <i className="fa-solid fa-chess-knight text-xs"></i>
+                        <span>Tactical Philosophy & Backroom Rebuild Direction</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white">
+                        Current System: {state.tactic || 'Balanced'}
+                      </h4>
+                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+                        {isStaleActive ? (
+                          <span className="text-rose-300">
+                            <strong>Obsolescence Active:</strong> League opposition has fully solved this philosophy (-4 OVR penalty in simulations). Head to the Coach room to adapt philosophy for 5 MP.
                           </span>
-                        </div>
-                      </div>
-                      <div className="text-base font-semibold text-white tracking-tight mb-1">
-                        Youth Academy & Medical
-                      </div>
-                      <span className="text-xs text-zinc-400 block mb-3">Facility Levels & Development</span>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5 text-xs text-zinc-300 border-t border-white/[0.04] pt-2.5">
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400 flex items-center gap-1.5">
-                          <i className="fas fa-graduation-cap text-zinc-400 text-[10px]" />
-                          <span>Academy Level:</span>
-                        </span>
-                        <span className="text-zinc-200 font-medium">Lvl {state.club.academyLevel ?? state.club.youthAcademy ?? 1}/5</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400 flex items-center gap-1.5">
-                          <i className="fas fa-kit-medical text-zinc-400 text-[10px]" />
-                          <span>Medical Level:</span>
-                        </span>
-                        <span className="text-zinc-200 font-medium">Lvl {state.club.medicalLevel ?? 1}/5</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Academy Slots:</span>
-                        <span className="text-zinc-200 font-medium">{getAcademySlotLimit(state.club.academyLevel ?? state.club.youthAcademy ?? 1)} Max Prospects</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Training Quality:</span>
-                        <span className="text-zinc-200 font-medium">Level {state.club.trainingFacilities || 1}/5</span>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              ) : activeTab === 'squad' ? (
-                /* 2-column grid for 'First-Team Progression' and 'Youth Pipeline & Graduates' */
-                <motion.div
-                  key="squad-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"
-                >
-                  {/* Left Card: First-Team Progression */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          FIRST-TEAM PROGRESSION
-                        </span>
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-md tabular-nums bg-white/[0.03] border border-white/[0.06] text-zinc-300">
-                          {ovrDelta >= 0 ? '+' : ''}{ovrDelta} OVR
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-2 mb-1">
-                        <span className="text-2xl sm:text-3xl font-semibold text-white tracking-tight leading-none tabular-nums">
-                          {seasonData.startOvr || state.club.baseOvr} → {seasonData.newBaseOvr || state.club.baseOvr}
-                        </span>
-                        <span className="text-xs text-zinc-400 font-normal">Team OVR</span>
-                      </div>
-                      <span className="text-xs text-zinc-400 block mb-3">Season Rating Evolution</span>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5 text-xs text-zinc-300 border-t border-white/[0.04] pt-2.5">
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Transfer Windows:</span>
-                        <span className="text-zinc-200 font-medium">
-                          {((seasonData.preSimOvr || state.club.baseOvr) - (seasonData.startOvr || state.club.baseOvr)) >= 0 ? '+' : ''}{((seasonData.preSimOvr || state.club.baseOvr) - (seasonData.startOvr || state.club.baseOvr))} OVR
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Youth Promotions:</span>
-                        <span className="text-zinc-200 font-medium">+{seasonData.graduatedYouths?.length || 0} Players</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Retirements:</span>
-                        <span className="text-zinc-400 font-medium">-{seasonData.rosterUpdates?.retirementPenalty || 0} OVR ({seasonData.rosterUpdates?.retirements || 0} retired)</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Natural Aging:</span>
-                        <span className="text-zinc-400 font-medium">-{seasonData.rosterUpdates?.naturalDecay || 0} OVR</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Card: Youth Pipeline & Graduates */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          YOUTH PIPELINE & GRADUATES
-                        </span>
-                        <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded">
-                          {state.youthPipeline?.length || 0} In Academy
-                        </span>
-                      </div>
-                      <div className="text-base font-semibold text-white tracking-tight mb-2">
-                        Promoted Graduates This Year
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5 flex-1 overflow-y-auto max-h-[160px] custom-scrollbar my-1">
-                      {seasonData.graduatedYouths && seasonData.graduatedYouths.length > 0 ? (
-                        seasonData.graduatedYouths.map((grad, gIdx) => (
-                          <div key={`grad-${gIdx}`} className="bg-white/[0.02] border border-white/[0.04] rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[11px]">
-                            <span className="font-medium text-zinc-200 truncate">{grad}</span>
-                            <span className="text-[10px] font-medium text-zinc-300 shrink-0">Promoted</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-3 bg-black/20 rounded-lg text-center text-xs text-zinc-400">
-                          No youth graduates promoted to the first-team this season.
-                        </div>
-                      )}
-
-                      {seasonData.departedYouths && seasonData.departedYouths.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                          <div className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                            <i className="fas fa-handshake-angle text-[9px]" />
-                            <span>Signed by Top-Flight Rival (Compensated)</span>
-                          </div>
-                          {seasonData.departedYouths.map((dep, dIdx) => (
-                            <div key={`dep-${dIdx}`} className="bg-white/[0.02] border border-white/[0.04] rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[11px] mb-1">
-                              <span className="text-zinc-200 truncate">{dep}</span>
-                              <span className="text-[10px] font-medium text-zinc-400 shrink-0">Compensated</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="text-[11px] text-zinc-400 border-t border-white/[0.04] pt-2 flex items-center justify-between">
-                      <span>Academy Capacity:</span>
-                      <span className="text-zinc-200 font-medium">{getAcademySlotLimit(state.club.academyLevel ?? state.club.youthAcademy ?? 1)} slots total</span>
-                    </div>
-                  </div>
-                </motion.div>
-              ) : activeTab === 'coach' ? (
-                /* Coach Tab */
-                <motion.div
-                  key="coach-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"
-                >
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          HEAD COACH & TACTICS
-                        </span>
-                        <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded">
-                          +{state.currentCoach?.ovrBoost || 0} OVR Boost
-                        </span>
-                      </div>
-                      <div className="text-xl sm:text-2xl font-semibold text-white tracking-tight mb-1 truncate">
-                        {state.currentCoach?.name || state.managerName || 'Head Coach'}
-                      </div>
-                      <span className="text-xs text-zinc-400 block mb-3">
-                        {state.currentCoach?.archetype || state.headCoachArchetype || state.currentCoach?.style || state.philosophy || 'Tactical Architect'}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5 text-xs text-zinc-300 border-t border-white/[0.04] pt-2.5">
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Tactical System:</span>
-                        <span className="text-zinc-200 font-medium">{state.tactic || 'Balanced 6-0'}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">{t('System Staleness:', 'System-Abnutzung:')}</span>
-                        <span className="font-medium text-zinc-300">
-                          {isCriticallyStale 
-                            ? t(`Critically Stale (Yr ${tacticTenure}, -1.0 OVR Drag)`, `Kritisch abgenutzt (${tacticTenure}. J., -1,0 GES Abzug)`)
-                            : isTacticStale 
-                            ? t(`Becoming Stale (Yr ${tacticTenure}, -0.5 OVR Drag)`, `Wird abgenutzt (${tacticTenure}. J., -0,5 GES Abzug)`)
-                            : t(`Fresh System (Yr 1 · No Drag)`, `Frisches System (1. J. · Kein Abzug)`)}
-                        </span>
-                      </div>
-                      {/* Visual tenure tracker */}
-                      <div className="grid grid-cols-3 gap-1.5 my-1">
-                        <div className={`p-1 rounded text-center text-[9px] font-mono border ${
-                          tacticTenure === 1 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
-                        }`}>
-                          Yr 1: Fresh
-                        </div>
-                        <div className={`p-1 rounded text-center text-[9px] font-mono border ${
-                          tacticTenure === 2 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
-                        }`}>
-                          Yr 2: -0.5 Drag
-                        </div>
-                        <div className={`p-1 rounded text-center text-[9px] font-mono border ${
-                          tacticTenure >= 3 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
-                        }`}>
-                          Yr 3+: -1.0 Drag
-                        </div>
-                      </div>
-                      {isTacticStale && (
-                        <div className="p-1.5 rounded bg-white/[0.02] border border-white/[0.06] text-[10px] text-zinc-400">
-                          {t('💡 Action: Evolve your philosophy in the Tactics & Rebuild hub to clear tactical drag.', '💡 Aktion: Philosophie im Taktik-Hub wechseln, um Abzug zu löschen.')}
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Contract Years:</span>
-                        <span className="text-zinc-200 font-medium">{state.currentCoach?.contractYears || 1} Year(s)</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Annual Wage:</span>
-                        <span className="text-zinc-200 font-medium">{formatMoney(state.currentCoach?.wage || 85000)}/yr</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
-                    <div>
-                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 block mb-2">
-                        CAMPAIGN PERFORMANCE METRICS
-                      </span>
-                      <div className="text-xl sm:text-2xl font-semibold text-zinc-200 tracking-tight mb-1 tabular-nums">
-                        {Math.round((seasonData.wins / Math.max(1, seasonData.wins + seasonData.draws + seasonData.losses)) * 100)}% Win Rate
-                      </div>
-                      <span className="text-xs text-zinc-400 block mb-3">Competitive Result Efficiency</span>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5 text-xs text-zinc-300 border-t border-white/[0.04] pt-2.5">
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Matches Supervised:</span>
-                        <span className="text-zinc-200 font-medium">{seasonData.wins + seasonData.draws + seasonData.losses} Matches</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Goals Scored:</span>
-                        <span className="text-zinc-200 font-medium">{seasonData.gf} Goals</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Goals Conceded:</span>
-                        <span className="text-zinc-400 font-medium">{seasonData.ga} Goals</span>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              ) : activeTab === 'board' ? (
-                /* Board Tab: 'Next Season Mandate' alongside progress bar for 'Club Impact & Trust' and 'Immunity Shields' */
-                <motion.div
-                  key="board-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"
-                >
-                  {/* Left Card: Next Season Mandate */}
-                  {(() => {
-                    const clubWithBudget = { ...state.club, currentBudget: state.budget ?? state.club.currentBudget ?? 0 };
-                    const roadmap = getOrGenerateRoadmap(state.boardRoadmap, clubWithBudget, seasonData.year, state.history);
-                    const metCount = roadmap.goals.filter(g => g.completed).length;
-                    return (
-                      <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                              NEXT SEASON MANDATE
-                            </span>
-                            <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded">
-                              {roadmap.horizonYears} Year Roadmap
-                            </span>
-                          </div>
-                          <div className="text-base sm:text-lg font-semibold text-white tracking-tight mb-1 truncate">
-                            {roadmap.titleEn}
-                          </div>
-                          <span className="text-xs text-zinc-400 block mb-3">
-                            Mandate: Target finish in division & strategic benchmarks
+                        ) : isStaleWarning ? (
+                          <span className="text-amber-300">
+                            <strong>System Under Surveillance:</strong> Winning consecutive titles with this system. Adapting philosophy now protects your tactical unpredictability.
                           </span>
-                        </div>
+                        ) : (
+                          <span>
+                            System operates smoothly. Consider whether this squad needs a win-now Continental Legend or a Youth Whisperer / Scout to accelerate wonderkid maturation.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="shrink-0 bg-white/[0.04] p-3 rounded-xl border border-white/[0.08] text-right">
+                      <div className="text-[10px] text-zinc-400 uppercase font-semibold">Management Points</div>
+                      <div className="text-base font-bold text-amber-300 tabular-nums">{state.skillPoints || 0} MP Available</div>
+                      <div className="text-[10px] text-zinc-400">5 MP to adapt system</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-                        <div className="flex flex-col gap-1.5 text-xs text-zinc-300 border-t border-white/[0.04] pt-2.5">
-                          <div className="flex justify-between items-center text-[11px]">
-                            <span className="text-zinc-400">Roadmap Goals Met:</span>
-                            <span className="text-zinc-200 font-medium">{metCount} of {roadmap.goals.length} Goals</span>
-                          </div>
-                          <div className="flex justify-between items-center text-[11px]">
-                            <span className="text-zinc-400">Manager Skill Points:</span>
-                            <span className="text-zinc-200 font-medium">+{seasonData.pointsEarned || 0} SP Earned</span>
-                          </div>
+            {/* ================= 6. PILLAR 5: BOARD EXPECTATIONS & ROADMAP ================= */}
+            {activeTab === 'overview' && (
+              <div id="section-board" className="space-y-3 scroll-mt-6">
+                <div className="text-xs font-semibold uppercase tracking-wider text-sky-400/90 px-1 flex items-center gap-2">
+                  <i className="fas fa-bullseye text-[11px]"></i>
+                  Board Vision · Strategic Mandates & Trust
+                </div>
+
+                {(seasonData.isSackedRelegation || seasonData.isSacked) ? (
+                  <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl sm:rounded-3xl p-5 sm:p-6">
+                    <div className="flex items-center gap-3.5 mb-2">
+                      <div className="w-11 h-11 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 text-lg shrink-0">
+                        <i className="fas fa-triangle-exclamation"></i>
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase font-semibold tracking-wider text-rose-400">Board Resolution</div>
+                        <div className="text-base sm:text-lg font-bold text-white">Managerial Contract Terminated</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      {isTier1Only
+                        ? `Following a bottom-3 finish in ${league.name}, the Board of Directors has immediately dismissed management for sporting failure. Since this country has no lower tier, the club remains in the league, but managerial immunity shields offer no protection against bottom-tier collapse.`
+                        : isBottomTier
+                        ? `Following drop-zone failure in ${league.name}, the Board of Directors has immediately terminated your contract. With no lower league to absorb the fall, management has been relieved of duties.`
+                        : `Following the conclusion of the campaign, the Board of Directors has officially relieved management of sporting duties.`}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-white/[0.06] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-sky-400 text-lg shrink-0 shadow-inner">
+                        <i className="fas fa-bullseye"></i>
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase font-semibold tracking-wider text-sky-400 mb-0.5">
+                          Next Season Mandate
+                        </div>
+                        <div className="text-base sm:text-lg font-bold text-white">
+                          Finish Top {state.boardTargetFinish || 15} or better mandated
+                        </div>
+                        <div className="text-xs text-zinc-400 mt-0.5">
+                          Target failure without immunity shields triggers termination review.
                         </div>
                       </div>
-                    );
-                  })()}
+                    </div>
 
-                  {/* Right Card: Club Impact & Trust & Immunity Shields */}
-                  <div className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-xl p-4 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                          CLUB IMPACT & TRUST
-                        </span>
-                        <span className="text-xs font-medium text-zinc-200">
-                          {state.clubImpactScore || 75}/100
-                        </span>
+                    {/* Impact score progress bar */}
+                    <div className="bg-white/[0.02] p-3.5 rounded-2xl border border-white/[0.05] min-w-[260px]">
+                      <div className="flex justify-between items-center text-xs mb-1.5">
+                        <span className="font-semibold text-zinc-400">Club Impact & Trust</span>
+                        <span className="font-bold text-white tabular-nums">{state.clubImpactScore ?? 50}/100</span>
                       </div>
-                      <div className="w-full bg-white/[0.06] rounded-full h-1.5 overflow-hidden mb-3">
+                      <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-zinc-300" 
-                          style={{ width: `${Math.min(100, state.clubImpactScore || 75)}%` }} 
+                          className={`h-full transition-all duration-700 ${
+                            (state.clubImpactScore ?? 50) >= 70 ? 'bg-emerald-400' : (state.clubImpactScore ?? 50) >= 40 ? 'bg-sky-400' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(0, state.clubImpactScore ?? 50))}%` }}
                         />
                       </div>
-                      <span className="text-xs text-zinc-400 block mb-3">Board & Fanbase Confidence Index</span>
-                    </div>
-
-                    <div className="flex flex-col gap-2 text-xs text-zinc-300 border-t border-white/[0.04] pt-2.5">
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400 flex items-center gap-1.5">
-                          <i className="fas fa-shield-halved text-zinc-400 text-xs" />
-                          Immunity Shields:
-                        </span>
-                        <span className="font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded text-[10px]">
-                          {state.immunityShields || 0} Available
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">Managerial Tenure:</span>
-                        <span className="text-zinc-200 font-medium">{state.tenureYears || 1} Seasons at Club</span>
-                      </div>
-
-                      {/* Visual 3-Level Pressure Gauge in Club Impact */}
-                      <div className="flex flex-col gap-1 border-t border-white/[0.04] pt-2">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-zinc-400 font-medium flex items-center gap-1.5">
-                            <i className="fas fa-crosshairs text-zinc-400 text-xs" />
-                            <span>{t('Dynasty Pressure Level:', 'Dynastie-Druckstufe:')}</span>
-                          </span>
-                          <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded border border-white/[0.06] bg-white/[0.03] text-zinc-300">
-                            {consecutiveTitles > 1 
-                              ? t(`Dynasty (${consecutiveTitles} Titles)`, `Dynastie (${consecutiveTitles} Titel)`) 
-                              : consecutiveTitles === 1 
-                              ? t('Champion (1 Title)', 'Titelverteidiger (1 Titel)') 
-                              : t('Challenger (No Tax)', 'Herausforderer (Keine Steuer)')}
-                          </span>
-                        </div>
-
-                        {/* Visual 3-level pressure track */}
-                        <div className="grid grid-cols-3 gap-1.5 my-1">
-                          <div className={`p-1.5 rounded-lg border text-center flex flex-col items-center justify-center ${
-                            consecutiveTitles === 0 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
-                          }`}>
-                            <span className="text-[9px] font-mono leading-none">CHALLENGER</span>
-                            <span className="text-[10px] mt-0.5">No Tax (0.0)</span>
-                          </div>
-                          <div className={`p-1.5 rounded-lg border text-center flex flex-col items-center justify-center ${
-                            consecutiveTitles === 1 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
-                          }`}>
-                            <span className="text-[9px] font-mono leading-none">CHAMPION</span>
-                            <span className="text-[10px] mt-0.5">1 Crown (-{(hasInfrastructureImmunity ? 0 : hasMoraleImmunity ? 0.25 : 0.5).toFixed(1)})</span>
-                          </div>
-                          <div className={`p-1.5 rounded-lg border text-center flex flex-col items-center justify-center ${
-                            consecutiveTitles > 1 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
-                          }`}>
-                            <span className="text-[9px] font-mono leading-none">DYNASTY</span>
-                            <span className="text-[10px] mt-0.5">{consecutiveTitles} Titles (-{effectiveDynastyTax.toFixed(1)})</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">{t('Dynasty Target on Back:', 'Zielscheiben-Steuer:')}</span>
-                        <span className="font-medium text-zinc-300">
-                          {consecutiveTitles > 0 ? `-${effectiveDynastyTax.toFixed(1)} OVR Tax (${consecutiveTitles} Titles)` : t('None (Challenger)', 'Keine (Herausforderer)')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">{t('Facility Dynasty Shield:', 'Infrastruktur-Schild:')}</span>
-                        <span className="font-medium text-zinc-300">
-                          {hasInfrastructureImmunity
-                            ? t('Active (100% Tax Immunity)', 'Aktiv (100% Steuer-Immunität)')
-                            : hasMoraleImmunity
-                            ? t('Partial Shield (50% Tax Reduction)', 'Teil-Schild (50% Steuer-Reduktion)')
-                            : t('Inactive (Lvl 3 Med / Lvl 5 req.)', 'Inaktiv (Stufe 3 Med / Stufe 5 erf.)')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">{t('Opponent Motivation:', 'Gegner-Motivation:')}</span>
-                        <span className="font-medium text-zinc-300">
-                          {consecutiveTitles > 0 ? t('Peak (+100% Focus vs Champion)', 'Maximal (+100% Fokus)') : t('Standard', 'Normal')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-zinc-400">{t('Boardroom Scrutiny:', 'Vorstandsdruck:')}</span>
-                        <span className="font-medium text-zinc-300">
-                          {consecutiveTitles > 0 ? t('Zero tolerance for dropped points', 'Keine Toleranz für Ausrutscher') : (state.tenureYears || 1) >= 4 ? t('Silverware expectation elevated', 'Hohe Titelerwartung') : t('Standard confidence', 'Stabiles Vertrauen')}
+                      <div className="flex justify-between items-center text-[10px] text-zinc-400 mt-1 font-medium">
+                        <span>Immunity Shields: {state.immunityShields ?? 0}</span>
+                        <span className={(state.clubImpactScore ?? 50) >= 70 ? 'text-emerald-400' : 'text-sky-300'}>
+                          {(state.clubImpactScore ?? 50) >= 70 ? 'Untouchable' : 'Stable'}
                         </span>
                       </div>
                     </div>
                   </div>
-                </motion.div>
-              ) : activeTab === 'universe' || activeTab === 'history' ? (
-                /* Universe & World Tab (incorporating Career Chronicle history) */
-                <motion.div
-                  key="universe-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="flex flex-col gap-3 sm:gap-4"
-                >
-                  <div className="flex items-center justify-between px-1">
-                    <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 flex items-center gap-1.5">
-                      <i className="fas fa-earth-americas text-zinc-400" />
-                      CAREER CHRONICLE & UNIVERSE HISTORY
-                    </span>
-                    <span className="text-[11px] text-zinc-400 font-medium">
-                      {(state.history || []).length} Recorded Seasons
-                    </span>
+                )}
+              </div>
+            )}
+
+            {/* ================= 7. PILLAR 6: LIVING UNIVERSE & WORLD FOOTBALL ================= */}
+            {activeTab === 'world' && (
+              <div id="section-universe" className="space-y-4 scroll-mt-6">
+                <div className="flex items-center justify-between text-xs px-1">
+                  <div className="font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-2">
+                    <i className="fa-solid fa-earth-americas text-[11px]"></i>
+                    Global Football Universe & Seasonal Digest
                   </div>
-
-                  {isNemesisActive && nemesisClub && (
-                    <div className="bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md rounded-xl p-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-white/[0.03] border border-white/[0.06] text-zinc-300 flex items-center justify-center shrink-0">
-                          <i className="fas fa-money-bill-trend-up text-xs" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-white flex items-center gap-1.5 truncate">
-                            <span>{t('🚨 GLOBAL UNIVERSE HEADLINE: Hostile Rival Takeover', '🚨 GLOBALE SCHLAGZEILE: Feindliche Rivalen-Übernahme')}</span>
-                          </div>
-                          <p className="text-[11px] text-zinc-400 truncate">
-                            {t(
-                              `${nemesisClub.name} acquired by private commercial backers (+3 to +5 OVR surge, now ${nemesisClub.baseOvr} OVR).`,
-                              `${nemesisClub.name} von Investoren übernommen (+3 bis +5 GES Wettrüsten, nun ${nemesisClub.baseOvr} GES).`
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.03] text-zinc-300 border border-white/[0.06] shrink-0 font-medium">
-                        {nemesisClub.baseOvr} OVR
-                      </span>
-                    </div>
-                  )}
-
-                  {(() => {
-                    const seasonMovements = (
-                      latestHistoryEntry?.universeMovements ||
-                      seasonData.universeMovements ||
-                      state.universeMovements ||
-                      []
-                    ).filter((m: any) => m.year === seasonData.year && m.type === 'intl_cup');
-                    if (seasonMovements.length === 0) return null;
-                    return (
-                      <div className="bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md rounded-xl p-3.5 flex flex-col gap-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-400 flex items-center gap-1.5">
-                            <i className="fas fa-trophy text-amber-400 text-[10px]" />
-                            SEASON {seasonData.year} CUP & CONTINENTAL CHAMPIONS
-                          </span>
-                          <span className="text-[10px] text-zinc-500 font-medium">
-                            Official Roll of Honour
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {seasonMovements.map((m: any) => {
-                            const isUserWinner = m.clubName === state.club.name || String(m.clubId) === String(state.club.id);
-                            const mId = String(m.id || '').toLowerCase();
-                            const mTitle = String(m.cupTitle || '').toLowerCase();
-                            const isCwcMov = mId.endsWith('-cup-cwc') || mTitle.includes('super globe');
-                            const isRegMov = mId.endsWith('-cup-reg') || mTitle.includes('regional') || mTitle.includes('amateur');
-                            const isEuroMov = mId.endsWith('-cup-cl') || mId.endsWith('-cup-el') || mId.endsWith('-cup-ecl') || mTitle.includes('champions league') || mTitle.includes('european league') || mTitle.includes('european cup') || mTitle.includes('americas') || mTitle.includes('north american');
-                            const matchedRun = (state.cupRunResults || []).find((cr: any) => {
-                              if (cr.year !== seasonData.year || !cr.winnerName) return false;
-                              if (cr.winnerName.trim().toLowerCase() !== (m.clubName || '').trim().toLowerCase()) return false;
-                              if (isCwcMov) return cr.id === 'cwc';
-                              if (isRegMov) return cr.id === 'reg_cup';
-                              if (isEuroMov) return cr.id === 'euro_cup' || cr.id === 'cl' || cr.id === 'el' || cr.id === 'ecl';
-                              return cr.id === 'nat_cup';
-                            });
-                            const userWasRunnerUp = Boolean(matchedRun && !matchedRun.won && matchedRun.exitRound === 'Final');
-                            const runnerUpDisplay = userWasRunnerUp ? state.club.name : matchedRun?.runnerUpName;
-                            return (
-                              <div
-                                key={`sf-cup-winner-${m.id}`}
-                                className={`rounded-lg px-3 py-2 border flex items-center justify-between gap-2 ${
-                                  isUserWinner
-                                    ? 'bg-sky-500/[0.06] border-sky-500/20'
-                                    : userWasRunnerUp
-                                    ? 'bg-amber-500/[0.05] border-amber-500/20'
-                                    : 'bg-white/[0.02] border-white/[0.04]'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="text-xs shrink-0">{getCountryFlag(m.country || 'GER')}</span>
-                                  <div className="flex flex-col min-w-0">
-                                    <span className="text-xs font-semibold text-white truncate">
-                                      {m.clubName}
-                                    </span>
-                                    <span className="text-[10px] text-zinc-400 truncate">
-                                      {m.cupTitle}
-                                      {runnerUpDisplay ? ` · def. ${runnerUpDisplay} in Final` : ''}
-                                    </span>
-                                  </div>
-                                </div>
-                                <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded border shrink-0 ${
-                                  isUserWinner
-                                    ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
-                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                                }`}>
-                                  {isUserWinner ? 'Your Club' : 'Champion'}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {(() => {
-                    const allSeasonMovs = (
-                      latestHistoryEntry?.universeMovements ||
-                      seasonData.universeMovements ||
-                      state.universeMovements ||
-                      []
-                    ).filter((m: any) => m.year === seasonData.year && m.type !== 'intl_cup' && m.type !== 'takeover');
-
-                    const notableMovs = allSeasonMovs.filter((m: any) =>
-                      (m.type === 'champion' && (m.fromTier === 1 || m.country === normalizeCountry(state.club.country || 'GER'))) ||
-                      m.isCinderella ||
-                      m.type === 'insolvency_relegation' ||
-                      (m.type === 'promotion' && m.toTier === 1 && m.country === normalizeCountry(state.club.country || 'GER')) ||
-                      (m.type === 'relegation' && m.fromTier === 1 && m.country === normalizeCountry(state.club.country || 'GER'))
-                    ).slice(0, 10);
-
-                    if (notableMovs.length === 0) return null;
-
-                    return (
-                      <div className="bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md rounded-xl p-3.5 flex flex-col gap-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-400 flex items-center gap-1.5">
-                            <i className="fas fa-newspaper text-sky-400 text-[10px]" />
-                            SEASON {seasonData.year} LEAGUE CHAMPIONS & WORLD HEADLINES
-                          </span>
-                          <span className="text-[10px] text-zinc-500 font-medium">
-                            Across Europe
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {notableMovs.map((m: any) => {
-                            const isUserClub = m.clubName === state.club.name || String(m.clubId) === String(state.club.id);
-                            const isChamp = m.type === 'champion';
-                            const isInsolvency = m.type === 'insolvency_relegation';
-                            const isPromo = m.type === 'promotion';
-                            const leagueName = getLeagueInfo(m.fromTier || 1, m.country || 'GER').name;
-                            const targetLeagueName = getLeagueInfo(m.toTier || 1, m.country || 'GER').name;
-
-                            let subtitle = leagueName;
-                            let badgeLabel = 'Champion';
-                            let badgeClass = 'bg-amber-500/10 text-amber-300 border-amber-500/20';
-
-                            if (isChamp) {
-                              subtitle = `${leagueName} Champions`;
-                              badgeLabel = isUserClub ? 'Your Club' : 'Title Winner';
-                              badgeClass = isUserClub
-                                ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
-                                : 'bg-amber-500/10 text-amber-300 border-amber-500/20';
-                            } else if (isInsolvency) {
-                              subtitle = `Licensing withdrawal · Demoted to ${targetLeagueName}`;
-                              badgeLabel = 'Insolvency';
-                              badgeClass = 'bg-rose-500/10 text-rose-300 border-rose-500/20';
-                            } else if (isPromo) {
-                              subtitle = m.isCinderella
-                                ? `Cinderella surge · Promoted to ${targetLeagueName}`
-                                : `Promoted to ${targetLeagueName}`;
-                              badgeLabel = m.isCinderella ? 'Cinderella' : 'Promoted';
-                              badgeClass = 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20';
-                            } else {
-                              subtitle = `Relegated to ${targetLeagueName}`;
-                              badgeLabel = 'Relegated';
-                              badgeClass = 'bg-rose-500/10 text-rose-300 border-rose-500/20';
-                            }
-
-                            return (
-                              <div
-                                key={`sf-world-mov-${m.id}`}
-                                className="rounded-lg px-3 py-2 border bg-white/[0.02] border-white/[0.04] flex items-center justify-between gap-2"
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="text-xs shrink-0">{getCountryFlag(m.country || 'GER')}</span>
-                                  <div className="flex flex-col min-w-0">
-                                    <span className="text-xs font-semibold text-white truncate">
-                                      {m.clubName}
-                                    </span>
-                                    <span className="text-[10px] text-zinc-400 truncate">
-                                      {subtitle}
-                                    </span>
-                                  </div>
-                                </div>
-                                <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded border shrink-0 ${badgeClass}`}>
-                                  {badgeLabel}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="flex flex-col gap-2">
-                    {[...(state.history || [])].reverse().map((h, hIdx) => {
-                      const isCurrentReview = h.year === seasonData.year;
-                      const gd = (h.gf || 0) - (h.ga || 0);
-                      const isChamp = h.pos === 1;
-                      const hasCups = Boolean(
-                        h.trophiesThisYear?.cl || h.trophiesThisYear?.el || 
-                        h.trophiesThisYear?.ecl || h.trophiesThisYear?.cwc || 
-                        h.trophiesThisYear?.dfb || h.trophiesThisYear?.reg
-                      );
-
-                      return (
-                        <div
-                          key={`hist-chronicle-${h.year}-${hIdx}`}
-                          className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                            isCurrentReview
-                              ? 'bg-white/[0.04] border-white/[0.08]'
-                              : 'bg-[#10121a]/90 border-white/[0.04]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex flex-col items-center justify-center w-12 py-1 px-2 rounded-lg bg-black/40 border border-white/10 shrink-0">
-                              <span className="text-[8px] text-zinc-400 font-mono uppercase">Season</span>
-                              <span className="text-xs font-semibold text-white tabular-nums">{h.year}</span>
-                            </div>
-
-                            <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs sm:text-[13px] font-semibold text-white tracking-tight truncate">
-                                  {h.clubName}
-                                </span>
-                                {isCurrentReview && (
-                                  <span className="px-1.5 py-0.2 rounded bg-white/[0.04] text-zinc-300 border border-white/[0.08] text-[9px] font-medium uppercase">
-                                    Current
-                                  </span>
-                                )}
-                                {renderSeasonTrophyBadges(h.trophiesThisYear)}
-                              </div>
-                              <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-0.5 flex-wrap">
-                                <span>{getCountryFlag(h.country || state.club.country)} Tier {h.tier}</span>
-                                <span>·</span>
-                                <span className={`font-medium ${isChamp ? 'text-amber-300' : 'text-zinc-300'}`}>
-                                  {isChamp ? '🏆 1st' : `${h.pos}.`}
-                                </span>
-                                <span>·</span>
-                                <span className="font-mono text-zinc-300">{h.wins}W-{h.draws}D-{h.losses}L</span>
-                                <span>·</span>
-                                <span className="font-mono text-zinc-300">{h.pts} pts</span>
-                                {gd !== 0 && (
-                                  <span className="font-mono text-zinc-400">
-                                    ({gd > 0 ? `+${gd}` : gd})
-                                  </span>
-                                )}
-                                {hasCups && (
-                                  <span className="text-zinc-400" title="Captured Silverware">
-                                    <i className="fas fa-trophy text-[10px]" />
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <button
-                            onClick={() => {
-                              setSelectedYearForTable(h.year);
-                              setActiveTab('table');
-                            }}
-                            className="w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white border border-white/10 text-xs font-semibold shrink-0 cursor-pointer transition flex items-center justify-center gap-1.5 active:scale-95"
-                          >
-                            <i className="fas fa-table-list text-[10px]" />
-                            <span>View Table</span>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              ) : activeTab === 'table' ? (
-                /* Final Standings Table View */
-                <motion.div
-                  key="table-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                  className="flex-1 h-full min-h-[460px] rounded-xl overflow-hidden border border-white/[0.05] bg-black/40 relative flex flex-col"
-                >
-                  <div className="absolute inset-0 w-full h-full overflow-hidden flex flex-col">
-                    <LeagueTableModal 
-                      state={state} 
-                      targetTier={(state.history || []).find(h => h.year === selectedYearForTable)?.tier || seasonData.tier} 
-                      targetYear={selectedYearForTable}
-                      clubsDb={clubsDb} 
-                      lang={lang} 
-                      onClose={() => {}} 
-                      embedded={true} 
-                    />
-                  </div>
-                </motion.div>
-              ) : null}
-            </AnimatePresence>
-          </div>
-
-          {/* Next Campaign Horizon Banner (The "Just One More Season" Hook) */}
-          {(() => {
-            const isPromoted = nextTier < playedTier;
-            const isRelegated = nextTier > playedTier || Boolean(seasonData.relegated && !seasonData.survived && playedTier < maxTier);
-            const targetLeague = getLeagueInfo(nextTier, state.club?.country || 'GER');
-            
-            let hookIcon = 'fa-calendar-star';
-            let hookTitle = `${seasonData.year + 1} Outlook`;
-            let hookMsg = '';
-            let hookBadgeColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
-
-            if (seasonData.euroNextSeason === 'CL') {
-              hookIcon = 'fa-star';
-              hookTitle = 'European Nights';
-              hookMsg = "⭐ EHF Champions League Qualified — clash with Europe's giants in the group stage!";
-              hookBadgeColor = 'text-amber-300 bg-amber-500/15 border-amber-500/30';
-            } else if (seasonData.euroNextSeason === 'EL') {
-              hookIcon = 'fa-globe';
-              hookTitle = 'European Nights';
-              hookMsg = '⭐ EHF European League Qualified — European nights await under arena floodlights!';
-              hookBadgeColor = 'text-sky-300 bg-sky-500/15 border-sky-500/30';
-            } else if (seasonData.euroNextSeason === 'ECL') {
-              hookIcon = 'fa-trophy';
-              hookTitle = 'European Nights';
-              hookMsg = '⭐ EHF European Cup Qualified — European silverware contention unlocked for next season!';
-              hookBadgeColor = 'text-teal-300 bg-teal-500/15 border-teal-500/30';
-            } else if (isPromoted) {
-              hookIcon = 'fa-rocket';
-              hookTitle = 'Promotion Secured';
-              hookMsg = `🚀 Promoted to ${targetLeague?.name || 'Higher Division'}! Higher division status, bigger arenas & richer TV distribution await.`;
-              hookBadgeColor = 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30';
-            } else if (isRelegated) {
-              hookIcon = 'fa-shield-halved';
-              hookTitle = 'Rebuild Mandate';
-              hookMsg = `Bounce-back mission in ${targetLeague?.name || 'Lower Division'} — rally the squad to reclaim division status.`;
-              hookBadgeColor = 'text-rose-300 bg-rose-500/15 border-rose-500/30';
-            } else if (seasonData.pos === 1) {
-              hookIcon = 'fa-crown';
-              hookTitle = 'Title Defense';
-              hookMsg = '👑 Reigning Champions — defend the crown and build an era-defining dynasty.';
-              hookBadgeColor = 'text-amber-300 bg-amber-500/15 border-amber-500/30';
-            } else if (seasonData.rivalryThisSeason && seasonData.rivalryThisSeason.losses > seasonData.rivalryThisSeason.wins) {
-              hookIcon = 'fa-hand-fist';
-              hookTitle = 'Derby Vengeance';
-              hookMsg = `⚔️ Settle the score with arch-rival ${seasonData.rivalryThisSeason.name} next season.`;
-              hookBadgeColor = 'text-orange-300 bg-orange-500/15 border-orange-500/30';
-            } else {
-              hookIcon = 'fa-bullseye';
-              hookTitle = `${seasonData.year + 1} Campaign Mandate`;
-              hookMsg = `Summer restructuring & boardroom push for Top-${Math.max(1, seasonData.pos - 2)} benchmark.`;
-              hookBadgeColor = 'text-indigo-300 bg-indigo-500/15 border-indigo-500/30';
-            }
-
-            return (
-              <div className="shrink-0 px-3.5 sm:px-5 py-2.5 bg-[#0e0f16] border-t border-white/[0.05] flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${hookBadgeColor}`}>
-                    <i className={`fas ${hookIcon} text-[9px]`} />
-                    <span>{hookTitle}</span>
-                  </div>
-                  <span className="text-zinc-300 text-[11px] sm:text-xs font-normal truncate">
-                    {hookMsg}
+                  <span className="text-[10px] text-zinc-400 font-mono">
+                    Season {seasonData.year} Ecosystem Digest
                   </span>
                 </div>
-                <span className="text-[10px] font-mono font-medium text-zinc-500 uppercase tracking-wider shrink-0 hidden md:inline">
-                  {seasonData.year + 1} SZN
-                </span>
+
+                {/* Diverse Rival Challenger Headline in Global Universe */}
+                {superVillainClub && rivalChallengerEvent && (
+                  <div className="bg-gradient-to-r from-purple-950/40 via-fuchsia-950/30 to-indigo-950/30 border border-fuchsia-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-xl bg-fuchsia-500/20 border border-fuchsia-400/30 flex items-center justify-center p-2 shrink-0">
+                        <ClubLogo name={superVillainClub.name} club={superVillainClub} size={32} />
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-fuchsia-400 tracking-wider">
+                          BREAKING LEAGUE HEADLINE · {rivalChallengerEvent.badge?.toUpperCase() || 'NEW TITLE CHALLENGER'}
+                        </div>
+                        <h4 className="text-sm sm:text-base font-bold text-white">
+                          {rivalChallengerEvent.headline || `${superVillainClub.name} Mounts Challenge Against ${state.club.name}`}
+                        </h4>
+                        <p className="text-xs text-zinc-300 mt-0.5">
+                          {rivalChallengerEvent.desc || `A surging ${rivalChallengerEvent.clubOvr || superVillainClub.baseOvr} OVR domestic contender emerges in ${league.name}.`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-[11px] font-bold text-fuchsia-300 bg-fuchsia-500/20 px-3 py-1 rounded-full border border-fuchsia-400/30">
+                        {rivalChallengerEvent.clubOvr || superVillainClub.baseOvr} OVR Threat
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Continental & World Champions Marquee */}
+                <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-white/[0.06] shadow-sm">
+                  <div className="flex items-center justify-between mb-3 border-b border-white/[0.05] pb-2">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <i className="fa-solid fa-trophy text-amber-400 text-xs"></i>
+                      World & Continental Silverware
+                    </span>
+                    <span className="text-[10px] text-zinc-400">Major Continental Kings</span>
+                  </div>
+
+                  {continentalChampions.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {continentalChampions.map((c) => (
+                        <div
+                          key={c.id}
+                          className="bg-black/30 border border-white/[0.06] rounded-2xl p-3 flex items-center gap-3 relative overflow-hidden"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 p-1">
+                            <ClubLogo
+                              name={c.clubName}
+                              id={c.clubId}
+                              color={c.clubColor}
+                              logo={c.clubLogo}
+                              isModActive={isModActive}
+                              className="w-8 h-8 object-contain"
+                              fallbackClassName="w-8 h-8 rounded-lg text-xs flex items-center justify-center font-bold text-white"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[10px] font-bold text-amber-300 uppercase tracking-wider truncate">
+                              {c.fromLeagueName}
+                            </div>
+                            <div className="text-xs font-bold text-white break-words">{c.clubName}</div>
+                            <div className="text-[10px] text-zinc-400 truncate mt-0.5">{c.reason}</div>
+                          </div>
+                          <div className="text-amber-400 text-sm shrink-0 pr-1">🏆</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-zinc-400 py-3 text-center">
+                      Continental tournaments in progress across the globe.
+                    </div>
+                  )}
+                </div>
+
+                {/* Domestic League Champions Grid */}
+                <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-white/[0.06] shadow-sm">
+                  <div className="flex items-center justify-between mb-3 border-b border-white/[0.05] pb-2">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <i className="fa-solid fa-crown text-amber-400 text-xs"></i>
+                      Domestic League Champions
+                    </span>
+                    <span className="text-[10px] text-zinc-400">National League Winners</span>
+                  </div>
+
+                  {leagueChampions.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                      {leagueChampions.map((c) => (
+                        <div
+                          key={c.id}
+                          className="bg-black/30 border border-white/[0.06] rounded-2xl p-2.5 flex items-center gap-2.5"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 p-1">
+                            <ClubLogo
+                              name={c.clubName}
+                              id={c.clubId}
+                              color={c.clubColor}
+                              logo={c.clubLogo}
+                              isModActive={isModActive}
+                              className="w-7 h-7 object-contain"
+                              fallbackClassName="w-7 h-7 rounded-lg text-[10px] flex items-center justify-center font-bold text-white"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[9px] font-bold text-sky-400 uppercase tracking-wider truncate">
+                              {c.fromLeagueName}
+                            </div>
+                            <div className="text-xs font-bold text-white break-words">{c.clubName}</div>
+                          </div>
+                          <i className="fa-solid fa-crown text-amber-400 text-xs shrink-0" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-zinc-400 py-3 text-center">
+                      Domestic title battles concluded for this campaign.
+                    </div>
+                  )}
+                </div>
+
+                {/* Fallen Giants Crisis Alert */}
+                {fallenGiantsList.length > 0 && (
+                  <div className="bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 border border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider mb-2">
+                      <i className="fa-solid fa-triangle-exclamation text-amber-400"></i>
+                      Fallen Giant Administration Alert
+                    </div>
+                    <div className="space-y-2">
+                      {fallenGiantsList.map((g) => (
+                        <div
+                          key={g.id}
+                          className="bg-black/40 border border-amber-500/20 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 p-1">
+                              <ClubLogo
+                                name={g.clubName}
+                                id={g.clubId}
+                                color={g.clubColor}
+                                logo={g.clubLogo}
+                                isModActive={isModActive}
+                                className="w-8 h-8 object-contain"
+                                fallbackClassName="w-8 h-8 rounded-lg text-xs flex items-center justify-center font-bold text-white"
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold text-white break-words">{g.clubName}</div>
+                              <div className="text-xs text-amber-300/90 font-medium">
+                                Demoted from {g.fromLeagueName} to {g.toLeagueName}
+                              </div>
+                              <div className="text-[10px] text-zinc-400">{g.reason}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                              Rebuild Challenge Target
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pyramid Movements: Promotions & Relegations */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Promotions */}
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-white/[0.06] shadow-sm">
+                    <div className="flex items-center justify-between mb-3 border-b border-white/[0.05] pb-2">
+                      <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i className="fa-solid fa-arrow-trend-up text-xs"></i>
+                        Promoted to Higher Tiers
+                      </span>
+                      <span className="text-[10px] text-zinc-400">{promotionsList.length} Moves</span>
+                    </div>
+                    {promotionsList.length > 0 ? (
+                      <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                        {promotionsList.map((p) => (
+                          <div
+                            key={p.id}
+                            className="bg-black/30 border border-white/[0.04] rounded-xl p-2.5 flex items-center justify-between text-xs"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <ClubLogo
+                                name={p.clubName}
+                                id={p.clubId}
+                                color={p.clubColor}
+                                logo={p.clubLogo}
+                                isModActive={isModActive}
+                                className="w-6 h-6 object-contain shrink-0"
+                                fallbackClassName="w-6 h-6 rounded text-[9px] flex items-center justify-center font-bold text-white shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <div className="font-bold text-white break-words">{p.clubName}</div>
+                                <div className="text-[10px] text-emerald-400 truncate">{p.reason}</div>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                              {p.toLeagueName}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-zinc-400 py-3 text-center">No promotions recorded.</div>
+                    )}
+                  </div>
+
+                  {/* Relegations */}
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-white/[0.06] shadow-sm">
+                    <div className="flex items-center justify-between mb-3 border-b border-white/[0.05] pb-2">
+                      <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i className="fa-solid fa-arrow-trend-down text-xs"></i>
+                        Relegated & Demoted
+                      </span>
+                      <span className="text-[10px] text-zinc-400">{relegationsList.length} Moves</span>
+                    </div>
+                    {relegationsList.length > 0 ? (
+                      <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                        {relegationsList.map((r) => (
+                          <div
+                            key={r.id}
+                            className="bg-black/30 border border-white/[0.04] rounded-xl p-2.5 flex items-center justify-between text-xs"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <ClubLogo
+                                name={r.clubName}
+                                id={r.clubId}
+                                color={r.clubColor}
+                                logo={r.clubLogo}
+                                isModActive={isModActive}
+                                className="w-6 h-6 object-contain shrink-0"
+                                fallbackClassName="w-6 h-6 rounded text-[9px] flex items-center justify-center font-bold text-white shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <div className="font-bold text-white break-words">{r.clubName}</div>
+                                <div className="text-[10px] text-rose-400 truncate">{r.reason}</div>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-semibold text-rose-300 bg-rose-500/15 border border-rose-500/25 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                              {r.toLeagueName}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-zinc-400 py-3 text-center">No relegations recorded.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Blockbuster Heavyweight Transfers */}
+                {transferSagasList.length > 0 && (
+                  <div className="bg-white/[0.03] rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-white/[0.06] shadow-sm">
+                    <div className="flex items-center justify-between mb-3 border-b border-white/[0.05] pb-2">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <i className="fa-solid fa-arrow-right-arrow-left text-sky-400 text-xs"></i>
+                        Blockbuster Heavyweight Transfer Sagas
+                      </span>
+                      <span className="text-[10px] text-zinc-400">Continental Market</span>
+                    </div>
+                    <div className="space-y-2">
+                      {transferSagasList.map((t) => (
+                        <div
+                          key={t.id}
+                          className="bg-black/30 border border-white/[0.05] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/30 flex items-center justify-center text-sky-300 font-bold shrink-0">
+                              <i className="fa-solid fa-user text-xs"></i>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold text-white truncate">{t.reason}</div>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-semibold text-sky-300 bg-sky-500/15 border border-sky-400/30 px-2.5 py-1 rounded-full self-start sm:self-auto shrink-0">
+                            Market Confirmed
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            );
-          })()}
+            )}
 
-          {/* Action Footer */}
-          <div className="shrink-0 p-2.5 sm:p-4 border-t border-white/[0.06] bg-[#0c0d12] flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-            <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-2.5 shrink-0">
-              <button 
-                onClick={handleDownload} 
-                disabled={isDownloading} 
-                className="h-9 sm:h-10 px-3 sm:px-3.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white rounded-xl transition-colors border border-white/[0.08] flex items-center justify-center gap-2 text-xs font-semibold shrink-0 disabled:opacity-50 cursor-pointer active:scale-95 shadow-sm" 
-                title="Share season summary card"
-                aria-label="Share season summary"
-              >
-                <i className={`fas ${isDownloading ? 'fa-spinner fa-spin' : 'fa-arrow-up-from-bracket'} text-xs`} />
-                <span>Share Card</span>
-              </button>
+          </div>
+        </div>
 
-              <button
-                onClick={() => {
-                  if (activeTab === 'table') {
-                    setActiveTab('summary');
-                  } else {
-                    setSelectedYearForTable(seasonData.year);
-                    setActiveTab('table');
-                  }
-                }}
-                className={`h-9 sm:h-10 px-3 sm:px-3.5 rounded-xl transition-colors border flex items-center justify-center gap-2 text-xs font-semibold shrink-0 cursor-pointer active:scale-95 shadow-sm ${
-                  activeTab === 'table'
-                    ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
-                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border-white/[0.08]'
-                }`}
-                title="View League Standings Table"
-              >
-                <i className="fas fa-table-list text-xs text-sky-400" />
-                <span>League Table</span>
-              </button>
-
-              {onShowProfile && (
-                <button
-                  onClick={onShowProfile}
-                  title="Head Coach Profile & Leaderboard"
-                  className="h-9 sm:h-10 px-3.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 flex items-center justify-center gap-2 text-xs font-bold shrink-0 cursor-pointer transition active:scale-95 shadow-sm hidden md:flex"
-                >
-                  <i className="fas fa-trophy text-amber-400 text-xs" />
-                  <span>Profile & Score</span>
-                </button>
-              )}
-            </div>
-
-            <button 
-              aria-label="Advance to Next Season" 
-              onClick={onClose} 
-              className="group w-full sm:w-auto sm:flex-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold h-10 px-4 sm:px-5 rounded-xl transition-all duration-200 active:scale-[0.99] shadow-[0_4px_18px_rgba(37,99,235,0.35)] border border-blue-400/30 cursor-pointer flex items-center justify-between min-w-0 sm:ml-auto"
+        {/* ACTION FOOTER */}
+        <div className="p-4 sm:p-5 pb-safe border-t border-white/[0.06] bg-white/[0.02] backdrop-blur-md shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 relative z-10">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className="px-4 py-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white text-xs font-semibold transition border border-white/[0.08] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-initial"
+              title="Export / Share Season Card"
             >
-              <div className="flex items-center gap-2 truncate mr-2">
-                <span className="text-xs sm:text-[13px] font-bold tracking-tight text-white leading-tight truncate">
-                  Kick Off {seasonData.year + 1} Campaign
-                </span>
-              </div>
-              <div className="w-6 h-6 rounded-lg bg-white/20 backdrop-blur-sm text-white flex items-center justify-center transition-transform group-hover:translate-x-0.5 shrink-0">
-                <i className="fas fa-arrow-right text-[10px]" />
-              </div>
+              <i className={`fas ${isDownloading ? 'fa-spinner fa-spin' : 'fa-share-nodes'} text-sky-400`}></i>
+              <span>Share Card</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                switchTab('table');
+              }}
+              className={`px-4 py-3 rounded-2xl text-xs font-semibold transition border flex items-center justify-center gap-2 cursor-pointer flex-1 sm:flex-initial ${
+                activeTab === 'table'
+                  ? 'bg-sky-500/20 text-sky-300 border-sky-400/30 shadow-sm'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border-white/[0.08]'
+              }`}
+            >
+              <i className={`fas ${activeTab === 'table' ? 'fa-table-cells-large text-sky-300' : 'fa-table text-sky-400'}`}></i>
+              <span>League Table</span>
             </button>
           </div>
 
+          <button
+            onClick={onClose}
+            className="w-full sm:w-auto sm:min-w-[280px] py-3.5 px-6 rounded-2xl bg-sky-500 hover:bg-sky-400 active:scale-[0.98] text-white font-semibold text-sm tracking-wide transition-all shadow-sm flex items-center justify-center gap-3 cursor-pointer group"
+          >
+            <span>Continue to Next Season <span className="hidden sm:inline font-normal text-xs text-sky-100/90">(Press Enter)</span></span>
+            <span className="text-xs text-sky-100 tabular-nums sm:hidden">({seasonData.year + 1})</span>
+            <i className="fas fa-arrow-right text-xs group-hover:translate-x-1 transition-transform"></i>
+          </button>
         </div>
       </motion.div>
     </motion.div>
