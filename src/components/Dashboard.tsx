@@ -723,6 +723,16 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const [preSeasonSupercupQueue, setPreSeasonSupercupQueue] = useState<any[]>([]);
   const [autoStartSimAfterSupercup, setAutoStartSimAfterSupercup] = useState(false);
 
+  useEffect(() => {
+    setPreSeasonSupercupQueue(prev =>
+      prev.filter(
+        m =>
+          m.playerClubName === state?.club?.name &&
+          (!m.country || normalizeCountry(m.country) === normalizeCountry(state?.club?.country || 'GER'))
+      )
+    );
+  }, [state?.club?.id, state?.club?.name, state?.club?.country]);
+
   const qualifiedSupercups = useMemo(() => {
     if (!state?.club || state.year <= winterBreakSeenYear) return [];
     return getQualifiedSupercupMatches(state, clubsDb, isAnyModActive());
@@ -4322,9 +4332,9 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
       />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start [overflow-anchor:none]">
         {/* Left Column */}
-        <div className="lg:col-span-5 flex flex-col gap-6">
+        <div className="lg:col-span-5 flex flex-col gap-6 [overflow-anchor:none]">
           <div className="flex flex-col gap-4">
             {/* Taunting the Player: 5-Year Trophy Drought Alert (Tier 1 & trophyDrought > 4) */}
             {state.club.tier === 1 && (state.trophyDrought || 0) > 4 && (
@@ -4496,6 +4506,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
               context: cleanContext
             };
             setSeasonalJobOffers(null);
+            setPreSeasonSupercupQueue([]);
             stateStore.acceptJobOffer(enrichedClub);
             setShowJobMarket(false);
             setShowInboundOffers(false);

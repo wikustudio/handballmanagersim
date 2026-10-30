@@ -65,6 +65,28 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   const [showIPOModal, setShowIPOModal] = useState(false);
   const stateStore = useGameStore();
   const tr = (en: string, _de?: string, _es?: string) => en;
+  const accordionRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+
+  const handleToggleAccordion = (section: string) => {
+    const isOpening = activeAccordion !== section;
+    setActiveAccordion(isOpening ? section : null);
+
+    if (isOpening && typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const el = accordionRefs.current[section];
+          if (!el) return;
+          const rect = el.getBoundingClientRect();
+          const isMobile = window.innerWidth < 1024;
+          const headerOffset = isMobile ? 76 : 88;
+          if (isMobile || rect.top < headerOffset || rect.bottom > window.innerHeight) {
+            const targetTop = Math.max(0, window.scrollY + rect.top - headerOffset);
+            window.scrollTo({ top: targetTop, behavior: 'smooth' });
+          }
+        });
+      });
+    }
+  };
 
   // Preserve scroll position when loan/marketing/ipo modals open and close
   const scrollPositionRef = React.useRef<number>(0);
@@ -110,7 +132,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   const performanceBonus = sponsorTerms.performanceBonus;
 
   return (
-    <div className="bg-[#10121a]/90 border border-white/[0.04] backdrop-blur-md rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 w-full">
+    <div className="bg-[#10121a]/90 border border-white/[0.04] backdrop-blur-md rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 w-full [overflow-anchor:none]">
       {/* Box Header matching user mockup */}
       <div className="flex flex-col gap-1 pb-1">
         <div className="flex items-center gap-2">
@@ -139,13 +161,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       {/* ========================================================================= */}
       {/* 1. COMMERCIAL & SPONSORSHIPS MODULE                                      */}
       {/* ========================================================================= */}
-      <div className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+      <div
+        ref={(el) => { accordionRefs.current['commercial'] = el; }}
+        className={`rounded-2xl border transition-all duration-200 overflow-hidden scroll-mt-20 ${
         activeAccordion === 'commercial' 
           ? 'border-purple-500/30 bg-purple-500/[0.04]' 
           : 'border-white/[0.05] bg-purple-500/[0.02] hover:border-purple-500/30 hover:bg-purple-500/[0.05]'
       }`}>
         <button 
-          onClick={() => setActiveAccordion(activeAccordion === 'commercial' ? null : 'commercial')}
+          type="button"
+          onClick={() => handleToggleAccordion('commercial')}
           className="w-full flex items-center justify-between p-3.5 sm:p-4 cursor-pointer text-left transition"
         >
           <div className="flex items-center gap-2.5">
@@ -403,13 +428,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       {/* ========================================================================= */}
       {/* 2. SQUAD & TRANSFERS MODULE                                               */}
       {/* ========================================================================= */}
-      <div className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+      <div
+        ref={(el) => { accordionRefs.current['squad'] = el; }}
+        className={`rounded-2xl border transition-all duration-200 overflow-hidden scroll-mt-20 ${
         activeAccordion === 'squad' 
           ? 'border-emerald-500/30 bg-emerald-500/[0.04]' 
           : 'border-white/[0.05] bg-emerald-500/[0.02] hover:border-emerald-500/30 hover:bg-emerald-500/[0.05]'
       }`}>
         <button 
-          onClick={() => setActiveAccordion(activeAccordion === 'squad' ? null : 'squad')}
+          type="button"
+          onClick={() => handleToggleAccordion('squad')}
           className="w-full flex items-center justify-between p-3.5 sm:p-4 cursor-pointer text-left transition"
         >
           <div className="flex items-center gap-2.5">
@@ -531,13 +559,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       {/* ========================================================================= */}
       {/* 3. INFRASTRUCTURE & ARENA MODULE                                          */}
       {/* ========================================================================= */}
-      <div className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+      <div
+        ref={(el) => { accordionRefs.current['infra'] = el; }}
+        className={`rounded-2xl border transition-all duration-200 overflow-hidden scroll-mt-20 ${
         activeAccordion === 'infra' 
           ? 'border-sky-500/30 bg-sky-500/[0.04]' 
           : 'border-white/[0.05] bg-sky-500/[0.02] hover:border-sky-500/30 hover:bg-sky-500/[0.05]'
       }`}>
         <button 
-          onClick={() => setActiveAccordion(activeAccordion === 'infra' ? null : 'infra')}
+          type="button"
+          onClick={() => handleToggleAccordion('infra')}
           className="w-full flex items-center justify-between p-3.5 sm:p-4 cursor-pointer text-left transition"
         >
           <div className="flex items-center gap-2.5">
@@ -679,13 +710,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       {/* ========================================================================= */}
       {/* 4. BOARD & MANAGER MODULE                                                 */}
       {/* ========================================================================= */}
-      <div className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+      <div
+        ref={(el) => { accordionRefs.current['manager'] = el; }}
+        className={`rounded-2xl border transition-all duration-200 overflow-hidden scroll-mt-20 ${
         activeAccordion === 'manager' 
           ? 'border-amber-500/30 bg-amber-500/[0.04]' 
           : 'border-white/[0.05] bg-amber-500/[0.02] hover:border-amber-500/30 hover:bg-amber-500/[0.05]'
       }`}>
         <button 
-          onClick={() => setActiveAccordion(activeAccordion === 'manager' ? null : 'manager')}
+          type="button"
+          onClick={() => handleToggleAccordion('manager')}
           className="w-full flex items-center justify-between p-3.5 sm:p-4 cursor-pointer text-left transition"
         >
           <div className="flex items-center gap-2.5">
