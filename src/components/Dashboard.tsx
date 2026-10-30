@@ -4508,9 +4508,10 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             setSeasonalJobOffers(null);
             setPreSeasonSupercupQueue([]);
             stateStore.acceptJobOffer(enrichedClub);
+            const resolvedStoreClub = useGameStore.getState().club || enrichedClub;
             setShowJobMarket(false);
             setShowInboundOffers(false);
-            setWelcomeClub(enrichedClub);
+            setWelcomeClub(resolvedStoreClub);
             setIsSeasonalBoardTransition(true);
             setShowBoardExpectations(true);
           }}
@@ -4581,8 +4582,10 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
               return historicNarrative || "We are looking for stability, tactical identity, and steady progression up the table.";
             };
 
-            // Exclude current club
-            const eligibleClubs = [...db].filter(c => c.id !== st.club?.id);
+            // Exclude current club and merge live worldClubs state so promotions, relegations, insolvencies, OVR & facilities are reflected
+            const eligibleClubs = [...db]
+              .filter(c => c.id !== st.club?.id)
+              .map(c => mergeClubWithWorldState(c, st.worldClubs?.[c.id] || st.worldClubs?.[String(c.id)]));
 
             // Separate into domestic and international pools
             const domesticClubs = eligibleClubs.filter(c => normalizeCountry(c.country || 'GER') === userCountry);
