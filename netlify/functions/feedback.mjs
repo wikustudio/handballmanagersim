@@ -1,4 +1,40 @@
 const FEEDBACK_RECIPIENT_EMAIL = process.env.FEEDBACK_EMAIL || 'kuehnewilly@gmail.com';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wzoalrpjjxacjcxyveln.supabase.co';
+const SUPABASE_ANON_KEY =
+  process.env.SUPABASE_ANON_KEY || 'sb_publishable_VObfts_vuIo_Dqh3Nc_UIQ_QAgotrSb';
+
+async function saveFeedbackToSupabase(report) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/handball_feedback`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        report_id: report.reportId,
+        category: report.type,
+        title: report.title,
+        description: report.description,
+        steps_to_reproduce: report.stepsToReproduce || null,
+        user_contact: report.userContact || null,
+        auto_captured: Boolean(report.autoCaptured),
+        crash_message: report.crashReport?.message || null,
+        crash_stack: report.crashReport?.stack || report.crashReport?.componentStack || null,
+        game_state: {
+          snapshot: report.gameStateSnapshot || null,
+          crashReport: report.crashReport || null,
+          recentErrors: report.recentErrors || [],
+        },
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 async function dispatchFeedbackEmail(report) {
   const categoryLabel =
@@ -170,7 +206,10 @@ export const handler = async (event) => {
     // Log in Netlify function logs as durable backup
     console.info('[HMS Feedback Report]', JSON.stringify(reportRecord));
 
-    const dispatchResult = await dispatchFeedbackEmail(reportRecord);
+    const [supabaseSaved, dispatchResult] = await Promise.all([
+      saveFeedbackToSupabase(reportRecord),
+      dispatchFeedbackEmail(reportRecord),
+    ]);
 
     return {
       statusCode: 200,
@@ -179,7 +218,11 @@ export const handler = async (event) => {
         ok: true,
         reportId,
         submittedAt,
-        status: dispatchResult.delivered ? 'dispatched' : 'recorded',
+        status: dispatchResult.delivered
+          ? 'dispatched'
+          : supabaseSaved
+          ? 'saved_to_supabase'
+          : 'recorded',
       }),
     };
   } catch (error) {

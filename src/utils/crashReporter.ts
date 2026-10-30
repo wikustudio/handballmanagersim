@@ -185,6 +185,9 @@ export function clearLatestCrashReport(): void {
   }
 }
 
+const SUPABASE_URL = 'https://wzoalrpjjxacjcxyveln.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_VObfts_vuIo_Dqh3Nc_UIQ_QAgotrSb';
+
 export async function submitFeedbackReport(
   payload: FeedbackSubmissionPayload
 ): Promise<{ ok: boolean; reportId?: string; error?: string }> {
@@ -194,7 +197,47 @@ export async function submitFeedbackReport(
     .toUpperCase()}`;
   const submittedAt = new Date().toISOString();
 
-  // 1. Submit to native Netlify Forms (zero-API-key native Netlify capture + email notification trigger)
+  const supabaseRow = {
+    report_id: clientReportId,
+    category: payload.type,
+    title: (payload.title || 'Untitled Report').slice(0, 200),
+    description: (payload.description || '').slice(0, 5000),
+    steps_to_reproduce: payload.stepsToReproduce ? payload.stepsToReproduce.slice(0, 2000) : null,
+    user_contact: payload.userContact ? payload.userContact.slice(0, 150) : null,
+    auto_captured: Boolean(payload.autoCaptured),
+    crash_message: payload.crashReport?.message || null,
+    crash_stack: payload.crashReport?.stack || payload.crashReport?.componentStack || null,
+    game_state: {
+      snapshot: payload.gameStateSnapshot || null,
+      crashReport: payload.crashReport || null,
+      recentErrors: (payload.recentErrors || []).slice(0, 5),
+    },
+  };
+
+  // 1. Primary: Submit directly to existing Supabase project (handball_feedback table)
+  try {
+    const sbRes = await fetch(`${SUPABASE_URL}/rest/v1/handball_feedback`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(supabaseRow),
+    });
+
+    if (sbRes.ok) {
+      return {
+        ok: true,
+        reportId: clientReportId,
+      };
+    }
+  } catch {
+    // Fall through to serverless / Netlify Forms fallback if offline or table not yet created
+  }
+
+  // 2. Submit to native Netlify Forms (zero-API-key native Netlify capture)
   let netlifyFormsAccepted = false;
   try {
     const formParams = new URLSearchParams();
@@ -228,7 +271,7 @@ export async function submitFeedbackReport(
     // Ignore if not running on Netlify edge
   }
 
-  // 2. Submit to backend / Netlify Serverless Function
+  // 3. Submit to backend / Netlify Serverless Function
   const endpoints = ['/api/feedback', '/.netlify/functions/feedback'];
   let lastError = 'Network error while submitting feedback report.';
 
