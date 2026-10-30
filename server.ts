@@ -128,7 +128,7 @@ async function startServer() {
   app.use(express.json({ limit: '1mb' }));
 
   // Feedback & Crash Report endpoint (recipient email is strictly hidden on the backend)
-  app.post('/api/feedback', async (req, res) => {
+  app.post(['/api/feedback', '/.netlify/functions/feedback'], async (req, res) => {
     try {
       const {
         type = 'bug',

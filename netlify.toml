@@ -2,10 +2,20 @@
   command = "npx vite build"
   publish = "dist"
 
+[functions]
+  directory = "netlify/functions"
+
 [build.environment]
   NODE_VERSION = "22"
   PUPPETEER_SKIP_DOWNLOAD = "true"
   SECRETS_SCAN_SMART_DETECTION_ENABLED = "false"
+
+# API routes handled by Netlify Functions
+[[redirects]]
+  from = "/api/feedback"
+  to = "/.netlify/functions/feedback"
+  status = 200
+  force = true
 
 # SPA client-side routing fallback
 [[redirects]]

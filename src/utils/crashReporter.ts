@@ -188,34 +188,53 @@ export function clearLatestCrashReport(): void {
 export async function submitFeedbackReport(
   payload: FeedbackSubmissionPayload
 ): Promise<{ ok: boolean; reportId?: string; error?: string }> {
-  try {
-    const response = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+  const endpoints = ['/api/feedback', '/.netlify/functions/feedback'];
+  let lastError = 'Network error while submitting feedback report.';
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+
+      if (response.ok && isJson) {
+        const data = await response.json();
+        if (data && data.ok) {
+          return {
+            ok: true,
+            reportId: data.reportId || `HMS-${Date.now().toString(36).toUpperCase()}`,
+          };
+        }
+      }
+
+      // If endpoint is missing (404/405) or returned SPA HTML fallback, try next endpoint
+      if (response.status === 404 || response.status === 405 || !isJson) {
+        lastError = `Server responded with status ${response.status}`;
+        continue;
+      }
+
+      const errData = isJson ? await response.json().catch(() => ({})) : {};
       return {
         ok: false,
         error: errData?.error || `Server responded with status ${response.status}`,
       };
+    } catch (err: any) {
+      lastError = err?.message || 'Network error while submitting feedback report.';
     }
-
-    const data = await response.json();
-    return {
-      ok: true,
-      reportId: data.reportId || `HMS-${Date.now().toString(36).toUpperCase()}`,
-    };
-  } catch (err: any) {
-    return {
-      ok: false,
-      error: err?.message || 'Network error while submitting feedback report.',
-    };
   }
+
+  return {
+    ok: false,
+    error: lastError,
+  };
 }
 
 export async function autoSubmitCrashReport(
