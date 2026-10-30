@@ -269,6 +269,22 @@
         </p>
       </div>
     </noscript>
+    <!-- Netlify Forms static definition for zero-API-key crash & feedback capture -->
+    <form name="hms-feedback" data-netlify="true" netlify-honeypot="bot-field" hidden>
+      <input type="hidden" name="form-name" value="hms-feedback" />
+      <input type="text" name="bot-field" />
+      <input type="text" name="report_id" />
+      <input type="text" name="submitted_at" />
+      <input type="text" name="category" />
+      <input type="text" name="title" />
+      <textarea name="description"></textarea>
+      <textarea name="steps_to_reproduce"></textarea>
+      <input type="text" name="user_contact" />
+      <input type="text" name="auto_captured" />
+      <textarea name="crash_message"></textarea>
+      <textarea name="crash_stack"></textarea>
+      <textarea name="game_state"></textarea>
+    </form>
     <div id="root"></div>
     <div id="app-loading-fallback" style="position: fixed; inset: 0; z-index: 99999; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #090a0f; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif; padding: 20px; text-align: center;">
       <div style="width: 56px; height: 56px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03);">

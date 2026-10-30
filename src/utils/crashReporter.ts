@@ -188,6 +188,47 @@ export function clearLatestCrashReport(): void {
 export async function submitFeedbackReport(
   payload: FeedbackSubmissionPayload
 ): Promise<{ ok: boolean; reportId?: string; error?: string }> {
+  const clientReportId = `HMS-${Date.now().toString(36).toUpperCase()}-${Math.random()
+    .toString(36)
+    .substring(2, 6)
+    .toUpperCase()}`;
+  const submittedAt = new Date().toISOString();
+
+  // 1. Submit to native Netlify Forms (zero-API-key native Netlify capture + email notification trigger)
+  let netlifyFormsAccepted = false;
+  try {
+    const formParams = new URLSearchParams();
+    formParams.append('form-name', 'hms-feedback');
+    formParams.append('report_id', clientReportId);
+    formParams.append('submitted_at', submittedAt);
+    formParams.append('category', payload.type);
+    formParams.append('title', payload.title || 'Untitled Report');
+    formParams.append('description', payload.description || '');
+    formParams.append('steps_to_reproduce', payload.stepsToReproduce || '');
+    formParams.append('user_contact', payload.userContact || 'Anonymous');
+    formParams.append('auto_captured', String(Boolean(payload.autoCaptured)));
+    formParams.append('crash_message', payload.crashReport?.message || 'None');
+    formParams.append('crash_stack', payload.crashReport?.stack || 'None');
+    formParams.append(
+      'game_state',
+      payload.gameStateSnapshot ? JSON.stringify(payload.gameStateSnapshot) : 'Not attached'
+    );
+
+    const netlifyFormRes = await fetch('/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formParams.toString(),
+    });
+    if (netlifyFormRes.ok) {
+      netlifyFormsAccepted = true;
+    }
+  } catch {
+    // Ignore if not running on Netlify edge
+  }
+
+  // 2. Submit to backend / Netlify Serverless Function
   const endpoints = ['/api/feedback', '/.netlify/functions/feedback'];
   let lastError = 'Network error while submitting feedback report.';
 
@@ -199,7 +240,7 @@ export async function submitFeedbackReport(
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, reportId: clientReportId, submittedAt }),
       });
 
       const contentType = response.headers.get('content-type') || '';
@@ -210,7 +251,7 @@ export async function submitFeedbackReport(
         if (data && data.ok) {
           return {
             ok: true,
-            reportId: data.reportId || `HMS-${Date.now().toString(36).toUpperCase()}`,
+            reportId: data.reportId || clientReportId,
           };
         }
       }
@@ -229,6 +270,13 @@ export async function submitFeedbackReport(
     } catch (err: any) {
       lastError = err?.message || 'Network error while submitting feedback report.';
     }
+  }
+
+  if (netlifyFormsAccepted) {
+    return {
+      ok: true,
+      reportId: clientReportId,
+    };
   }
 
   return {
