@@ -18,7 +18,7 @@ import { ConsentBanner } from './components/ConsentBanner';
 import { Trophy, Globe } from 'lucide-react';
 import { getActiveClubs, isRealDataModActive, getCustomDb, mergeClubWithWorldState } from './utils/modManager';
 import { preloadClubAssets } from './utils/assetPreloader';
-import { initCrashReporter } from './utils/crashReporter';
+import { initCrashReporter, openFeedbackModal } from './utils/crashReporter';
 import { SEO } from './components/SEO';
 
 const serializeTrophiesKey = (t?: any): string => {
@@ -834,8 +834,36 @@ export default function App() {
               onShowLeaderboard={fetchGlobalHighscores}
             />
           ) : (
-            <main className="px-3 sm:px-6 py-2 sm:py-4 pb-36 sm:pb-4 w-full max-w-full overflow-x-hidden">
-              <div className="flex flex-col gap-3 sm:gap-6 w-full max-w-full">
+            <main className="px-3 sm:px-6 py-2 sm:py-3.5 pb-36 sm:pb-4 w-full max-w-full overflow-x-hidden">
+              <div className="flex flex-col gap-2.5 sm:gap-4 w-full max-w-full">
+                {/* Subtle Community Feedback Strip between Navigation and Dashboard */}
+                <div className="max-w-7xl mx-auto w-full">
+                  <button
+                    type="button"
+                    onClick={() => openFeedbackModal()}
+                    className="w-full group flex items-center justify-between gap-2.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.045] border border-white/[0.06] hover:border-sky-400/25 transition-all duration-200 text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400/80 group-hover:bg-sky-400 shrink-0 shadow-[0_0_6px_rgba(56,189,248,0.6)]" />
+                      <p className="text-[11px] sm:text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors leading-snug">
+                        {lang === 'de' ? (
+                          <>
+                            <span className="font-medium text-zinc-300">Gestalte das Spiel mit:</span> Melde Feedback, Wünsche oder Abstürze — <span className="text-sky-400/90 font-medium">Feedback wird wöchentlich umgesetzt.</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium text-zinc-300">Help shape this game:</span> Share feedback, feature wishes, or crash reports — <span className="text-sky-400/90 font-medium">feedback is implemented weekly.</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <span className="shrink-0 inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold text-sky-400/90 group-hover:text-sky-300 px-2 py-0.5 rounded-md bg-sky-500/10 border border-sky-400/20 group-hover:border-sky-400/40 transition-all">
+                      <i className="fas fa-comment-dots text-[10px]" />
+                      <span>{lang === 'de' ? 'Melden' : 'Report'}</span>
+                    </span>
+                  </button>
+                </div>
+
                 <Dashboard state={state} lang={lang} />
               </div>
             </main>
