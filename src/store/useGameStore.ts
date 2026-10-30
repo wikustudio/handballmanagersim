@@ -630,6 +630,44 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
 
         const penalty = r.activeLoan ? 25 : (r.budget < 0 ? 15 : 0);
 
+        const resolvedJobEuroStatus: 'CL' | 'EL' | 'ECL' | null = (() => {
+            if ((a.tier === 1 || (a.tier === 2 && (a as any).euroStatus === 'EL')) && (a as any).euroStatus) {
+                return (a as any).euroStatus;
+            }
+            if (finalClub.tier !== 1 || userIsReserve) return null;
+
+            const lastHist = (r.history || []).length > 0 ? r.history[r.history.length - 1] : null;
+            const latestMoves = lastHist?.universeMovements || r.universeMovements || [];
+            const wonDomTitle = latestMoves.some(
+                (m: any) => m.type === 'champion' && m.fromTier === 1 && normalizeCountry(m.country || 'GER') === normJobCountry && m.clubName === finalClub.name
+            );
+            const wonCl = latestMoves.some(
+                (m: any) => m.type === 'intl_cup' && (String(m.id || '').endsWith('-cup-cl') || String(m.cupTitle || '').toLowerCase().includes('champions league')) && m.clubName === finalClub.name
+            );
+            if (wonDomTitle || wonCl) return 'CL';
+
+            const wonElOrDomCup = latestMoves.some(
+                (m: any) =>
+                    m.type === 'intl_cup' &&
+                    m.clubName === finalClub.name &&
+                    (String(m.id || '').endsWith('-cup-el') ||
+                        String(m.id || '').endsWith('-cup-dfb') ||
+                        String(m.cupTitle || '').toLowerCase().includes('european league'))
+            );
+            if (wonElOrDomCup) return 'EL';
+
+            const tier1DomClubs = mergedJobClubs
+                .filter(rc => rc.tier === 1 && normalizeCountry(rc.country || 'GER') === normJobCountry && !isReserveClub(rc.name))
+                .sort((x, y) => (y.baseOvr || 0) - (x.baseOvr || 0) || (y.rep || 0) - (x.rep || 0) || String(x.id).localeCompare(String(y.id)));
+            const rankIdx = tier1DomClubs.findIndex(
+                rc => String(rc.id) === String(finalClub.id) || rc.name === finalClub.name
+            );
+            if (rankIdx === 0 || rankIdx === 1) return 'CL';
+            if (rankIdx >= 2 && rankIdx <= 4) return 'EL';
+            if (rankIdx === 5 && !['HUN', 'GER', 'ESP', 'POR'].includes(normJobCountry)) return 'ECL';
+            return null;
+        })();
+
         return {
             worldClubs: i,
             club: finalClub,
@@ -661,7 +699,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             rivalH2HWins: 0,
             rivalH2HDraws: 0,
             rivalH2HLosses: 0,
-            euroStatus: (a.tier === 1 || (a.tier === 2 && (a as any).euroStatus === 'EL')) ? ((a as any).euroStatus || null) : null,
+            euroStatus: resolvedJobEuroStatus,
             activeEuroTournament: undefined,
             euroQualifiedForSf: null,
             youthPullsThisSeason: 0,
