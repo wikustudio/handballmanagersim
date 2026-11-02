@@ -214,108 +214,113 @@ export async function submitFeedbackReport(
     },
   };
 
-  // 1. Primary: Submit directly to existing Supabase project (handball_feedback table)
-  try {
-    const sbRes = await fetch(`${SUPABASE_URL}/rest/v1/handball_feedback`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify(supabaseRow),
-    });
-
-    if (sbRes.ok) {
-      return {
-        ok: true,
-        reportId: clientReportId,
-      };
-    }
-  } catch {
-    // Fall through to serverless / Netlify Forms fallback if offline or table not yet created
-  }
-
-  // 2. Submit to native Netlify Forms (zero-API-key native Netlify capture)
-  let netlifyFormsAccepted = false;
-  try {
-    const formParams = new URLSearchParams();
-    formParams.append('form-name', 'hms-feedback');
-    formParams.append('report_id', clientReportId);
-    formParams.append('submitted_at', submittedAt);
-    formParams.append('category', payload.type);
-    formParams.append('title', payload.title || 'Untitled Report');
-    formParams.append('description', payload.description || '');
-    formParams.append('steps_to_reproduce', payload.stepsToReproduce || '');
-    formParams.append('user_contact', payload.userContact || 'Anonymous');
-    formParams.append('auto_captured', String(Boolean(payload.autoCaptured)));
-    formParams.append('crash_message', payload.crashReport?.message || 'None');
-    formParams.append('crash_stack', payload.crashReport?.stack || 'None');
-    formParams.append(
-      'game_state',
-      payload.gameStateSnapshot ? JSON.stringify(payload.gameStateSnapshot) : 'Not attached'
-    );
-
-    const netlifyFormRes = await fetch('/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formParams.toString(),
-    });
-    if (netlifyFormRes.ok) {
-      netlifyFormsAccepted = true;
-    }
-  } catch {
-    // Ignore if not running on Netlify edge
-  }
-
-  // 3. Submit to backend / Netlify Serverless Function
-  const endpoints = ['/api/feedback', '/.netlify/functions/feedback'];
-  let lastError = 'Network error while submitting feedback report.';
-
-  for (const endpoint of endpoints) {
+  // 1. Submit to existing Supabase project (handball_feedback table)
+  let supabaseAccepted = false;
+  const supabasePromise = (async () => {
     try {
-      const response = await fetch(endpoint, {
+      const sbRes = await fetch(`${SUPABASE_URL}/rest/v1/handball_feedback`, {
         method: 'POST',
         headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
-          Accept: 'application/json',
+          Prefer: 'return=minimal',
         },
-        body: JSON.stringify({ ...payload, reportId: clientReportId, submittedAt }),
+        body: JSON.stringify(supabaseRow),
       });
-
-      const contentType = response.headers.get('content-type') || '';
-      const isJson = contentType.includes('application/json');
-
-      if (response.ok && isJson) {
-        const data = await response.json();
-        if (data && data.ok) {
-          return {
-            ok: true,
-            reportId: data.reportId || clientReportId,
-          };
-        }
+      if (sbRes.ok) {
+        supabaseAccepted = true;
       }
-
-      // If endpoint is missing (404/405) or returned SPA HTML fallback, try next endpoint
-      if (response.status === 404 || response.status === 405 || !isJson) {
-        lastError = `Server responded with status ${response.status}`;
-        continue;
-      }
-
-      const errData = isJson ? await response.json().catch(() => ({})) : {};
-      return {
-        ok: false,
-        error: errData?.error || `Server responded with status ${response.status}`,
-      };
-    } catch (err: any) {
-      lastError = err?.message || 'Network error while submitting feedback report.';
+    } catch {
+      // Ignore if offline
     }
-  }
+  })();
 
-  if (netlifyFormsAccepted) {
+  // 2. Submit to native Netlify Forms (triggers Netlify Email Notifications if enabled in Netlify Dashboard)
+  let netlifyFormsAccepted = false;
+  const netlifyFormsPromise = (async () => {
+    try {
+      const formParams = new URLSearchParams();
+      formParams.append('form-name', 'hms-feedback');
+      formParams.append('report_id', clientReportId);
+      formParams.append('submitted_at', submittedAt);
+      formParams.append('category', payload.type);
+      formParams.append('title', payload.title || 'Untitled Report');
+      formParams.append('description', payload.description || '');
+      formParams.append('steps_to_reproduce', payload.stepsToReproduce || '');
+      formParams.append('user_contact', payload.userContact || 'Anonymous');
+      formParams.append('auto_captured', String(Boolean(payload.autoCaptured)));
+      formParams.append('crash_message', payload.crashReport?.message || 'None');
+      formParams.append('crash_stack', payload.crashReport?.stack || 'None');
+      formParams.append(
+        'game_state',
+        payload.gameStateSnapshot ? JSON.stringify(payload.gameStateSnapshot) : 'Not attached'
+      );
+
+      const netlifyFormRes = await fetch('/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formParams.toString(),
+      });
+      if (netlifyFormRes.ok) {
+        netlifyFormsAccepted = true;
+      }
+    } catch {
+      // Ignore if not running on Netlify edge
+    }
+  })();
+
+  // 3. Submit to backend / Netlify Serverless Function for email relay
+  let backendAccepted = false;
+  let lastError = 'Network error while submitting feedback report.';
+  const backendPromise = (async () => {
+    const endpoints = ['/api/feedback', '/.netlify/functions/feedback'];
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            ...payload,
+            reportId: clientReportId,
+            submittedAt,
+            skipSupabaseInsert: true,
+          }),
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        const isJson = contentType.includes('application/json');
+
+        if (response.ok && isJson) {
+          const data = await response.json();
+          if (data && data.ok) {
+            backendAccepted = true;
+            return;
+          }
+        }
+
+        if (response.status === 404 || response.status === 405 || !isJson) {
+          lastError = `Server responded with status ${response.status}`;
+          continue;
+        }
+
+        const errData = isJson ? await response.json().catch(() => ({})) : {};
+        lastError = errData?.error || `Server responded with status ${response.status}`;
+        return;
+      } catch (err: any) {
+        lastError = err?.message || 'Network error while submitting feedback report.';
+      }
+    }
+  })();
+
+  await Promise.allSettled([supabasePromise, netlifyFormsPromise, backendPromise]);
+
+  if (supabaseAccepted || backendAccepted || netlifyFormsAccepted) {
     return {
       ok: true,
       reportId: clientReportId,

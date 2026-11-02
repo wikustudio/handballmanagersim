@@ -31,8 +31,7 @@ export const preloadImage = (url: string): Promise<void> => {
 export const preloadClubAssets = (clubs: Club[]): void => {
   if (typeof window === 'undefined' || !clubs || !Array.isArray(clubs)) return;
 
-  // Pre-warm crests in microtask batches to prevent main-thread contention
-  requestIdleCallback?.(() => {
+  const runBatchPreload = () => {
     clubs.forEach((c) => {
       const numericId = typeof c.id === 'number' ? c.id : Number(c.id);
       if (!isNaN(numericId) && hasVerifiedLocalAsset(numericId)) {
@@ -48,21 +47,15 @@ export const preloadClubAssets = (clubs: Club[]): void => {
         preloadImage(c.fallbackLogo);
       }
     });
-  }) || setTimeout(() => {
-    clubs.forEach((c) => {
-      const numericId = typeof c.id === 'number' ? c.id : Number(c.id);
-      if (!isNaN(numericId) && hasVerifiedLocalAsset(numericId)) {
-        preloadImage(getLocalAssetPath(numericId));
-      }
-      if (!isNaN(numericId) && REAL_WORLD_LOGOS[numericId]) {
-        preloadImage(REAL_WORLD_LOGOS[numericId]);
-      }
-      if (c.logo && typeof c.logo === 'string') {
-        preloadImage(c.logo);
-      }
-      if (c.fallbackLogo && typeof c.fallbackLogo === 'string') {
-        preloadImage(c.fallbackLogo);
-      }
-    });
-  }, 10);
+  };
+
+  // Pre-warm crests in idle time (with safe Safari/iOS WebKit setTimeout fallback)
+  const win = window as Window & {
+    requestIdleCallback?: (cb: () => void) => number;
+  };
+  if (typeof win.requestIdleCallback === 'function') {
+    win.requestIdleCallback(runBatchPreload);
+  } else {
+    window.setTimeout(runBatchPreload, 16);
+  }
 };
