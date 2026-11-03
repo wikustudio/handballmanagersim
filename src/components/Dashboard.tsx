@@ -829,9 +829,13 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
       category: 'cup' as const,
       title: userWon ? `${currentMatch.title.toUpperCase()} CHAMPIONS!` : `${currentMatch.title.toUpperCase()} RUNNER-UP`,
       message: userWon
-        ? `🏆 ${currentMatch.title} Winners! Defeated ${currentMatch.opponentName} in ${currentMatch.hostArena} (+${formatMoney(prize)} prize purse).`
+        ? `🏆 ${currentMatch.title} Winners!`
         : `🥈 ${currentMatch.title} Finalist: Narrowly defeated by ${currentMatch.opponentName} in ${currentMatch.hostArena} (+${formatMoney(prize)} appearance purse).`,
-      read: false
+      subtitle: userWon
+        ? `Defeated ${currentMatch.opponentName} in ${currentMatch.hostArena} (+${formatMoney(prize)} prize purse).`
+        : undefined,
+      opponentName: currentMatch.opponentName,
+      read: Boolean(userWon && remaining.length === 0 && !autoStartSimAfterSupercup)
     };
 
     if (userWon) {
@@ -894,6 +898,8 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         setTimeout(() => {
           launchSimulationOverlayNow();
         }, 120);
+      } else if (userWon) {
+        setActiveCelebrationToast(scNotif);
       }
     }
   };
@@ -1646,6 +1652,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             notifications: currentNotifs.filter((n: any) => !(
               n.category === 'decision_day' ||
               n.category === 'league' ||
+              n.title === 'LEAGUE CHAMPIONS!' ||
               (typeof n.message === 'string' && (n.message.includes('Relegated!') || n.message.includes('You have been sacked!') || n.message.includes('Champions!') || n.message.includes('Winners! (Promoted)')))
             ))
           });
@@ -1663,14 +1670,16 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             const lastHist = history.length > 0 ? history[history.length - 1] : null;
             const fullFinalTable = lastHist?.finalTable || generateLeagueTable(useGameStore.getState(), clubsDb, tier, lastHist || undefined);
             const verifiedStandings = getDecisionDayStandingsSlice(fullFinalTable, 1, false, 'champion');
+            const tierPrizeMap: Record<number, number> = { 1: 350000, 2: 120000, 3: 45000, 4: 15000, 5: 5000 };
+            const leaguePrizeVal = getLeagueScaledVal(tier, tierPrizeMap[tier] || 5000, state.club.country || 'GER');
 
             let champToast = {
               id: Math.random().toString(),
               type: "celebration",
               category: "league",
               message: `🏆 ${leagueName} Champions!`,
-              subtitle: `Crowned Champions of ${leagueName} in Season ${simSeasonYear}!`,
-              read: false,
+              subtitle: `Crowned Champions of ${leagueName} in Season ${simSeasonYear} (+${formatMoney(leaguePrizeVal)} prize purse)!`,
+              read: true,
               standings: verifiedStandings
             };
             if (history.length > 1) {
@@ -1682,7 +1691,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                 champToast = {
                   ...champToast,
                   message: `🏆 BACK TO BACK CHAMPIONS!`,
-                  subtitle: `Back-to-back league titles! An extraordinary dynasty in the making.`,
+                  subtitle: `Back-to-back ${leagueName} titles (+${formatMoney(leaguePrizeVal)} prize purse)! An extraordinary dynasty in the making.`,
                   standings: verifiedStandings
                 };
               }
@@ -1692,7 +1701,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             useGameStore.getState().updateState({
               notifications: [
                 champToast,
-                ...(useGameStore.getState().notifications || []).filter(n => n.id !== champToast.id && n.category !== 'decision_day')
+                ...(useGameStore.getState().notifications || []).filter(n => n.id !== champToast.id && n.category !== 'decision_day' && n.title !== 'LEAGUE CHAMPIONS!')
               ]
             });
             setPendingMatches([]);
@@ -3091,14 +3100,16 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
 
               const verifiedStandings = getDecisionDayStandingsSlice(fullFinalTable, 1);
               const leagueName = getLeagueInfo(originalTier, state.club.country).name;
+              const tierPrizeMapDecider: Record<number, number> = { 1: 350000, 2: 120000, 3: 45000, 4: 15000, 5: 5000 };
+              const deciderPrizeVal = getLeagueScaledVal(originalTier, tierPrizeMapDecider[originalTier] || 5000, state.club.country || 'GER');
               let titleToast: any = { 
                   id: Math.random().toString(), 
                   type: "celebration", 
                   category: "decision_day", 
                   title: "DECISION DAY · CHAMPIONS",
                   message: `🏆 ${originalTier === 1 ? leagueName + " Champions!" : canDeciderPromote ? leagueName + " Winners! (Promoted)" : leagueName + " Winners!"}`, 
-                  subtitle: "Decision Day victory! Crowned champions in front of a capacity crowd.", 
-                  read: false,
+                  subtitle: `Decision Day victory! Crowned ${leagueName} champions in front of a capacity crowd (+${formatMoney(deciderPrizeVal)} prize purse).`, 
+                  read: true,
                   standings: verifiedStandings
               };
               if (history.length > 1) {
@@ -3107,7 +3118,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                   const prevPos = prevHistEntry.pos;
                   const prevTier = prevHistEntry.tier;
                   if (isSameClubPrev && prevPos === 1 && prevTier >= originalTier) {
-                      titleToast = { ...titleToast, message: `🏆 BACK TO BACK CHAMPIONS!`, subtitle: "Back-to-back league titles! An extraordinary dynasty in the making." };
+                      titleToast = { ...titleToast, message: `🏆 BACK TO BACK CHAMPIONS!`, subtitle: `Back-to-back ${leagueName} titles (+${formatMoney(deciderPrizeVal)} prize purse)! An extraordinary dynasty in the making.` };
                   } else if (isSameClubPrev && (prevPos === 1 || prevPos === 2) && prevTier > originalTier) {
                       titleToast = { ...titleToast, message: `🔥 BACK TO BACK PROMOTIONS!`, subtitle: "Ascending the leagues with consecutive promotions!" };
                   }
@@ -3138,7 +3149,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                   trophies: wasAlreadyPos1 ? currentTrophiesAfterSim : [...currentTrophiesAfterSim, expectedTrophyName],
                   notifications: [
                       titleToast,
-                      ...(useGameStore.getState().notifications || []).filter(n => n.id !== titleToast.id)
+                      ...(useGameStore.getState().notifications || []).filter(n => n.id !== titleToast.id && n.title !== 'LEAGUE CHAMPIONS!')
                   ]
               });
           } else if (match.type === 'playoff') {
@@ -4258,7 +4269,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                 setActiveCelebrationToast(newToastToTrigger);
                 useGameStore.getState().updateState({
                   notifications: [
-                    newToastToTrigger,
+                    { ...newToastToTrigger, read: true },
                     ...(useGameStore.getState().notifications || []).filter(n => !n.read && n.id !== newToastToTrigger.id)
                   ]
                 });
@@ -4268,7 +4279,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                 setActiveCelebrationToast(nextT);
                 useGameStore.getState().updateState({
                   notifications: [
-                    nextT,
+                    { ...nextT, read: true },
                     ...(useGameStore.getState().notifications || []).filter(n => !n.read && n.id !== nextT.id)
                   ]
                 });
@@ -4933,11 +4944,12 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
              }
           }}
           onBidReg={() => {
-            const regTransfers = state.regTransfersThisSeason || 0;
-            const winterBonusReg = state.winterTransfersOpenedYear === state.year ? 3 : 0;
-            const limitReg = ((state.managerSkills || []).includes('scouting_network') ? 5 : 3) + winterBonusReg;
+            const liveState = useGameStore.getState();
+            const regTransfers = liveState.regTransfersThisSeason || 0;
+            const winterBonusReg = liveState.winterTransfersOpenedYear === liveState.year ? 3 : 0;
+            const limitReg = ((liveState.managerSkills || []).includes('scouting_network') ? 5 : 3) + winterBonusReg;
             if (regTransfers >= limitReg) return;
-            const currentSquad = state.club.squadSize || 18;
+            const currentSquad = liveState.club.squadSize || 18;
             if (currentSquad >= 22) return;
 
             if (Math.random() < 0.25) {
@@ -4946,18 +4958,22 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                 return;
             }
             let gain = Math.random() < 0.2 ? -1 : Math.random() < 0.7 ? 1 : 2;
-            if ((state.managerSkills || []).includes('rosinenpicker')) gain += 1;
-            const cost = Math.round(getLeagueScaledVal(state.club.tier, 500000, state.club.country) * Math.max(0.5, (state.club.baseOvr || 60) / 75) * ((state.managerSkills || []).includes('rosinenpicker') ? 0.8 : 1) * (state.tactic === '7v6 Empty Net' && (state.club.tier || 1) > 1 ? 0.9 : 1));
-            stateStore.buyPlayer(cost, gain, 1, 'reg');
-            const impact = gain > 0 ? '+' + gain : gain;
-            useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: gain > 0 ? 'success' : 'error', message: `New Signing Arrives for €${(cost/1000000).toFixed(2)}M. Team OVR effect: ${impact}`, read: false }, ...(useGameStore.getState().notifications || [])] });
+            if ((liveState.managerSkills || []).includes('rosinenpicker')) gain += 1;
+            const cost = Math.round(getLeagueScaledVal(liveState.club.tier, 500000, liveState.club.country) * Math.max(0.5, (liveState.club.baseOvr || 60) / 75) * ((liveState.managerSkills || []).includes('rosinenpicker') ? 0.8 : 1) * (liveState.tactic === '7v6 Empty Net' && (liveState.club.tier || 1) > 1 ? 0.9 : 1));
+            const beforeOvr = liveState.club.baseOvr || 60;
+            useGameStore.getState().buyPlayer(cost, gain, 1, 'reg');
+            const afterOvr = useGameStore.getState().club.baseOvr || beforeOvr;
+            const actualGain = afterOvr - beforeOvr;
+            const impact = actualGain > 0 ? '+' + actualGain : actualGain;
+            useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: actualGain > 0 ? 'success' : 'error', message: `New Signing Arrives for €${(cost/1000000).toFixed(2)}M. Team OVR effect: ${impact} (Now ${afterOvr} OVR)`, read: false }, ...(useGameStore.getState().notifications || [])] });
           }}
           onBidKey={() => {
-             const keyTransfers = state.keyTransfersThisSeason || 0;
-             const winterBonusKey = state.winterTransfersOpenedYear === state.year ? 1 : 0;
-             const limitKey = ((state.managerSkills || []).includes('star_magnet') ? 3 : 2) + winterBonusKey;
+             const liveState = useGameStore.getState();
+             const keyTransfers = liveState.keyTransfersThisSeason || 0;
+             const winterBonusKey = liveState.winterTransfersOpenedYear === liveState.year ? 1 : 0;
+             const limitKey = ((liveState.managerSkills || []).includes('star_magnet') ? 3 : 2) + winterBonusKey;
              if (keyTransfers >= limitKey) return;
-             const currentSquad = state.club.squadSize || 18;
+             const currentSquad = liveState.club.squadSize || 18;
              if (currentSquad >= 22) return;
 
              if (Math.random() < 0.3) {
@@ -4965,69 +4981,86 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                  return;
              }
              let gain = Math.random() < 0.2 ? -1 : Math.random() < 0.7 ? 2 : Math.random() < 0.9 ? 3 : 4;
-             if ((state.managerSkills || []).includes('rosinenpicker')) gain += 1;
-             const cost = Math.round(getLeagueScaledVal(state.club.tier, 1500000, state.club.country) * Math.max(0.5, (state.club.baseOvr || 60) / 75) * ((state.managerSkills || []).includes('rosinenpicker') ? 0.8 : 1) * (state.tactic === '7v6 Empty Net' && (state.club.tier || 1) > 1 ? 0.9 : 1));
-             stateStore.buyPlayer(cost, gain, 1, 'key');
+             if ((liveState.managerSkills || []).includes('rosinenpicker')) gain += 1;
+             const cost = Math.round(getLeagueScaledVal(liveState.club.tier, 1500000, liveState.club.country) * Math.max(0.5, (liveState.club.baseOvr || 60) / 75) * ((liveState.managerSkills || []).includes('rosinenpicker') ? 0.8 : 1) * (liveState.tactic === '7v6 Empty Net' && (liveState.club.tier || 1) > 1 ? 0.9 : 1));
+             const beforeOvr = liveState.club.baseOvr || 60;
+             useGameStore.getState().buyPlayer(cost, gain, 1, 'key');
+             const afterOvr = useGameStore.getState().club.baseOvr || beforeOvr;
+             const actualGain = afterOvr - beforeOvr;
              if (gain >= 3) {
-                 setGachaRevealData({ type: 'key', cost, gain, ovr: useGameStore.getState().club.baseOvr || ((state.club.baseOvr || 60) + gain), name: 'KEY SIGNING' });
+                 setGachaRevealData({ type: 'key', cost, gain: actualGain, ovr: afterOvr, name: 'KEY SIGNING' });
              } else {
-                 const impact = gain > 0 ? '+' + gain : gain;
-                 useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: gain > 0 ? 'success' : 'error', message: `Key Signing Arrives for €${(cost/1000000).toFixed(2)}M. Team OVR effect: ${impact}`, read: false }, ...(useGameStore.getState().notifications || [])] });
+                 const impact = actualGain > 0 ? '+' + actualGain : actualGain;
+                 useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: actualGain > 0 ? 'success' : 'error', message: `Key Signing Arrives for €${(cost/1000000).toFixed(2)}M. Team OVR effect: ${impact} (Now ${afterOvr} OVR)`, read: false }, ...(useGameStore.getState().notifications || [])] });
              }
           }}
           onSuperstarTransfer={() => {
-             if ((state.galacticosThisSeason || 0) >= 1 || (state.club.squadSize || 18) >= 22) return;
-             const cost = Math.round(getLeagueScaledVal(state.club.tier, 3000000, state.club.country) * Math.max(0.5, (state.club.baseOvr || 60) / 75) * ((state.managerSkills || []).includes('rosinenpicker') ? 0.8 : 1));
-             if (state.budget + creditLimit < cost) return;
+             const liveState = useGameStore.getState();
+             if ((liveState.galacticosThisSeason || 0) >= 1 || (liveState.club.squadSize || 18) >= 22) return;
+             const cost = Math.round(getLeagueScaledVal(liveState.club.tier, 3000000, liveState.club.country) * Math.max(0.5, (liveState.club.baseOvr || 60) / 75) * ((liveState.managerSkills || []).includes('rosinenpicker') ? 0.8 : 1));
+             if (liveState.budget + creditLimit < cost) return;
              const gain = 3;
-             stateStore.buyPlayer(cost, gain, 1, 'superstar');
-             const finalOvr = useGameStore.getState().club.baseOvr || Math.min(100, (state.club.baseOvr || 60) + gain);
-             setGachaRevealData({ type: 'superstar', cost, gain, ovr: finalOvr, name: 'WORLD CLASS TALENT' });
+             const beforeOvr = liveState.club.baseOvr || 60;
+             useGameStore.getState().buyPlayer(cost, gain, 1, 'superstar');
+             const finalOvr = useGameStore.getState().club.baseOvr || Math.min(100, beforeOvr + gain);
+             setGachaRevealData({ type: 'superstar', cost, gain: finalOvr - beforeOvr, ovr: finalOvr, name: 'WORLD CLASS TALENT' });
           }}
           onLoanPlayer={() => {
-            if ((state.loansThisSeason || 0) >= 2 || (state.club.squadSize || 18) >= 22) return;
+            const liveState = useGameStore.getState();
+            if ((liveState.loansThisSeason || 0) >= 2 || (liveState.club.squadSize || 18) >= 22) return;
             if (Math.random() < 0.15) {
                 useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: 'info', message: 'Loan Failed. The parent club decided to keep the player.', read: false }, ...(useGameStore.getState().notifications || [])] });
                 return;
             }
             const loanCost = 0; // Free upfront loan fee (adds +2% wage contribution in calculateClubFinancials)
             const gain = Math.random() < 0.25 ? -1 : Math.random() < 0.75 ? 1 : 2;
-            stateStore.buyPlayer(loanCost, gain, 1, 'loan'); 
-            const impact = gain > 0 ? '+' + gain : gain;
-            useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: gain > 0 ? 'success' : 'error', message: `Loan Deal Secured! Team OVR effect: ${impact}`, read: false }, ...(useGameStore.getState().notifications || [])] });
+            const beforeOvr = liveState.club.baseOvr || 60;
+            useGameStore.getState().buyPlayer(loanCost, gain, 1, 'loan'); 
+            const afterOvr = useGameStore.getState().club.baseOvr || beforeOvr;
+            const actualGain = afterOvr - beforeOvr;
+            const impact = actualGain > 0 ? '+' + actualGain : actualGain;
+            useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: actualGain > 0 ? 'success' : 'error', message: `Loan Deal Secured! Team OVR effect: ${impact} (Now ${afterOvr} OVR)`, read: false }, ...(useGameStore.getState().notifications || [])] });
           }}
           onSellBench={() => {
-             if ((state.squadSalesThisSeason || 0) >= 3 || (state.club.squadSize || 18) <= 13) return;
-             const isUnderRestructuring = (state.budget || 0) < 0;
+             const liveState = useGameStore.getState();
+             if ((liveState.squadSalesThisSeason || 0) >= 3 || (liveState.club.squadSize || 18) <= 13) return;
+             const isUnderRestructuring = (liveState.budget || 0) < 0;
              if (!isUnderRestructuring && Math.random() < 0.15) {
                  useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: 'info', message: 'Sale Collapsed. No club matched our valuation.', read: false }, ...(useGameStore.getState().notifications || [])] });
                  return;
              }
-             const ovrRatio = (state.club.baseOvr || 60) / 75;
+             const ovrRatio = (liveState.club.baseOvr || 60) / 75;
              const exponentialValue = Math.pow(ovrRatio, 2);
-             const sellValue = Math.round(getLeagueScaledVal(state.club.tier, 125000, state.club.country) * Math.max(0.5, exponentialValue));
+             const sellValue = Math.round(getLeagueScaledVal(liveState.club.tier, 125000, liveState.club.country) * Math.max(0.5, exponentialValue));
              const loss = Math.random() < 0.5 ? 0 : -1;
-             stateStore.buyPlayer(-sellValue, loss, -1, 'sell');
+             const beforeOvr = liveState.club.baseOvr || 60;
+             useGameStore.getState().buyPlayer(-sellValue, loss, -1, 'sell');
+             const afterOvr = useGameStore.getState().club.baseOvr || beforeOvr;
+             const actualLoss = afterOvr - beforeOvr;
              const message = isUnderRestructuring
-               ? `Liquid Buyer Activated: 1. HBL/Top-tier club stepped in to purchase bench player for €${(sellValue/1000000).toFixed(2)}M and absorb wages! Team OVR effect: ${loss}`
-               : `Bench Player Sold for €${(sellValue/1000000).toFixed(2)}M. Team OVR effect: ${loss}`;
+               ? `Liquid Buyer Activated: 1. HBL/Top-tier club stepped in to purchase bench player for €${(sellValue/1000000).toFixed(2)}M and absorb wages! Team OVR effect: ${actualLoss} (Now ${afterOvr} OVR)`
+               : `Bench Player Sold for €${(sellValue/1000000).toFixed(2)}M. Team OVR effect: ${actualLoss} (Now ${afterOvr} OVR)`;
              useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: 'info', message, read: false }, ...(useGameStore.getState().notifications || [])] });
           }}
           onSellStarter={() => {
-             if ((state.squadSalesThisSeason || 0) >= 3 || (state.club.squadSize || 18) <= 13) return;
-             const isUnderRestructuring = (state.budget || 0) < 0;
+             const liveState = useGameStore.getState();
+             if ((liveState.squadSalesThisSeason || 0) >= 3 || (liveState.club.squadSize || 18) <= 13) return;
+             const isUnderRestructuring = (liveState.budget || 0) < 0;
              if (!isUnderRestructuring && Math.random() < 0.2) {
                  useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: 'info', message: 'Sale Collapsed. The player refused the contract from the buying club.', read: false }, ...(useGameStore.getState().notifications || [])] });
                  return;
              }
-             const ovrRatio = (state.club.baseOvr || 60) / 75;
+             const ovrRatio = (liveState.club.baseOvr || 60) / 75;
              const exponentialValue = Math.pow(ovrRatio, 2.5); // Starters scale massively at high OVR
-             const sellValue = Math.round(getLeagueScaledVal(state.club.tier, 350000, state.club.country) * Math.max(0.5, exponentialValue));
+             const sellValue = Math.round(getLeagueScaledVal(liveState.club.tier, 350000, liveState.club.country) * Math.max(0.5, exponentialValue));
              const loss = Math.random() < 0.5 ? -2 : -3;
-             stateStore.buyPlayer(-sellValue, loss, -1, 'sell');
+             const beforeOvr = liveState.club.baseOvr || 60;
+             useGameStore.getState().buyPlayer(-sellValue, loss, -1, 'sell');
+             const afterOvr = useGameStore.getState().club.baseOvr || beforeOvr;
+             const actualLoss = afterOvr - beforeOvr;
              const message = isUnderRestructuring
-               ? `Liquid Buyer Activated: Top-tier club stepped in to purchase starter for €${(sellValue/1000000).toFixed(2)}M and absorb wages! Team OVR effect: ${loss}`
-               : `Starter Sold for €${(sellValue/1000000).toFixed(2)}M. Team OVR effect: ${loss}`;
+               ? `Liquid Buyer Activated: Top-tier club stepped in to purchase starter for €${(sellValue/1000000).toFixed(2)}M and absorb wages! Team OVR effect: ${actualLoss} (Now ${afterOvr} OVR)`
+               : `Starter Sold for €${(sellValue/1000000).toFixed(2)}M. Team OVR effect: ${actualLoss} (Now ${afterOvr} OVR)`;
              useGameStore.getState().updateState({ notifications: [{ id: Math.random().toString(), type: 'info', message, read: false }, ...(useGameStore.getState().notifications || [])] });
           }}
           onTerminateContractMutual={() => {

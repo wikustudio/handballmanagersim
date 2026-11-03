@@ -1,362 +1,378 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Language, ViewMode } from '../types';
 import { t } from '../data/translations';
+import { ConfirmResetModal } from './ConfirmResetModal';
+import { HandballSimLogo } from './HandballSimLogo';
+import { isRealDataModActive, getCustomDb } from '../utils/modManager';
+import { openConsentBanner } from '../utils/consentManager';
+import { SaveBackupModal } from './SaveBackupModal';
+import { FeedbackModal } from './FeedbackModal';
+import { FeedbackType } from '../utils/crashReporter';
+import { useGameStore } from '../store/useGameStore';
 
 interface HeaderProps {
-  lang: Language;
+  onShowLeaderboard?: () => void;
+  onOpenMods?: () => void;
+  lang?: Language;
   viewMode: ViewMode;
-  onToggleLang?: (l: Language) => void;
   onToggleViewMode: (v: ViewMode) => void;
   onResetGame: () => void;
   hasActiveGame: boolean;
-  onOpenModModal?: () => void;
-  isModActive?: boolean;
-  onOpenFeedbackModal?: () => void;
-  unreadCrashCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  lang,
+  lang = 'en',
   viewMode,
-  onToggleLang,
   onToggleViewMode,
   onResetGame,
   hasActiveGame,
-  onOpenModModal,
-  isModActive,
-  onOpenFeedbackModal,
-  unreadCrashCount = 0,
+  onShowLeaderboard,
+  onOpenMods,
 }) => {
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const state = useGameStore();
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showSaveBackup, setShowSaveBackup] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackInitialType, setFeedbackInitialType] = useState<FeedbackType | undefined>(undefined);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const [isModActive, setIsModActive] = useState<boolean>(() => {
+    return isRealDataModActive() || Boolean(getCustomDb());
+  });
 
   useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setMoreMenuOpen(false);
-      }
+    const handleModChange = () => {
+      setIsModActive(isRealDataModActive() || Boolean(getCustomDb()));
     };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreMenuOpen(false);
+    const handleOpenFeedback = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      setFeedbackInitialType(detail?.type);
+      setShowFeedback(true);
     };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Idle prefetch Leaderboard chunk in background so opening it is instantaneous (0ms)
-    const prefetchTimer = setTimeout(() => {
-      import('./LeaderboardPage').catch(() => {});
-    }, 1200);
-
+    window.addEventListener('mod-state-change', handleModChange);
+    window.addEventListener('storage', handleModChange);
+    window.addEventListener('open-feedback-modal', handleOpenFeedback);
     return () => {
-      clearTimeout(prefetchTimer);
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('mod-state-change', handleModChange);
+      window.removeEventListener('storage', handleModChange);
+      window.removeEventListener('open-feedback-modal', handleOpenFeedback);
     };
   }, []);
 
-  const tr = (en: string, de: string) => t(lang, en, de);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const tr = (en: string, _de?: string) => en;
+
+  const activeModName = (() => {
+    if (getCustomDb()) return 'Custom Community Mod';
+    return isRealDataModActive() ? 'Handball Manager Database' : null;
+  })();
 
   return (
-    <header className="fixed top-0 inset-x-0 z-40 bg-[#0c0e15]/90 backdrop-blur-2xl border-b border-white/[0.08] transition-colors">
-      <div className="max-w-6xl mx-auto w-full flex items-center justify-between px-3 sm:px-6 py-2.5">
-        {/* Brand / Logo */}
+    <>
+    <header className="fixed top-0 inset-x-0 z-40 border-b border-white/[0.08] bg-[#090a0f]/90 backdrop-blur-xl">
+      <div className="max-w-5xl mx-auto w-full flex items-center justify-between gap-2 px-3 sm:px-4 py-2 sm:py-2.5">
+        {/* Left: Brand Logo & Title */}
         <button
           onClick={() => {
-            if (viewMode === 'about' || viewMode === 'leaderboard') {
+            if (viewMode === 'about') {
               onToggleViewMode('game');
-            } else {
-              onResetGame();
+            } else if (hasActiveGame) {
+              setShowConfirm(true);
             }
           }}
-          className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-90 transition text-left group shrink-0"
+          className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-85 transition text-left select-none min-w-0"
+          title="Handball Manager Sim"
         >
-          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-sm shrink-0 border border-white/[0.15] bg-white/[0.05]">
-            <img src="/assets/a_footballsim_logo.jpg" alt="Logo" className="w-full h-full object-cover" />
-          </div>
-          <span className="text-sm sm:text-base font-extrabold tracking-tight text-white group-hover:text-amber-300 transition-colors">
-            <span className="sm:hidden">FM Sim</span>
-            <span className="hidden sm:inline">Football Manager Sim</span>
+          <HandballSimLogo className="w-8 h-8 rounded-xl shrink-0 border border-white/20 p-0.5 bg-zinc-900" />
+          <span className="font-bold tracking-tight text-white font-sans text-xs xs:text-sm sm:text-base truncate">
+            {tr('Handball Manager Sim', 'Handball Manager Sim')}
           </span>
         </button>
 
-        {/* Clean, Streamlined Navigation */}
-        <nav className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {/* Dugout / Career Button */}
-          {hasActiveGame ? (
+        {/* Right side navigation matching clean design */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* Start Over button (visible when game is active on desktop) */}
+          {hasActiveGame && (
             <button
-              onClick={() => {
-                if (viewMode !== 'game') {
-                  onToggleViewMode('game');
-                } else {
-                  onResetGame();
-                }
-              }}
-              className={`transition px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                viewMode === 'game'
-                  ? 'text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent'
-                  : 'text-sky-300 bg-sky-500/15 border border-sky-400/30'
-              }`}
-              title={viewMode !== 'game' ? 'Return to Career Dugout' : tr('Start Over', 'Neustart')}
+              onClick={() => setShowConfirm(true)}
+              className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition cursor-pointer py-1.5 px-2 rounded-lg hover:bg-white/[0.05]"
+              title={tr('Start Over', 'Neustart')}
             >
-              <i className={`fa-solid ${viewMode !== 'game' ? 'fa-arrow-left text-sky-400' : 'fa-rotate-right text-zinc-400'} text-xs`}></i>
-              <span className="hidden sm:inline">{viewMode !== 'game' ? 'Dugout' : tr('Start Over', 'Neustart')}</span>
-            </button>
-          ) : viewMode !== 'game' && (
-            <button
-              onClick={() => onToggleViewMode('game')}
-              className="text-zinc-300 hover:text-white hover:bg-white/[0.06] transition px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0"
-            >
-              <i className="fa-solid fa-play text-xs text-sky-400"></i>
-              <span>Play</span>
+              <i className="fas fa-rotate-right text-[11px]" />
+              <span className="font-medium">{tr('Start Over', 'Neustart')}</span>
             </button>
           )}
 
-          {/* Leaderboard Button */}
+          {/* Feedback / Crash Report button */}
           <button
-            onClick={() => onToggleViewMode(viewMode === 'leaderboard' ? 'game' : 'leaderboard')}
-            onMouseEnter={() => import('./LeaderboardPage').catch(() => {})}
-            onTouchStart={() => import('./LeaderboardPage').catch(() => {})}
-            className={`transition px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0 ${
-              viewMode === 'leaderboard'
-                ? 'text-amber-300 bg-amber-500/20 border border-amber-400/40 shadow-[0_0_16px_rgba(245,158,11,0.2)]'
-                : 'text-zinc-300 hover:text-white hover:bg-white/[0.06] border border-white/[0.06]'
-            }`}
-            title="Leaderboard & Press Conference Wall"
+            onClick={() => {
+              setFeedbackInitialType(undefined);
+              setShowFeedback(true);
+            }}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 hover:border-sky-400/30 text-zinc-200 hover:text-white text-xs font-semibold transition cursor-pointer active:scale-95 shadow-sm"
+            title={tr('Submit Feedback, Bug Fix, or Crash Report', 'Feedback, Bug oder Absturz melden')}
           >
-            <i className="fa-solid fa-trophy text-xs text-amber-400"></i>
-            <span>Leaderboard</span>
+            <i className="fas fa-comment-dots text-sky-400 text-xs" />
+            <span className="hidden xs:inline">{tr('Feedback', 'Feedback')}</span>
           </button>
 
-          {/* Feedback & Crash Report Button */}
-          {onOpenFeedbackModal && (
+          {/* Leaderboard button */}
+          {onShowLeaderboard && (
             <button
-              onClick={onOpenFeedbackModal}
-              className={`relative transition px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                unreadCrashCount > 0
-                  ? 'text-rose-200 bg-rose-500/20 border border-rose-400/40 shadow-[0_0_14px_rgba(244,63,94,0.25)]'
-                  : 'text-zinc-300 hover:text-white hover:bg-white/[0.06] border border-white/[0.06]'
-              }`}
-              title="Submit Crash Report, Bug Fix, or Feature Request"
+              onClick={onShowLeaderboard}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 hover:border-white/20 text-zinc-200 hover:text-white text-xs font-semibold transition cursor-pointer active:scale-95 shadow-sm"
+              title={tr('Global Leaderboard', 'Globale Bestenliste')}
             >
-              <i className={`fa-solid ${unreadCrashCount > 0 ? 'fa-bug text-rose-400 animate-pulse' : 'fa-comment-dots text-emerald-400'} text-xs`}></i>
-              <span className="hidden md:inline">Feedback</span>
-              {unreadCrashCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-black leading-tight">
-                  {unreadCrashCount}
-                </span>
-              )}
+              <i className="fas fa-trophy text-amber-400 text-xs" />
+              <span>{tr('Leaderboard', 'Bestenliste')}</span>
             </button>
           )}
 
-          {/* Consolidated "More" Dropdown Menu */}
-          <div ref={moreMenuRef} className="relative shrink-0">
+          {/* More Menu Dropdown Trigger */}
+          <div className="relative" ref={menuRef}>
             <button
-              onClick={() => setMoreMenuOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition text-xs font-bold cursor-pointer active:scale-95 ${
-                moreMenuOpen
-                  ? 'border-white/30 bg-white/[0.12] text-white shadow-md'
-                  : 'border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:text-white hover:bg-white/[0.06]'
+              onClick={() => setShowMenu((prev) => !prev)}
+              aria-expanded={showMenu}
+              aria-label="More Menu"
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition cursor-pointer active:scale-95 shadow-sm ${
+                showMenu
+                  ? 'bg-zinc-800 text-white border-sky-400 ring-2 ring-sky-400/30'
+                  : 'bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/15 hover:border-white/25 text-zinc-200 hover:text-white'
               }`}
-              title="More options & community"
             >
-              <i className="fa-solid fa-bars text-xs"></i>
-              <span>More</span>
+              <i className="fas fa-bars text-xs text-zinc-300" />
+              <span>{tr('More', 'Mehr')}</span>
               {isModActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)] animate-pulse" />
               )}
-              <i className={`fa-solid fa-chevron-down text-[9px] opacity-60 transition-transform ${moreMenuOpen ? 'rotate-180' : ''}`}></i>
+              <i
+                className={`fas ${showMenu ? 'fa-chevron-up' : 'fa-chevron-down'} text-[9px] text-zinc-400 transition-transform duration-200`}
+              />
             </button>
 
-            {/* Dropdown Drawer */}
+            {/* Dropdown Menu Popup */}
             <AnimatePresence>
-              {moreMenuOpen && (
+              {showMenu && (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                  initial={{ opacity: 0, scale: 0.96, y: 6 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                  transition={{ duration: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute right-0 top-full mt-2 w-72 sm:w-64 max-w-[calc(100vw-1.5rem)] max-h-[calc(100svh-4.5rem)] overflow-y-auto custom-scrollbar overscroll-contain bg-[#10121a]/98 border border-white/[0.12] rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.85)] backdrop-blur-xl transform origin-top-right p-2 z-50 text-left"
+                  exit={{ opacity: 0, scale: 0.96, y: 6 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="absolute top-full right-0 mt-2 w-[calc(100vw-24px)] max-w-xs sm:w-80 rounded-2xl bg-[#0f111a] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-2.5 sm:p-3 flex flex-col gap-1 z-50 overflow-hidden"
                 >
-                {/* Section 1: Game Features */}
-                <div className="p-1 space-y-1">
+                  {/* Item 1: About & Rules */}
                   <button
                     onClick={() => {
+                      setShowMenu(false);
                       onToggleViewMode(viewMode === 'about' ? 'game' : 'about');
-                      setMoreMenuOpen(false);
                     }}
-                    className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.06] text-zinc-300 hover:text-white text-xs font-semibold transition cursor-pointer text-left"
+                    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
                   >
-                    <div className="w-6 h-6 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center shrink-0">
-                      <i className="fa-solid fa-circle-info text-xs"></i>
+                    <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/20 text-sky-400 flex items-center justify-center shrink-0">
+                      <i className="fas fa-circle-info text-sm" />
                     </div>
-                    <span className="truncate">{tr('About & Rules', 'Über & Regeln')}</span>
+                    <div className="flex flex-col">
+                      <span className="text-zinc-200 group-hover:text-white font-medium text-sm">
+                        {tr('About & Rules', 'Über das Spiel & Regeln')}
+                      </span>
+                    </div>
                   </button>
 
-                  {onOpenFeedbackModal && (
+                  {/* Item 2: Report Bug / Crash / Feature Request */}
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setFeedbackInitialType(undefined);
+                      setShowFeedback(true);
+                    }}
+                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/20 text-sky-400 flex items-center justify-center shrink-0">
+                        <i className="fas fa-bug text-sm" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-zinc-200 group-hover:text-white font-medium text-sm">
+                          {tr('Report Crash / Feature Request', 'Absturz melden / Vorschlag')}
+                        </span>
+                      </div>
+                    </div>
+                    <i className="fas fa-chevron-right text-zinc-500 text-xs group-hover:text-zinc-300" />
+                  </button>
+
+                  {/* Item 3: Database Mod with Active Badge */}
+                  {onOpenMods && (
                     <button
                       onClick={() => {
-                        onOpenFeedbackModal();
-                        setMoreMenuOpen(false);
+                        setShowMenu(false);
+                        onOpenMods();
                       }}
-                      className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] text-zinc-300 hover:text-white text-xs font-semibold transition cursor-pointer text-left gap-2"
+                      className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-6 h-6 rounded-lg bg-rose-500/15 text-rose-400 flex items-center justify-center shrink-0">
-                          <i className="fa-solid fa-bug text-xs"></i>
+                      <div className="flex items-center gap-3 min-w-0 pr-2">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-400/20 text-emerald-400 flex items-center justify-center shrink-0">
+                          <i className="fas fa-layer-group text-sm" />
                         </div>
-                        <span className="truncate">Report Bug / Feedback</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-zinc-200 group-hover:text-white font-medium text-sm truncate">
+                            {isModActive
+                              ? (activeModName || tr('Handball Manager Database', 'Handball Manager Datenbank'))
+                              : tr('User Databases', 'Benutzer-Datenbanken')}
+                          </span>
+                        </div>
                       </div>
-                      {unreadCrashCount > 0 ? (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
-                          {unreadCrashCount} Log{unreadCrashCount > 1 ? 's' : ''}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-zinc-500 font-normal shrink-0">Email</span>
-                      )}
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border shrink-0 ${
+                          isModActive
+                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                            : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                        }`}
+                      >
+                        {isModActive ? 'Active' : 'Off'}
+                      </span>
                     </button>
                   )}
 
-                  {onOpenModModal && (
-                    <button
-                      onClick={() => {
-                        onOpenModModal();
-                        setMoreMenuOpen(false);
-                      }}
-                      className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] text-zinc-300 hover:text-white text-xs font-semibold transition cursor-pointer text-left gap-2"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
-                          <i className="fa-solid fa-layer-group text-xs"></i>
-                        </div>
-                        <span className="truncate">CR27 Database Mod</span>
-                      </div>
-                      {isModActive ? (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-zinc-500 font-normal shrink-0">Off</span>
-                      )}
-                    </button>
-                  )}
-                </div>
-
-                <div className="h-[1px] bg-white/[0.08] my-1"></div>
-
-                {/* Section 2: Creator Support */}
-                <div className="p-1">
+                  {/* Item 4: Buy Me a Coffee */}
                   <a
                     href="https://buymeacoffee.com/willykuhne"
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => setMoreMenuOpen(false)}
-                    className="flex items-center justify-between p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/20 text-amber-300 hover:text-amber-200 text-xs font-bold transition cursor-pointer gap-2"
+                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                        <i className="fa-solid fa-mug-hot text-xs"></i>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-400/20 text-amber-400 flex items-center justify-center shrink-0">
+                        <i className="fas fa-mug-hot text-sm" />
                       </div>
-                      <span className="truncate">Buy Me a Coffee</span>
-                    </div>
-                    <i className="fa-solid fa-arrow-up-right-from-square text-[10px] opacity-70 shrink-0"></i>
-                  </a>
-                </div>
-
-                <div className="h-[1px] bg-white/[0.08] my-1"></div>
-
-                {/* Section 3: Community */}
-                <div className="p-1 space-y-1">
-                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider px-2 py-0.5">
-                    Community
-                  </div>
-                  <a
-                    href="https://www.reddit.com/r/FootballManagerSim/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setMoreMenuOpen(false)}
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] text-zinc-300 hover:text-white text-xs font-medium transition cursor-pointer gap-2"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-6 h-6 rounded-lg bg-[#ff4500]/15 text-[#ff4500] flex items-center justify-center shrink-0">
-                        <i className="fa-brands fa-reddit text-xs"></i>
-                      </div>
-                      <span className="truncate">Reddit</span>
-                    </div>
-                    <span className="text-[10px] text-zinc-500 font-mono shrink-0">r/FootballManagerSim</span>
-                  </a>
-                </div>
-
-                <div className="h-[1px] bg-white/[0.08] my-1"></div>
-
-                {/* Section 4: Other Sim Games */}
-                <div className="p-1 space-y-1">
-                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider px-2 py-0.5">
-                    Other Games
-                  </div>
-                  <a
-                    href="https://handballmanagersim.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setMoreMenuOpen(false)}
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] text-zinc-300 hover:text-white text-xs font-medium transition cursor-pointer gap-2"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-6 h-6 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center shrink-0">
-                        <i className="fa-solid fa-volleyball text-xs"></i>
-                      </div>
-                      <span className="truncate">Handball Manager Sim</span>
-                    </div>
-                    <i className="fa-solid fa-arrow-up-right-from-square text-[10px] opacity-50 shrink-0"></i>
-                  </a>
-                </div>
-
-                {/* Section 5: Language Switcher */}
-                {onToggleLang && (
-                  <>
-                    <div className="h-[1px] bg-white/[0.08] my-1"></div>
-                    <div className="p-1.5 flex items-center justify-between bg-black/30 rounded-xl">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-1">
-                        Language
+                      <span className="text-zinc-200 group-hover:text-white font-medium text-sm">
+                        {tr('Buy Me a Coffee', 'Kaffee spendieren')}
                       </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => {
-                            onToggleLang('en');
-                            setMoreMenuOpen(false);
-                          }}
-                          className={`px-2 py-0.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            lang === 'en'
-                              ? 'bg-white/20 text-white shadow-sm'
-                              : 'text-zinc-500 hover:text-zinc-300'
-                          }`}
-                        >
-                          English
-                        </button>
-                        <button
-                          onClick={() => {
-                            onToggleLang('de');
-                            setMoreMenuOpen(false);
-                          }}
-                          className={`px-2 py-0.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            lang === 'de'
-                              ? 'bg-white/20 text-white shadow-sm'
-                              : 'text-zinc-500 hover:text-zinc-300'
-                          }`}
-                        >
-                          Deutsch
-                        </button>
-                      </div>
                     </div>
-                  </>
-                )}
+                    <i className="fas fa-arrow-up-right-from-square text-zinc-500 text-xs group-hover:text-zinc-300 transition-transform" />
+                  </a>
+
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowSaveBackup(true);
+                    }}
+                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/20 text-sky-400 flex items-center justify-center shrink-0">
+                        <i className="fas fa-cloud-arrow-down text-sm" />
+                      </div>
+                      <span className="text-zinc-200 group-hover:text-white font-medium text-sm">
+                        {tr('Save Backup & Transfer', 'Spielstand-Sicherung & Transfer')}
+                      </span>
+                    </div>
+                    <i className="fas fa-arrow-right-arrow-left text-zinc-500 text-xs group-hover:text-zinc-300" />
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      openConsentBanner();
+                    }}
+                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/20 text-sky-400 flex items-center justify-center shrink-0">
+                        <i className="fas fa-shield-halved text-sm" />
+                      </div>
+                      <span className="text-zinc-200 group-hover:text-white font-medium text-sm">
+                        {tr('Privacy & Cookies', 'Datenschutz & Cookies')}
+                      </span>
+                    </div>
+                    <i className="fas fa-sliders text-zinc-500 text-xs group-hover:text-zinc-300" />
+                  </button>
+
+                  {/* Other Games */}
+                  <div className="px-2.5 pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-widest text-zinc-500">
+                    {tr('OTHER GAMES', 'WEITERE SPIELE')}
+                  </div>
+                  <a
+                    href="https://footballmanagersim.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-950/70 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                        <i className="fas fa-futbol text-sm" />
+                      </div>
+                      <span className="text-zinc-200 group-hover:text-white font-medium text-sm">
+                        Football Manager Sim
+                      </span>
+                    </div>
+                    <i className="fas fa-arrow-up-right-from-square text-zinc-500 text-xs group-hover:text-zinc-300 transition-transform" />
+                  </a>
+
+                  {/* Start Over Button when career active (mobile fallback in menu) */}
+                  {hasActiveGame && (
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowConfirm(true);
+                      }}
+                      className="flex sm:hidden items-center gap-3 p-2.5 rounded-xl hover:bg-rose-500/10 transition text-left cursor-pointer w-full group text-rose-400 mt-1 border-t border-white/[0.08]"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-rose-500/15 border border-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+                        <i className="fas fa-rotate-right text-xs" />
+                      </div>
+                      <span className="font-medium text-sm text-rose-300 group-hover:text-rose-200">
+                        {tr('Start Over', 'Neustart')}
+                      </span>
+                    </button>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        </nav>
+        </div>
       </div>
     </header>
+
+      {/* Save Backup & Transfer Modal */}
+      <SaveBackupModal
+        isOpen={showSaveBackup}
+        onClose={() => setShowSaveBackup(false)}
+        state={state}
+        lang={lang}
+      />
+
+      {/* Feedback & Crash Report Modal */}
+      <FeedbackModal
+        isOpen={showFeedback}
+        onClose={() => setShowFeedback(false)}
+        lang={lang}
+        initialType={feedbackInitialType}
+      />
+
+      {/* Confirmation Modal for Reset */}
+      <AnimatePresence>
+        {showConfirm && (
+          <ConfirmResetModal
+            lang={lang}
+            onClose={() => setShowConfirm(false)}
+            onConfirm={() => {
+              setShowConfirm(false);
+              onResetGame();
+            }}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 };

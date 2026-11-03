@@ -366,7 +366,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
     if (isPromotion && !isWinner) return 'PROMOTION TRIUMPH!';
     if (rawMsg.includes('BACK TO BACK CHAMPIONS')) return 'DYNASTY SECURED!';
     if (rawMsg.includes('BACK TO BACK PROMOTIONS')) return 'BACK-TO-BACK PROMOTIONS!';
-    if (isWinner) return 'TITLE GLORY!';
+    if (isWinner) return 'LEAGUE GLORY!';
     return 'SEASON CONCLUSION';
   })();
 
@@ -399,6 +399,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
     if (isEuroLeague || isEuropeanCup) return 'EUROPEAN SHOWPIECE · FINAL';
     if (isCup) return 'NATIONAL CUP · FINAL FOUR';
     if (isRunnerUp) return isPromotion ? 'PROMOTION CONFIRMED · RUNNER-UP' : 'OFFICIAL RUNNER-UP';
+    if (isWinner) return toast.category === 'decision_day' ? 'DECISION DAY · LEAGUE CHAMPIONS' : 'LEAGUE CHAMPIONSHIP · TROPHY PRESENTATION';
     return 'LIVE TROPHY PRESENTATION';
   })();
 
@@ -543,6 +544,18 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
               <>
                 An unforgettable giant-killing campaign etched into history! <strong className="text-white font-semibold">{state?.club?.name}</strong> completes a breathtaking Magic Cup Run to hoist the prestigious <strong className="text-amber-300 font-semibold">{displayTrophyTitle.replace(/!+$/, '')}</strong> trophy into the arena rafters!
               </>
+            ) : isWinner ? (
+              <>
+                {playedTier === 1 ? (
+                  <>
+                    League championship glory! <strong className="text-white font-semibold">{state?.club?.name}</strong> conquers <strong className="text-amber-300 font-semibold">{currentLeague.name}</strong> to hoist the championship trophy in front of a roaring capacity crowd and secure automatic qualification for the <strong className="text-sky-300 font-semibold">EHF Champions League</strong>!
+                  </>
+                ) : (
+                  <>
+                    Division championship triumph! <strong className="text-white font-semibold">{state?.club?.name}</strong> dominates <strong className="text-amber-300 font-semibold">{currentLeague.name}</strong> to lift the league trophy{isPromotion ? <> and secure promotion to <strong className="text-emerald-400 font-semibold">{getLeagueInfo(Math.max(1, playedTier - 1), state?.club?.country || 'GER').name}</strong></> : null} in front of ecstatic supporters!
+                  </>
+                )}
+              </>
             ) : (
               <>
                 A commendable season! <strong className="text-white font-semibold">{state?.club?.name}</strong> completes the campaign in <strong className="text-slate-200 font-semibold">{currentLeague.name}</strong> with pride and determination in front of roaring supporters!
@@ -580,6 +593,23 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
               </div>
               <div className="text-xs text-amber-200/90 font-normal">
                 {toast.subtitle || 'Silverware secured in the national cup final'}
+              </div>
+            </div>
+          )}
+
+          {/* Domestic League Championship Glory Showcase Card */}
+          {isWinner && !isCup && !isPlatinum && !isMagicCup && !isSurvived && (
+            <div className="w-full mt-2 mb-2 bg-amber-500/[0.06] rounded-2xl p-3 sm:p-3.5 border border-amber-500/25 text-center shadow-sm">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-amber-300 font-semibold flex items-center justify-center gap-1.5 pb-1 mb-1 border-b border-white/[0.06]">
+                <i className="fas fa-crown text-amber-400" />
+                <span>{playedTier === 1 ? `${currentLeague.name.toUpperCase()} · LEAGUE GLORY` : `${currentLeague.name.toUpperCase()} · DIVISION CHAMPIONS`}</span>
+                <i className="fas fa-crown text-amber-400" />
+              </div>
+              <div className="text-base sm:text-lg font-semibold text-white tracking-tight py-1">
+                {state?.club?.name} — {currentLeague.name} Champions!
+              </div>
+              <div className="text-xs text-amber-200/90 font-normal">
+                {toast.subtitle || `Crowned official champions of ${currentLeague.name}`}
               </div>
             </div>
           )}

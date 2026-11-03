@@ -119,6 +119,15 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
     }
     initializedYearRef.current = state.year;
 
+    const latestStore = useGameStore.getState() as any;
+    if (latestStore.winterBreakTournamentYear === state.year) {
+      setTournamentName(latestStore.winterBreakTournamentName || '');
+      setPlayersInvolved(latestStore.winterBreakPlayersInvolved || 0);
+      setOvrChange(latestStore.winterBreakOvrChange || 0);
+      setTournamentStory(latestStore.winterBreakTournamentStory || '');
+      return;
+    }
+
     // 2. International Tournament Logic
     const isWorldCupYear = state.year % 4 === 2;
     const isEuroYear = state.year % 4 === 0;
@@ -129,15 +138,17 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
     
     setTournamentName(tName);
     
+    const currentBaseOvr = latestStore.club?.baseOvr ?? state.club.baseOvr;
+    let numPlayers = 0;
+    let change = 0;
+    let story = '';
+
     // Determine impact based on OVR
-    if (state.club.baseOvr >= 80) {
-        const numPlayers = Math.max(1, Math.floor((state.club.baseOvr - 65) / 5) + Math.floor(Math.random() * 3));
+    if (currentBaseOvr >= 80) {
+        numPlayers = Math.max(1, Math.floor((currentBaseOvr - 65) / 5) + Math.floor(Math.random() * 3));
         setPlayersInvolved(numPlayers);
         
         const performance = Math.random();
-        let change = 0;
-        let story = '';
-        
         if (performance < 0.2) {
             change = -1;
             story = t(lang, `Disaster! Your players returned exhausted and injured from the ${tName}.`, `Katastrophe! Deine Spieler kehrten erschöpft und verletzt von der ${tName} zurück.`);
@@ -159,13 +170,50 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
         
         const rnd = Math.random();
         if (rnd < 0.3) {
-           setTournamentStory(t(lang, 'Your squad completed a focused recovery program during the winter break.', 'Deine Mannschaft hat sich in der Winterpause optimal erholt und regeneriert.'));
+           story = t(lang, 'Your squad completed a focused recovery program during the winter break.', 'Deine Mannschaft hat sich in der Winterpause optimal erholt und regeneriert.');
         } else if (rnd < 0.7) {
-           setTournamentStory(t(lang, 'The squad played several competitive club friendlies to maintain match fitness.', 'Das Team absolvierte einige Testspiele, um optimal im Rhythmus zu bleiben.'));
+           story = t(lang, 'The squad played several competitive club friendlies to maintain match fitness.', 'Das Team absolvierte einige Testspiele, um optimal im Rhythmus zu bleiben.');
         } else {
-           setTournamentStory(t(lang, 'The winter break provided valuable training time to refine tactical nuances and recover.', 'Die Winterpause bot wertvolle Zeit, um taktische Feinheiten einzustudieren und Kräfte zu sammeln.'));
+           story = t(lang, 'The winter break provided valuable training time to refine tactical nuances and recover.', 'Die Winterpause bot wertvolle Zeit, um taktische Feinheiten einzustudieren und Kräfte zu sammeln.');
         }
+        setTournamentStory(story);
     }
+
+    const freshStore = useGameStore.getState() as any;
+    const oldOvr = freshStore.club?.baseOvr ?? currentBaseOvr;
+    const newOvr = Math.min(100, Math.max(30, oldOvr + change));
+    const actualDelta = newOvr - oldOvr;
+    const updatedWorldClubs = { ...(freshStore.worldClubs || {}) };
+    if (freshStore.club?.id && updatedWorldClubs[freshStore.club.id]) {
+      updatedWorldClubs[freshStore.club.id] = { ...updatedWorldClubs[freshStore.club.id], baseOvr: newOvr };
+    }
+
+    freshStore.updateState({
+      winterBreakTournamentYear: state.year,
+      winterBreakTournamentName: tName,
+      winterBreakPlayersInvolved: numPlayers,
+      winterBreakOvrChange: actualDelta,
+      winterBreakTournamentStory: story,
+      ...(actualDelta !== 0 ? {
+        club: { ...freshStore.club, baseOvr: newOvr },
+        worldClubs: updatedWorldClubs,
+        startOfSeasonOvr: typeof freshStore.startOfSeasonOvr === 'number' ? freshStore.startOfSeasonOvr : oldOvr,
+        lastOvr: typeof freshStore.lastOvr === 'number' ? freshStore.lastOvr : oldOvr,
+        ...(actualDelta > 0
+          ? { eventOvrGainThisSeason: (freshStore.eventOvrGainThisSeason || 0) + actualDelta }
+          : { signingFlopLossThisSeason: (freshStore.signingFlopLossThisSeason || 0) + Math.abs(actualDelta) }),
+        ovrHistory: [
+          {
+            id: Math.random().toString(36).substring(7),
+            season: state.year,
+            change: actualDelta,
+            reason: `Winter Break: ${tName}`,
+            reasonDe: `Winterpause: ${tName}`
+          },
+          ...(freshStore.ovrHistory || [])
+        ].slice(0, 30)
+      } : {})
+    });
   }, [state.year, tier, country, state.club.id, state.boardTargetPos, lang]);
 
   // Build active competitions dynamically
@@ -370,40 +418,12 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
   const skillPoints = state.skillPoints || 0;
   const currentTactic = state.tactic || 'Balanced 6-0';
 
-  const [hasAppliedOvr, setHasAppliedOvr] = useState(false);
+  const seasonOvrLogs = (state.ovrHistory || []).filter(h => h.season === state.year);
+  const seasonOvrDelta = seasonOvrLogs.length > 0
+    ? seasonOvrLogs.reduce((sum, h) => sum + h.change, 0)
+    : (typeof state.startOfSeasonOvr === 'number' ? state.club.baseOvr - state.startOfSeasonOvr : 0);
 
   const applyOvrAndProceed = (action: () => void) => {
-    if (!hasAppliedOvr) {
-      setHasAppliedOvr(true);
-      if (ovrChange !== 0) {
-        const oldOvr = state.club.baseOvr;
-        const newOvr = Math.min(100, Math.max(30, oldOvr + ovrChange));
-        const actualDelta = newOvr - oldOvr;
-        const updatedWorldClubs = { ...state.worldClubs };
-        if (updatedWorldClubs[state.club.id]) {
-          updatedWorldClubs[state.club.id] = { ...updatedWorldClubs[state.club.id], baseOvr: newOvr };
-        }
-        useGameStore.getState().updateState({
-          club: { ...state.club, baseOvr: newOvr },
-          worldClubs: updatedWorldClubs,
-          startOfSeasonOvr: typeof (state as any).startOfSeasonOvr === 'number' ? (state as any).startOfSeasonOvr : oldOvr,
-          lastOvr: typeof (state as any).lastOvr === 'number' ? (state as any).lastOvr : oldOvr,
-          ...(actualDelta > 0
-            ? { eventOvrGainThisSeason: ((state as any).eventOvrGainThisSeason || 0) + actualDelta }
-            : { signingFlopLossThisSeason: ((state as any).signingFlopLossThisSeason || 0) + Math.abs(actualDelta) }),
-          ovrHistory: [
-            {
-              id: Math.random().toString(36).substring(7),
-              season: state.year,
-              change: actualDelta,
-              reason: `Winter Break: ${tournamentName}`,
-              reasonDe: `Winterpause: ${tournamentName}`
-            },
-            ...(state.ovrHistory || [])
-          ].slice(0, 30)
-        });
-      }
-    }
     action();
   };
 
@@ -422,7 +442,7 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onContinue, hasAppliedOvr, ovrChange, isSubModalOpen]);
+  }, [onContinue, isSubModalOpen]);
 
   return (
     <motion.div 
@@ -573,9 +593,18 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
               <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
                 {t(lang, 'Squad Strength', 'Kaderstärke')}
               </span>
-              <div className="flex items-baseline gap-1 my-0.5">
+              <div className="flex items-baseline gap-1.5 my-0.5">
                 <span className="text-xl sm:text-2xl font-semibold text-white tracking-tight tabular-nums">{state.club.baseOvr}</span>
                 <span className="text-xs text-zinc-400 font-normal">OVR</span>
+                {seasonOvrDelta !== 0 && (
+                  <span className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border tabular-nums ${
+                    seasonOvrDelta > 0
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                      : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                  }`}>
+                    {seasonOvrDelta > 0 ? `+${seasonOvrDelta}` : seasonOvrDelta}
+                  </span>
+                )}
               </div>
               <span className="text-[11px] font-medium text-zinc-400 truncate">
                 {tier === 1 ? 'Top Flight Tier' : `Tier ${tier}`}
