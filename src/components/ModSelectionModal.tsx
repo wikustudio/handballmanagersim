@@ -43,6 +43,7 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
   const [realDataActive, setRealDataActiveState] = useState<boolean>(isRealDataModActive());
   const [customClubs, setCustomClubsState] = useState<Club[] | null>(getCustomDb());
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isV22Expanded, setIsV22Expanded] = useState<boolean>(false);
   const [isV21Expanded, setIsV21Expanded] = useState<boolean>(false);
   const [isV20Expanded, setIsV20Expanded] = useState<boolean>(false);
   const [isV19Expanded, setIsV19Expanded] = useState<boolean>(false);
@@ -249,7 +250,7 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
                 }`}
               >
                 <i className="fas fa-sparkles text-[10px]" />
-                <span>v2.2 Changelog</span>
+                <span>v2.3 Changelog</span>
               </button>
               <button
                 type="button"
@@ -287,16 +288,16 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
             {/* TAB 1: CHANGELOG & VERSION HISTORY */}
             {activeTab === 'changelog' && (
               <div className="space-y-4">
-                {/* ACTIVE RELEASE CARD: v2.2 Commercial, Supercup & World Progression Updates */}
+                {/* ACTIVE RELEASE CARD: v2.3 Multi-Year Sponsors, UI Overhaul & Logic Polish */}
                 <div className="relative overflow-hidden rounded-2xl p-5 border border-emerald-500/20 bg-[#10121a]">
                   {/* Release Header */}
                   <div className="flex items-center justify-between gap-3 border-b border-white/[0.04] pb-3 mb-3.5">
                     <div className="flex items-center gap-2.5">
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold text-xs tracking-tight shadow-sm">
-                        v 2.2
+                        v 2.3
                       </span>
                       <h3 className="text-base sm:text-lg font-semibold text-white uppercase tracking-tight">
-                        Sponsors, Supercup &amp; World Updates
+                        Multi-Year Sponsors, UI Overhaul &amp; Logic Polish
                       </h3>
                     </div>
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
@@ -307,51 +308,137 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
 
                   {/* Eyebrow */}
                   <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300/90 mb-3">
-                    TIER-SCALED SPONSOR POOLS, DOMESTIC SUPERCUP FINAL &amp; AI INFRASTRUCTURE
+                    UNIFIED SPONSORSHIP HUB, 1–3 YEAR CONTRACTS, BROADCAST UI &amp; ENGINE INTEGRITY
                   </div>
 
                   {/* Bullet Highlights Grid */}
                   <div className="space-y-2.5 text-xs text-zinc-300">
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-handshake text-emerald-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-file-contract text-emerald-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">20-Country Tier-Scaled Sponsor Pools (Mod ON &amp; Fictional)</strong>
+                        <strong className="text-white block font-semibold">Unified Sponsorship Deals Hub &amp; 1–3 Year Contract Negotiation</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Diversified pools of 15+ regional sponsors per country across Standard, Megadeal, and Performance tiers with real-world brands when Mod is active and sound-alike fallback brands when Mod is off—scaled strictly by division tier (Tiers 1–5) with exact contract figures.
+                          Standard, Megadeal, and Performance sponsorships are consolidated into a single commercial negotiation hub. Negotiate 1-year, 2-year (+5%/yr bonus), or 3-year (+10%/yr bonus) commitments with automated recurring season payouts and full Ledger tracking.
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-file-signature text-sky-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-shield-halved text-amber-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">Persistent Season Sponsor Deals &amp; Winter Break Pitching</strong>
+                        <strong className="text-white block font-semibold">Streamlined Board Confidence &amp; Club Impact HUD</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Signed sponsors lock in for the full season, collapsed negotiations display as Empty, and unpitched sponsor offers persist across the Winter Break and into the next campaign with full visibility in the Financial Ledger and Season Wrap-Up.
+                          Redesigned Board Confidence modal featuring an instant sacking threshold meter (&lt;15%), active board target vs. live standing comparison, immunity shield badges, and a clear 3-pillar breakdown (Results, Finances, Youth &amp; Facilities).
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-trophy text-amber-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-layer-group text-sky-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">Domestic Supercup Curtain-Raiser Final &amp; European Celebrations</strong>
+                        <strong className="text-white block font-semibold">Unified Broadcast Design System Across All Modals</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Authentic one-off Domestic Supercup Final between the national League Champion and Cup Winner (or League Runner-Up for Double winners), plus side-by-side European &amp; League Title celebration banners in the Season Wrap-Up and Career History.
+                          Consistent dark broadcast surfaces (#14151e / #10121a), crisp hairline dividers, and tabular telemetry across Sponsorships, Youth Academy, Team Retreat, Transfer Market, Facilities, Financial Ledger, and Stadium modals.
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-building-shield text-purple-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-gears text-purple-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">Dynamic AI Club Facility Progression (5+ Seasons)</strong>
+                        <strong className="text-white block font-semibold">Solvency, Playoff Promotion &amp; Academy Protection Refinements</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Top-flight and high-stature clubs across the universe organically upgrade their Youth Academies and Medical Centers to Levels 2–3+ as multi-season careers progress.
+                          Automatic debt &amp; insolvency alert clearance when capital injections restore positive balance, division-matched sponsor pool refreshes after playoff promotions/relegations, and protected academy prospect priority during Generational Rebuilds.
                         </span>
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* PREVIOUS MILESTONE ARCHIVE CARD: v2.2 (Collapsible Accordion Row) */}
+                <div className="relative overflow-hidden rounded-2xl border border-white/[0.04] bg-[#10121a] transition-colors duration-200 hover:border-emerald-500/20">
+                  <button
+                    type="button"
+                    onClick={() => setIsV22Expanded((prev) => !prev)}
+                    className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left transition hover:bg-emerald-500/[0.03] cursor-pointer focus:outline-none"
+                    aria-expanded={isV22Expanded}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="px-2 py-0.5 rounded-full bg-black/40 text-zinc-400 border border-white/[0.04] font-semibold text-xs tracking-tight shadow-sm shrink-0">
+                        v 2.2
+                      </span>
+                      <h3 className="text-sm sm:text-base font-semibold text-zinc-200 uppercase tracking-tight truncate">
+                        {'Sponsors, Supercup & World Updates'}
+                      </h3>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 hidden xs:inline-block">
+                        MILESTONE ARCHIVE
+                      </span>
+                      <div className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-zinc-400">
+                        <i
+                          className={`fas fa-chevron-down text-[10px] transition-transform duration-200 ${
+                            isV22Expanded ? 'rotate-180 text-white' : ''
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isV22Expanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        className="overflow-hidden border-t border-white/[0.04] bg-black/20"
+                      >
+                        <div className="p-4 sm:p-5 space-y-2.5 text-xs text-zinc-300">
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-handshake text-emerald-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">20-Country Tier-Scaled Sponsor Pools (Mod ON &amp; Fictional)</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Diversified pools of 15+ regional sponsors per country across Standard, Megadeal, and Performance tiers with real-world brands when Mod is active and sound-alike fallback brands when Mod is off—scaled strictly by division tier (Tiers 1–5) with exact contract figures.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-file-signature text-sky-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Persistent Season Sponsor Deals &amp; Winter Break Pitching</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Signed sponsors lock in for the full season, collapsed negotiations display as Empty, and unpitched sponsor offers persist across the Winter Break and into the next campaign with full visibility in the Financial Ledger and Season Wrap-Up.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-trophy text-amber-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Domestic Supercup Curtain-Raiser Final &amp; European Celebrations</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Authentic one-off Domestic Supercup Final between the national League Champion and Cup Winner (or League Runner-Up for Double winners), plus side-by-side European &amp; League Title celebration banners in the Season Wrap-Up and Career History.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-building-shield text-purple-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Dynamic AI Club Facility Progression (5+ Seasons)</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Top-flight and high-stature clubs across the universe organically upgrade their Youth Academies and Medical Centers to Levels 2–3+ as multi-season careers progress.
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* PREVIOUS MILESTONE ARCHIVE CARD: v2.1 (Collapsible Accordion Row) */}

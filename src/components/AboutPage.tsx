@@ -43,7 +43,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ lang = 'en', onStartCareer
             </span>
             <span className="text-zinc-600 select-none">·</span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-black uppercase tracking-wider">
-              v 2.1 Game Logic
+              v 2.3 Game Logic
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight uppercase">
@@ -133,22 +133,22 @@ export const AboutPage: React.FC<AboutPageProps> = ({ lang = 'en', onStartCareer
               <div>
                 <strong className="text-white block font-bold mb-1">
                   {isDe
-                    ? 'Neu in Version 2.2: Ligen-skalierte Sponsoren-Pools, Nationales Supercup-Finale & KI-Infrastruktur'
-                    : 'New in Version 2.2: Tier-Scaled Sponsor Pools, Domestic Supercup Final & AI Facility Progression'}
+                    ? 'Neu in Version 2.3: Mehrjährige Sponsorenverträge, Einheitliches Broadcast-UI & Engine-Feinschliff'
+                    : 'New in Version 2.3: Multi-Year Sponsorship Contracts, Unified Broadcast UI & Engine Refinements'}
                 </strong>
                 <span>
                   {isDe
-                    ? 'Das v2.2-Update bringt länderspezifische Sponsoren-Pools (15+ Partner pro Land für Standard-, Mega- und Performance-Deals mit Liga-Skalierung von Liga 1 bis 5), persistente Saison-Sponsorenverträge über die Winterpause hinweg, das nationale Supercup-Finale (Meister gegen Pokalsieger), gemeinsame Europapokal- & Meisterfeiern im Saisonabschluss sowie dynamischen Ausbau der Jugendakademie & Medizin-Zentren bei Top-KI-Vereinen.'
-                    : 'The v2.2 update introduces 20-country tier-scaled sponsor pools (15+ corporate partners per nation across Standard, Megadeal, and Performance tiers with Mod ON real brands and Mod OFF sound-alike equivalents), persistent season sponsor slots across the Winter Break, the single-match Domestic Supercup Final (League Champion vs. Cup Winner), joint European & League Title celebrations, and multi-season AI club Youth Academy & Medical Center progression.'}
+                    ? 'Das v2.3-Update vereint alle Sponsorenkategorien (Standard, Megadeal & Performance) in einem zentralen Verhandlungs-Hub mit wählbaren Vertragslaufzeiten von 1, 2 (+5 %/Jahr) oder 3 Saisons (+10 %/Jahr) und garantierten jährlichen Raten. Zudem wurden alle Management-Modals (inkl. Vorstandsvertrauen, Sponsoren, Akademie, Team-Retreat & Transfermarkt) auf das einheitliche Broadcast-Design aktualisiert und die Solvenz-, Playoff- und Kadernachwuchs-Logik präzisiert.'
+                    : 'The v2.3 update consolidates Standard, Megadeal, and Performance sponsorships into a unified Sponsorship Deals hub with negotiable 1-year, 2-year (+5%/yr), and 3-year (+10%/yr) contract terms and automated recurring season installments. It also brings a streamlined Board Confidence & Club Impact HUD, a unified broadcast design language across all management modals, and core solvency, playoff, and academy protection refinements.'}
                 </span>
               </div>
               <div className="pt-2 border-t border-white/[0.06] text-xs text-zinc-400">
                 <strong className="text-zinc-200 font-semibold">
-                  {isDe ? 'v2.1 & v2.0 Fundament:' : 'v2.1 & v2.0 Core Foundation:'}
+                  {isDe ? 'v2.2, v2.1 & v2.0 Fundament:' : 'v2.2, v2.1 & v2.0 Core Foundation:'}
                 </strong>{' '}
                 {isDe
-                  ? '5-stufige Meilensteine für Jugendakademie & Medizinisches Zentrum, Generationen-Umbruch, Anti-Metronom-Taktikverschleiß, Bankdarlehen, 18 kalibrierte Ligapyramiden und striktes 2-1-0-Punktesystem.'
-                  : '5-tier Youth Academy & Medical Center milestones, Generational Squad Rebuilds, Anti-Metronome tactical staleness, Institutional Bank Loans, 18 calibrated league pyramids, and strict 2-1-0 handball scoring.'}
+                  ? 'Länderspezifische Sponsoren-Pools (20 Nationen, Liga 1–5), Nationales Supercup-Finale, 5-stufige Jugendakademie & Medizinisches Zentrum, Generationen-Umbruch, Anti-Metronom-Taktikverschleiß, Bankdarlehen, 18 Ligapyramiden und striktes 2-1-0-Punktesystem.'
+                  : '20-country tier-scaled sponsor pools (Tiers 1–5), Domestic Supercup Final, 5-tier Youth Academy & Medical Center milestones, Generational Squad Rebuilds, Anti-Metronome tactical staleness, Institutional Bank Loans, 18 calibrated league pyramids, and strict 2-1-0 handball scoring.'}
               </div>
             </div>
           </div>
@@ -442,8 +442,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ lang = 'en', onStartCareer
               {isDe ? 'Einmal alle 3 Saisons kannst du bei drohender Zahlungsunfähigkeit das Konsortium lokaler Förderer einberufen. Die Partner übernehmen 50% der aufgelaufenen Schulden.' : 'Once every 3 seasons, clubs facing severe debt can convene regional business patrons to inject capital and absorb 50% of outstanding debt.'}
             </li>
             <li>
-              <strong className="text-white">{isDe ? 'Sponsoren-Verhandlungen:' : 'Commercial Sponsorship Pitches:'}</strong>{' '}
-              {isDe ? 'Verhandle mit Ausrüstern und Werbepartnern (Kempa, SELECT, Liqui Moly, Hummel) über Vorabzahlungen zur Liquiditätssicherung.' : 'Negotiate deals with commercial handball brands (Kempa, SELECT, Liqui Moly, Hummel) for upfront cash infusions.'}
+              <strong className="text-white">{isDe ? 'Sponsoren-Verhandlungen & Mehrjahresverträge (1–3 Jahre):' : 'Commercial Sponsorship Pitches & Multi-Year Contracts (1–3 Years):'}</strong>{' '}
+              {isDe ? 'Verhandle im zentralen Sponsoren-Hub über Standard-, Megadeal- und Performance-Pakete mit länderspezifischen Partnern. Wähle zwischen 1-, 2- (+5 %/Jahr) und 3-Jahres-Laufzeiten (+10 %/Jahr) für wiederkehrende jährliche Auszahlungen.' : 'Negotiate Standard, Megadeal, and Performance packages in the unified Sponsorship Deals hub with tier-scaled national brands, choosing 1-year, 2-year (+5%/yr), or 3-year (+10%/yr) terms for recurring annual payouts.'}
             </li>
             <li>
               <strong className="text-white">{isDe ? 'Institutionelle Bankdarlehen & Vorzeitige Tilgung:' : 'Institutional Bank Loans & Early Settlement Rebates:'}</strong>{' '}
