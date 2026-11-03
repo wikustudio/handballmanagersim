@@ -1187,16 +1187,18 @@ export const resolveDynamicEvent = (
           }
         };
       }
-      updated.ovrHistory = [
-        {
-          id: Math.random().toString(36).substring(7),
-          season: updated.year,
-          change: newOvr - oldOvr,
-          reason: `Event: ${getLocalizedText(event.title)}`,
-          reasonDe: `Ereignis: ${getLocalizedText(event.title)}`
-        },
-        ...(updated.ovrHistory || [])
-      ].slice(0, 30);
+      if (actualDelta !== 0) {
+        updated.ovrHistory = [
+          {
+            id: Math.random().toString(36).substring(7),
+            season: updated.year,
+            change: actualDelta,
+            reason: `Event: ${getLocalizedText(event.title)}`,
+            reasonDe: `Ereignis: ${getLocalizedText(event.title)}`
+          },
+          ...(updated.ovrHistory || [])
+        ].slice(0, 30);
+      }
     }
     if (effects.rep) updated.reputation = Math.max(1, Math.min(100, updated.reputation + effects.rep));
     if (effects.fans) {

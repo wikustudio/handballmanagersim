@@ -808,6 +808,11 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             veteranRingerName: undefined,
             winterBreakSeenYear: -1,
             winterTransfersOpenedYear: -1,
+            winterBreakTournamentYear: -1,
+            winterBreakOvrChange: 0,
+            winterBreakTournamentName: '',
+            winterBreakTournamentStory: '',
+            winterBreakPlayersInvolved: 0,
             regionalToursThisSeason: 0,
             brandCampaignsThisSeason: 0,
             teamBondingThisSeason: 0,
@@ -973,18 +978,19 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         const ringerName = customName || countryPool[Math.floor(Math.random() * countryPool.length)];
 
         const newOvr = Math.min(state.maxOvrCap || 100, (state.club.baseOvr || 60) + gain);
+        const actualRingerChange = newOvr - (state.club.baseOvr || 60);
         const newSquadSize = currentSquad + 1;
 
-        const ovrHistory = [
+        const ovrHistory = actualRingerChange !== 0 ? [
             {
                 id: Math.random().toString(36).substring(7),
                 season: state.year,
-                change: gain,
+                change: actualRingerChange,
                 reason: `Veteran Ringer: ${ringerName}`,
                 reasonDe: `Altstar-Verpflichtung: ${ringerName}`
             },
             ...(state.ovrHistory || [])
-        ].slice(0, 30);
+        ].slice(0, 30) : (state.ovrHistory || []);
 
         const updatedClub = {
             ...state.club,
@@ -1001,7 +1007,6 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             }
         };
 
-        const actualRingerChange = newOvr - (state.club.baseOvr || 60);
         set({
             budget: state.budget - fee,
             transferSpend: (state.transferSpend || 0) + fee,
@@ -4213,6 +4218,13 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             pendingSeasonState: null,
             supercupPlayedYear: undefined,
             pendingSupercupTrophies: undefined,
+            winterBreakSeenYear: -1,
+            winterTransfersOpenedYear: -1,
+            winterBreakTournamentYear: -1,
+            winterBreakOvrChange: 0,
+            winterBreakTournamentName: '',
+            winterBreakTournamentStory: '',
+            winterBreakPlayersInvolved: 0,
         });
     },
     dismissNotification: (n) => set((r) => ({ notifications: (r.notifications || []).filter(i => i.id !== n) })),
