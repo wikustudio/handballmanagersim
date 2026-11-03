@@ -312,7 +312,7 @@ export interface GameState {
   youthSpend?: number;
   sponsorIncome?: number;
   activePerformanceDeal?: boolean;
-  seasonSponsorDeals?: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number }>;
+  seasonSponsorDeals?: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number; contractYears?: 1 | 2 | 3; yearsRemaining?: number }>;
   seasonSponsorDealsYear?: number;
   lastPatronRescueYear?: number;
   lastInsolventGiantNotice?: { clubId: string; clubName: string; tier: number; country: string };

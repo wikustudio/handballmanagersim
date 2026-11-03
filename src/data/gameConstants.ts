@@ -1554,7 +1554,16 @@ export const getSponsorBrandForClub = (
   const applyLocality = (str: string) => str.replace(/\{city\}/g, locality).trim();
 
   const rawName = modActive ? chosen.name : (chosen.fallbackName || chosen.name);
-  const rawFull = modActive ? chosen.fullName : (chosen.fallbackName || chosen.fullName);
+  let rawFull = chosen.fullName;
+  if (!modActive && chosen.fallbackName) {
+    if (chosen.fullName && chosen.fullName.toLowerCase().includes(chosen.name.toLowerCase())) {
+      const escaped = chosen.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      rawFull = chosen.fullName.replace(new RegExp(escaped, 'i'), chosen.fallbackName);
+    } else {
+      const corp = getCorporateEntityInfo(norm);
+      rawFull = `${chosen.fallbackName} ${corp.legalForm}`;
+    }
+  }
 
   return {
     ...chosen,
@@ -1568,6 +1577,10 @@ export interface DynamicSponsorPitchTerms {
   megaPayout: number;
   performanceUpfront: number;
   performanceBonus: number;
+  baseStandardPayout?: number;
+  baseMegaPayout?: number;
+  basePerformanceUpfront?: number;
+  basePerformanceBonus?: number;
   performanceTargetPos: number;
   megaSuccessProb: number;
   megaSuccessPct: number;
@@ -1739,6 +1752,10 @@ export const getDynamicSponsorPitchTerms = (state: any): DynamicSponsorPitchTerm
     ? state.seasonSponsorDeals
     : {};
 
+  const locality = extractClubLocality(clubName);
+  const applyLocality = (str: string) => (str || '').replace(/\{city\}/g, locality).trim();
+  const modActive = isAnyModActive();
+
   const resolveSeasonBrand = (dealType: 0 | 1 | 2, baseBrand: SponsorBrand): SponsorBrand => {
     const entry = seasonDeals[dealType];
     if (!entry) return baseBrand;
@@ -1750,10 +1767,34 @@ export const getDynamicSponsorPitchTerms = (state: any): DynamicSponsorPitchTerm
         logo: '',
       };
     }
+    if (entry.brandName) {
+      const matched = SPONSOR_BRANDS.find(
+        b => applyLocality(b.name) === entry.brandName || (b.fallbackName && applyLocality(b.fallbackName) === entry.brandName)
+      );
+      if (matched) {
+        const rawName = modActive ? matched.name : (matched.fallbackName || matched.name);
+        let rawFull = matched.fullName;
+        if (!modActive && matched.fallbackName) {
+          if (matched.fullName && matched.fullName.toLowerCase().includes(matched.name.toLowerCase())) {
+            const escaped = matched.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            rawFull = matched.fullName.replace(new RegExp(escaped, 'i'), matched.fallbackName);
+          } else {
+            const corp = getCorporateEntityInfo(country);
+            rawFull = `${matched.fallbackName} ${corp.legalForm}`;
+          }
+        }
+        return {
+          ...matched,
+          name: applyLocality(rawName),
+          fullName: applyLocality(rawFull),
+          logo: entry.brandLogo || matched.logo,
+        };
+      }
+    }
     return {
       ...baseBrand,
       name: entry.brandName || baseBrand.name,
-      fullName: entry.brandName || baseBrand.fullName,
+      fullName: entry.brandName && entry.brandName !== baseBrand.name ? entry.brandName : (baseBrand.fullName || entry.brandName),
       logo: entry.brandLogo !== undefined ? entry.brandLogo : baseBrand.logo,
     };
   };
@@ -1763,6 +1804,10 @@ export const getDynamicSponsorPitchTerms = (state: any): DynamicSponsorPitchTerm
     megaPayout: seasonDeals[1]?.status === 'signed' && seasonDeals[1]?.payout !== undefined ? seasonDeals[1].payout : megaPayout,
     performanceUpfront: seasonDeals[2]?.status === 'signed' && seasonDeals[2]?.payout !== undefined ? seasonDeals[2].payout : performanceUpfront,
     performanceBonus: seasonDeals[2]?.status === 'signed' && seasonDeals[2]?.bonus !== undefined ? seasonDeals[2].bonus : performanceBonus,
+    baseStandardPayout: standardPayout,
+    baseMegaPayout: megaPayout,
+    basePerformanceUpfront: performanceUpfront,
+    basePerformanceBonus: performanceBonus,
     performanceTargetPos: Math.max(1, Math.floor((league.teams || 18) / 2)),
     megaSuccessProb,
     megaSuccessPct,

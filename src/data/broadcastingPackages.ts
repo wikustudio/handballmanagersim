@@ -26,7 +26,7 @@ export const BROADCASTING_PACKAGES: Record<string, BroadcastingPackage> = {
     primaryColor: '#ff5500',
     accentColor: '#ffa000',
     nationalCupName: 'DHB-Pokal',
-    regionalCupName: 'DHB Amateur Cup',
+    regionalCupName: 'Regional Cup',
     decisionDayShow: 'DYN MULTIPLEX · DECISION DAY LIVE',
     mainArena: 'Lanxess Arena, Cologne',
     lowerThirdBug: 'DYN HOST BROADCAST · BUNDESLIGA LIVE FEED',
@@ -273,7 +273,7 @@ export const GER_ARD_BROADCAST: BroadcastingPackage = {
   primaryColor: '#002d62',
   accentColor: '#f59e0b',
   nationalCupName: 'DHB-Pokal',
-  regionalCupName: 'DHB Amateur Cup',
+  regionalCupName: 'Regional Cup',
   decisionDayShow: 'ARD SPORTSCHAU · CHAMPIONSHIP DECIDER LIVE',
   mainArena: 'Lanxess Arena, Cologne',
   lowerThirdBug: 'ARD SPORTSCHAU · CHAMPIONSHIP & DHB-POKAL LIVE',
@@ -290,7 +290,7 @@ export const GER_ZDF_BROADCAST: BroadcastingPackage = {
   primaryColor: '#fa7d00',
   accentColor: '#1f2937',
   nationalCupName: 'DHB-Pokal',
-  regionalCupName: 'DHB Amateur Cup',
+  regionalCupName: 'Regional Cup',
   decisionDayShow: 'ZDF SPORTSTUDIO · THE GRAND FINAL LIVE',
   mainArena: 'Lanxess Arena, Cologne',
   lowerThirdBug: 'ZDF SPORTSTUDIO · LIVE FROM THE ARENA',
@@ -625,47 +625,47 @@ export const HUN_SPORT1_EURO_BROADCAST: BroadcastingPackage = {
 };
 
 // ============================================================================
-// AUTHENTIC GERMAN REGIONAL CUP BROADCASTERS (LANDESPOKAL / REGIONALPOKAL)
+// AUTHENTIC GERMAN REGIONAL CUP BROADCASTERS (REGIONAL CUP)
 // ============================================================================
 
 export const GER_MDR_BROADCAST: BroadcastingPackage = {
   ...BROADCASTING_PACKAGES['GER'],
-  networkName: 'MDR Sport im Osten',
-  networkBadge: 'LANDESPOKAL',
+  networkName: 'MDR Sport',
+  networkBadge: 'REGIONAL CUP',
   networkTag: 'MDR HD',
   nationalCupName: 'DHB-Pokal',
-  regionalCupName: 'Landespokal',
-  decisionDayShow: 'SPORT IM OSTEN · LANDESPOKAL LIVE',
+  regionalCupName: 'Regional Cup',
+  decisionDayShow: 'MDR SPORT · REGIONAL CUP LIVE',
   mainArena: 'GETEC Arena, Magdeburg',
-  lowerThirdBug: 'MDR FERNSEHEN · SPORT IM OSTEN · LANDESPOKAL LIVE',
-  championshipMOTW: 'SPORT IM OSTEN TOP-SPIEL',
+  lowerThirdBug: 'MDR SPORT · REGIONAL CUP LIVE',
+  championshipMOTW: 'MDR SPORT TOP MATCH',
   logoKey: 'MDR',
 };
 
 export const GER_WDR_BROADCAST: BroadcastingPackage = {
   ...BROADCASTING_PACKAGES['GER'],
-  networkName: 'WDR Sport im Westen',
-  networkBadge: 'LANDESPOKAL',
+  networkName: 'WDR Sport',
+  networkBadge: 'REGIONAL CUP',
   networkTag: 'WDR HD',
   nationalCupName: 'DHB-Pokal',
-  regionalCupName: 'Landespokal',
-  decisionDayShow: 'SPORT IM WESTEN · LANDESPOKAL',
+  regionalCupName: 'Regional Cup',
+  decisionDayShow: 'WDR SPORT · REGIONAL CUP',
   mainArena: 'Schwalbe Arena, Gummersbach',
-  lowerThirdBug: 'WDR FERNSEHEN · SPORT IM WESTEN · LANDESPOKAL',
-  championshipMOTW: 'SPORT IM WESTEN LIVE',
+  lowerThirdBug: 'WDR SPORT · REGIONAL CUP',
+  championshipMOTW: 'WDR SPORT LIVE',
   logoKey: 'WDR',
 };
 
 export const GER_BR_BROADCAST: BroadcastingPackage = {
   ...BROADCASTING_PACKAGES['GER'],
   networkName: 'BR Sport',
-  networkBadge: 'LANDESPOKAL',
+  networkBadge: 'REGIONAL CUP',
   networkTag: 'BR HD',
   nationalCupName: 'DHB-Pokal',
-  regionalCupName: 'Landespokal',
-  decisionDayShow: 'BR SPORT · LANDESPOKAL LIVE',
+  regionalCupName: 'Regional Cup',
+  decisionDayShow: 'BR SPORT · REGIONAL CUP LIVE',
   mainArena: 'Arena Nürnberger Versicherung',
-  lowerThirdBug: 'BR FERNSEHEN · BR SPORT · LANDESPOKAL LIVE',
+  lowerThirdBug: 'BR SPORT · REGIONAL CUP LIVE',
   championshipMOTW: 'BR SPORT LIVE',
   logoKey: 'BR',
 };
@@ -673,13 +673,13 @@ export const GER_BR_BROADCAST: BroadcastingPackage = {
 export const GER_SWR_BROADCAST: BroadcastingPackage = {
   ...BROADCASTING_PACKAGES['GER'],
   networkName: 'SWR Sport',
-  networkBadge: 'LANDESPOKAL',
+  networkBadge: 'REGIONAL CUP',
   networkTag: 'SWR HD',
   nationalCupName: 'DHB-Pokal',
-  regionalCupName: 'Landespokal',
-  decisionDayShow: 'SWR SPORT · LANDESPOKAL',
+  regionalCupName: 'Regional Cup',
+  decisionDayShow: 'SWR SPORT · REGIONAL CUP',
   mainArena: 'EWS Arena, Göppingen',
-  lowerThirdBug: 'SWR FERNSEHEN · SWR SPORT · LANDESPOKAL',
+  lowerThirdBug: 'SWR SPORT · REGIONAL CUP',
   championshipMOTW: 'SWR SPORT LIVE',
   logoKey: 'SWR',
 };
@@ -687,27 +687,27 @@ export const GER_SWR_BROADCAST: BroadcastingPackage = {
 export const GER_SPORT1_BROADCAST: BroadcastingPackage = {
   ...BROADCASTING_PACKAGES['GER'],
   networkName: 'Sport1',
-  networkBadge: 'POKAL LIVE',
+  networkBadge: 'CUP LIVE',
   networkTag: 'SPORT1 HD',
   nationalCupName: 'DHB-Pokal',
-  regionalCupName: 'Landespokal',
-  decisionDayShow: 'SPORT1 POKAL LIVE',
+  regionalCupName: 'Regional Cup',
+  decisionDayShow: 'SPORT1 CUP LIVE',
   mainArena: 'Lanxess Arena, Köln',
-  lowerThirdBug: 'SPORT1 · POKAL LIVE ÜBERTRAGUNG',
-  championshipMOTW: 'SPORT1 TOP-SPIEL',
+  lowerThirdBug: 'SPORT1 · CUP LIVE BROADCAST',
+  championshipMOTW: 'SPORT1 TOP MATCH',
   logoKey: 'SPORT1',
 };
 
 export const GER_SPORTTOTAL_BROADCAST: BroadcastingPackage = {
   ...BROADCASTING_PACKAGES['GER'],
   networkName: 'Sporttotal.tv',
-  networkBadge: 'LANDESPOKAL',
+  networkBadge: 'REGIONAL CUP',
   networkTag: 'SPORTTOTAL HD',
   nationalCupName: 'DHB-Pokal',
-  regionalCupName: 'Landespokal',
-  decisionDayShow: 'SPORTTOTAL.TV · AMATEURPOKAL LIVE',
-  mainArena: 'Regionalhalle',
-  lowerThirdBug: 'SPORTTOTAL.TV · MULTI-CAM LIVESTREAM · LANDESPOKAL',
+  regionalCupName: 'Regional Cup',
+  decisionDayShow: 'SPORTTOTAL.TV · REGIONAL CUP LIVE',
+  mainArena: 'Regional Arena',
+  lowerThirdBug: 'SPORTTOTAL.TV · MULTI-CAM LIVESTREAM · REGIONAL CUP',
   championshipMOTW: 'SPORTTOTAL MATCH OF THE WEEK',
   logoKey: 'SPORTTOTAL',
 };
@@ -794,9 +794,10 @@ export const FICTIONAL_COURTSTREAM_PACKAGE: BroadcastingPackage = {
 };
 
 export interface BroadcastContext {
-  type?: string;          // 'championship_decider' | 'playoff' | 'relegation_playoff' | 'cup_final' | 'cup_sf' | 'cup_qf' | 'reg_cup' | 'regional_cup'
+  type?: string;          // 'championship_decider' | 'playoff' | 'relegation_playoff' | 'cup_final' | 'cup_sf' | 'cup_qf' | 'reg_cup' | 'regional_cup' | 'winter_break'
   title?: string;
   subtitle?: string;
+  tier?: number;
   isCupFinal?: boolean;
   isRegionalCup?: boolean;
   isDecisionDay?: boolean;
@@ -817,6 +818,8 @@ export function getBroadcastingPackage(
   const isModActive = context?.isModActive !== undefined 
     ? context.isModActive 
     : isAnyModActive();
+  const tier = context?.tier || 1;
+  const isLowerTier = tier >= 3;
 
   const isEuroSupercup = Boolean(
     context?.type === 'euro_supercup' ||
@@ -864,10 +867,12 @@ export function getBroadcastingPackage(
       (context?.subtitle && (context.subtitle.toUpperCase().includes('RELEGATION') || context.subtitle.toUpperCase().includes('SURVIVAL')))
     );
 
-    if (isRelegation) {
+    if (isRelegation || isLowerTier) {
       return {
         ...FICTIONAL_COURTSTREAM_PACKAGE,
         country: cleanCode,
+        networkBadge: isLowerTier ? 'REGIONAL STREAM' : FICTIONAL_COURTSTREAM_PACKAGE.networkBadge,
+        networkTag: isLowerTier ? 'REGIONAL HD' : FICTIONAL_COURTSTREAM_PACKAGE.networkTag,
       };
     }
 
@@ -928,7 +933,7 @@ export function getBroadcastingPackage(
     };
   }
 
-  if (isEuropean) {
+  if (isEuropean && !isLowerTier) {
     if (DAZN_EUROPEAN_TERRITORIES.has(cleanCode)) {
       return { ...DAZN_EUROPEAN_BROADCAST, country: cleanCode };
     }
@@ -939,11 +944,11 @@ export function getBroadcastingPackage(
     return EHF_EUROPEAN_BROADCAST;
   }
 
-  // Germany (GER): Handle ARD, ZDF, Dyn Sport, and Regional Cup Broadcasters (MDR, WDR, BR, SWR, Sport1, Sporttotal)
+  // Germany (GER): Handle ARD, ZDF, Dyn Sport, and Regional / Lower-Tier Broadcasters (MDR, WDR, BR, SWR, Sport1, Sporttotal)
   if (cleanCode === 'GER') {
     if (context?.preferredNetwork === 'ARD') return GER_ARD_BROADCAST;
     if (context?.preferredNetwork === 'ZDF') return GER_ZDF_BROADCAST;
-    if (context?.preferredNetwork === 'DYN') return BROADCASTING_PACKAGES['GER'];
+    if (context?.preferredNetwork === 'DYN' && !isLowerTier) return BROADCASTING_PACKAGES['GER'];
     if (context?.preferredNetwork === 'MDR') return GER_MDR_BROADCAST;
     if (context?.preferredNetwork === 'WDR') return GER_WDR_BROADCAST;
     if (context?.preferredNetwork === 'BR') return GER_BR_BROADCAST;
@@ -969,35 +974,41 @@ export function getBroadcastingPackage(
       (context?.subtitle && (context.subtitle.toUpperCase().includes('LANDESPOKAL') || context.subtitle.toUpperCase().includes('REGIONALPOKAL') || context.subtitle.toUpperCase().includes('AMATEUR')))
     );
 
-    // Authentic Regional Cup Rights Holders in Germany:
-    // MDR Sport im Osten (East Germany / Saxony / Thuringia / Saxony-Anhalt),
-    // WDR Sport im Westen (North Rhine-Westphalia),
-    // BR Sport (Bavaria),
-    // SWR Sport (Baden-Württemberg / Rhineland-Palatinate),
-    // Sport1 & Sporttotal.tv (National amateur / streaming)
-    if (isRegionalCup) {
+    // Authentic Regional & Lower-Tier (Tier >= 3) Rights Holders in Germany:
+    // Never DYN or DAZN for lower tiers! Uses regional third programs (MDR, WDR, BR, SWR) or Sporttotal.tv
+    if (isRegionalCup || isLowerTier) {
       const nameOrCity = `${context?.clubName || ''} ${context?.clubCity || ''}`.toLowerCase();
-      
-      // East Germany: Magdeburg, Leipzig, Dresden, Aue, Eisenach, Dessau, Potsdam, Erfurt, Halle, Rostock
-      if (/(magdeburg|leipzig|dresden|aue|eisenach|dessau|potsdam|erfurt|halle|rostock|th[üu]ringen|sachsen)/i.test(nameOrCity)) {
-        return GER_MDR_BROADCAST;
+      const badgeLabel = isRegionalCup
+        ? 'REGIONAL CUP'
+        : tier === 3
+        ? '3. LIGA LIVE'
+        : 'REGIONAL SPORT';
+
+      // East Germany: Magdeburg, Leipzig, Dresden, Aue, Eisenach, Dessau, Potsdam, Erfurt, Halle, Rostock, Cottbus, Chemnitz, Zwickau, Jena
+      if (/(magdeburg|leipzig|dresden|aue|eisenach|dessau|potsdam|erfurt|halle|rostock|cottbus|chemnitz|zwickau|jena|stralsund|oranienburg|bernburg|th[üu]ringen|sachsen)/i.test(nameOrCity)) {
+        return { ...GER_MDR_BROADCAST, networkBadge: badgeLabel };
       }
-      // North Rhine-Westphalia: Gummersbach, Minden, Essen, Hagen, Hamm, Ferndorf, Dormagen, Düsseldorf, Köln, Krefeld, Bergischer, Emsdetten
-      if (/(gummersbach|minden|essen|hagen|hamm|ferndorf|dormagen|d[üu]sseldorf|k[öo]ln|krefeld|bergisch|emsdetten|nrw|westfalen|rhein)/i.test(nameOrCity)) {
-        return GER_WDR_BROADCAST;
+      // North Rhine-Westphalia: Gummersbach, Minden, Essen, Hagen, Hamm, Ferndorf, Dormagen, Düsseldorf, Köln, Krefeld, Bergischer, Emsdetten, Lemgo, Bielefeld, Dortmund, Bochum, Münster
+      if (/(gummersbach|minden|essen|hagen|hamm|ferndorf|dormagen|d[üu]sseldorf|k[öo]ln|krefeld|bergisch|emsdetten|lemgo|bielefeld|dortmund|bochum|m[üu]nster|aachen|wuppertal|solingen|leverkusen|nrw|westfalen|rhein)/i.test(nameOrCity)) {
+        return { ...GER_WDR_BROADCAST, networkBadge: badgeLabel };
       }
-      // Bavaria: Erlangen, Coburg, Würzburg, Großwallstadt, Rimpar, Fürstenfeldbruck, Bayern, München, Nürnberg
-      if (/(erlangen|coburg|w[üu]rzburg|gro[ßs]wallstadt|rimpar|f[üu]rstenfeldbruck|bayern|m[üu]nchen|n[üu]rnberg|franken)/i.test(nameOrCity)) {
-        return GER_BR_BROADCAST;
+      // Bavaria: Erlangen, Coburg, Würzburg, Großwallstadt, Rimpar, Fürstenfeldbruck, Bayern, München, Nürnberg, Augsburg, Regensburg, Bamberg, Bayreuth
+      if (/(erlangen|coburg|w[üu]rzburg|gro[ßs]wallstadt|rimpar|f[üu]rstenfeldbruck|bayern|m[üu]nchen|n[üu]rnberg|augsburg|regensburg|bamberg|bayreuth|allg[äa]u|franken)/i.test(nameOrCity)) {
+        return { ...GER_BR_BROADCAST, networkBadge: badgeLabel };
       }
-      // South-West / Baden-Württemberg: Göppingen, Balingen, Stuttgart, Konstanz, Ludwigshafen, Friesenheim, Rhein-Neckar, Mannheim
-      if (/(g[öo]ppingen|balingen|stuttgart|konstanz|ludwigshafen|friesenheim|mannheim|baden|w[üu]rttemberg|pfalz)/i.test(nameOrCity)) {
-        return GER_SWR_BROADCAST;
+      // South-West / Baden-Württemberg & RLP: Göppingen, Balingen, Stuttgart, Konstanz, Ludwigshafen, Friesenheim, Rhein-Neckar, Mannheim, Karlsruhe, Freiburg, Heilbronn, Kornwestheim, Bietigheim, Pfullingen
+      if (/(g[öo]ppingen|balingen|stuttgart|konstanz|ludwigshafen|friesenheim|mannheim|karlsruhe|freiburg|heilbronn|kornwestheim|bietigheim|pfullingen|oppenweiler|mainz|kaiserslautern|baden|w[üu]rttemberg|pfalz)/i.test(nameOrCity)) {
+        return { ...GER_SWR_BROADCAST, networkBadge: badgeLabel };
       }
 
+      if (tier >= 4 && !isRegionalCup) {
+        return { ...GER_SPORTTOTAL_BROADCAST, networkBadge: badgeLabel };
+      }
+
+      const localPool = [GER_MDR_BROADCAST, GER_WDR_BROADCAST, GER_BR_BROADCAST, GER_SWR_BROADCAST, GER_SPORTTOTAL_BROADCAST];
       const yr = context?.year || 2024;
-      const index = Math.abs(yr) % GER_REGIONAL_CUP_PACKAGES.length;
-      return GER_REGIONAL_CUP_PACKAGES[index];
+      const index = Math.abs(yr + nameOrCity.length) % localPool.length;
+      return { ...localPool[index], networkBadge: badgeLabel };
     }
 
     const isCup = Boolean(
@@ -1028,12 +1039,20 @@ export function getBroadcastingPackage(
       return BROADCASTING_PACKAGES['GER'];
     }
 
-    // Default for league matchdays, playoffs, and relegation battles: Dyn Sport (Official host broadcaster)
+    // Default for Tier 1 & Tier 2 league matchdays, playoffs, and relegation battles: Dyn Sport
     return BROADCASTING_PACKAGES['GER'];
   }
 
   // Denmark (DEN)
   if (cleanCode === 'DEN') {
+    if (isLowerTier) {
+      return {
+        ...DEN_DR_BROADCAST,
+        networkName: 'DR Sporten Regional',
+        networkBadge: 'DR REGIONAL',
+        networkTag: 'DR SPORTEN',
+      };
+    }
     if (context?.preferredNetwork === 'DR') return DEN_DR_BROADCAST;
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final' || isDomesticSupercup);
     if (isCup) return DEN_DR_BROADCAST;
@@ -1042,6 +1061,14 @@ export function getBroadcastingPackage(
 
   // France (FRA)
   if (cleanCode === 'FRA') {
+    if (isLowerTier) {
+      return {
+        ...FRA_FRANCE_TV_BROADCAST,
+        networkName: 'France 3 Régions',
+        networkBadge: 'FRANCE 3 RÉGIONS',
+        networkTag: 'FRANCE 3 RÉGIONAL',
+      };
+    }
     if (context?.preferredNetwork === 'FRANCE_TV') return FRA_FRANCE_TV_BROADCAST;
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final');
     if (isCup) return FRA_FRANCE_TV_BROADCAST;
@@ -1050,6 +1077,14 @@ export function getBroadcastingPackage(
 
   // Spain (ESP)
   if (cleanCode === 'ESP') {
+    if (isLowerTier) {
+      return {
+        ...ESP_RTVE_BROADCAST,
+        networkName: 'RFEBM Live / Teledeporte',
+        networkBadge: 'RFEBM DIRECTO',
+        networkTag: 'RFEBM STREAM',
+      };
+    }
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final' || isDomesticSupercup);
     if (isCup) return ESP_RTVE_BROADCAST;
     return BROADCASTING_PACKAGES['ESP'];
@@ -1057,6 +1092,14 @@ export function getBroadcastingPackage(
 
   // Norway (NOR)
   if (cleanCode === 'NOR') {
+    if (isLowerTier) {
+      return {
+        ...NOR_NRK_BROADCAST,
+        networkName: 'NRK Lokalsport / Direktesport',
+        networkBadge: 'DIREKTESPORT',
+        networkTag: 'NRK REGIONAL',
+      };
+    }
     if (context?.preferredNetwork === 'NRK') return NOR_NRK_BROADCAST;
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final' || isDomesticSupercup);
     if (isCup) return NOR_NRK_BROADCAST;
@@ -1065,6 +1108,14 @@ export function getBroadcastingPackage(
 
   // Poland (POL)
   if (cleanCode === 'POL') {
+    if (isLowerTier) {
+      return {
+        ...POL_TVP_BROADCAST,
+        networkName: 'TVP 3 Regionalna',
+        networkBadge: 'TVP 3 REGIONALNA',
+        networkTag: 'TVP 3 SPORT',
+      };
+    }
     if (context?.preferredNetwork === 'TVP') return POL_TVP_BROADCAST;
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final' || isDomesticSupercup);
     if (isCup) return POL_TVP_BROADCAST;
@@ -1073,6 +1124,14 @@ export function getBroadcastingPackage(
 
   // Sweden (SWE)
   if (cleanCode === 'SWE') {
+    if (isLowerTier) {
+      return {
+        ...SWE_SVT_BROADCAST,
+        networkName: 'SVT Lokalt / Handboll Play',
+        networkBadge: 'HANDBOLL PLAY',
+        networkTag: 'SVT LOKALT',
+      };
+    }
     if (context?.preferredNetwork === 'SVT') return SWE_SVT_BROADCAST;
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final' || isDomesticSupercup);
     if (isCup) return SWE_SVT_BROADCAST;
@@ -1081,6 +1140,14 @@ export function getBroadcastingPackage(
 
   // Austria (AUT)
   if (cleanCode === 'AUT') {
+    if (isLowerTier) {
+      return {
+        ...AUT_ORF_BROADCAST,
+        networkName: 'ORF Landesstudio / LAOLA1',
+        networkBadge: 'LAOLA1 REGIONAL',
+        networkTag: 'ORF REGIONAL',
+      };
+    }
     if (context?.preferredNetwork === 'ORF') return AUT_ORF_BROADCAST;
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final' || isDomesticSupercup);
     if (isCup) return AUT_ORF_BROADCAST;
@@ -1089,6 +1156,14 @@ export function getBroadcastingPackage(
 
   // Switzerland (SUI)
   if (cleanCode === 'SUI') {
+    if (isLowerTier) {
+      return {
+        ...SUI_SRF_BROADCAST,
+        networkName: 'RED+ / handballTV.ch',
+        networkBadge: 'HANDBALLTV.CH',
+        networkTag: 'RED+ REGIONAL',
+      };
+    }
     if (context?.preferredNetwork === 'SRF') return SUI_SRF_BROADCAST;
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final' || isDomesticSupercup);
     if (isCup) return SUI_SRF_BROADCAST;
@@ -1097,6 +1172,14 @@ export function getBroadcastingPackage(
 
   // Croatia (CRO)
   if (cleanCode === 'CRO') {
+    if (isLowerTier) {
+      return {
+        ...CRO_HRT_BROADCAST,
+        networkName: 'HRT Regionalni / HRS TV',
+        networkBadge: 'HRS TV UŽIVO',
+        networkTag: 'HRT REGIONAL',
+      };
+    }
     if (context?.preferredNetwork === 'HRT') return CRO_HRT_BROADCAST;
     const isCup = Boolean(context?.isCupFinal || context?.type === 'cup_final' || isDomesticSupercup);
     if (isCup) return CRO_HRT_BROADCAST;
@@ -1105,6 +1188,9 @@ export function getBroadcastingPackage(
 
   // Portugal (POR)
   if (cleanCode === 'POR') {
+    if (isLowerTier) {
+      return POR_ANDEBOL_TV_BROADCAST;
+    }
     if (context?.preferredNetwork === 'RTP') return POR_RTP_BROADCAST;
     if (context?.preferredNetwork === 'PORTO_CANAL') return POR_PORTO_CANAL_BROADCAST;
     if (context?.preferredNetwork === 'SPORT_TV') return BROADCASTING_PACKAGES['POR'];
@@ -1149,6 +1235,10 @@ export function getBroadcastingPackage(
     // For SL Benfica: BTV is their dedicated broadcaster
     if (club.includes('benfica')) {
       return POR_BTV_BROADCAST;
+    }
+
+    if (tier === 2) {
+      return POR_ANDEBOL_TV_BROADCAST;
     }
 
     // Default top league broadcaster: Sport TV (Campeonato Placard Andebol 1)

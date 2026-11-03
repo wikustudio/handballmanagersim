@@ -250,7 +250,7 @@ interface GameStore extends GameState {
     teamBonding: (cost: number) => void;
     recruitYouth: (cost: number, customProspect?: any) => { success: boolean; message: string; prospect?: any };
     protectYouth: (id: string, cost: number) => void;
-    pitchSponsor: (type: 0 | 1 | 2) => void;
+    pitchSponsor: (type: 0 | 1 | 2, contractYears?: 1 | 2 | 3) => void;
     conductRegionalTour: () => any;
     launchBrandCampaign: (campaignType?: 1 | 2 | 3) => any;
     launchIPO: (offeringPrice: number) => void;
@@ -332,6 +332,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             }
         }
 
+        const initStartingBudget = getStartingBudget(baseClub.tier, baseClub.country || 'GER');
         const freshClub: Club = {
             ...baseClub,
             tier: baseClub.tier,
@@ -344,6 +345,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             medicalLevel: initMedicalLevel,
             squadSize: baseClub.squadSize || 18,
             morale: 75,
+            currentBudget: initStartingBudget,
         };
 
         const initEuroStatus: 'CL' | 'EL' | 'ECL' | null = (() => {
@@ -680,7 +682,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             historicContext: resolvedContext,
             context: resolvedContext,
             temporaryOvrBoost: 0,
-            activeLoansCount: 0
+            activeLoansCount: 0,
+            currentBudget: o
         };
         const expectations = getInitialBoardExpectations(finalClub, r.worldClubs || {});
 
@@ -1185,9 +1188,9 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             budget: o.budget - n,
             stadiumExpandedThisSeason: (o.stadiumExpandedThisSeason || 0) + 1,
             infraActionsThisSeason: (o.infraActionsThisSeason || 0) + 1,
-            notifications: [...(o.notifications||[]), { id: Math.random().toString(36).substring(7), type: 'success', message: `Arena expansion completed (+${i.toLocaleString()} seats). -€${(n/1000000).toFixed(1)}M deducted from Treasury.`, read: false }],
+            notifications: [...(o.notifications||[]), { id: Math.random().toString(36).substring(7), type: 'success', message: `Arena expansion completed (+${i.toLocaleString()} seats). -${formatMoney(n)} deducted from Treasury.`, read: false }],
             facilitySpend: (o.facilitySpend || 0) + n,
-            club: updatedClub,
+            club: { ...updatedClub, currentBudget: o.budget - n },
             worldClubs: updatedWorldClubs
         };
     }),
@@ -1271,7 +1274,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         return {
             budget: o.budget - downPayment,
             activeLoan: newLoan,
-            club: updatedClub,
+            club: { ...updatedClub, currentBudget: o.budget - downPayment },
             worldClubs: updatedWorldClubs,
             stadiumExpandedThisSeason: (o.stadiumExpandedThisSeason || 0) + 1,
             infraActionsThisSeason: (o.infraActionsThisSeason || 0) + 1,
@@ -1284,8 +1287,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                     type: 'celebration',
                     category: 'arena',
                     title: `🏟️ ${opt?.label || 'Grand Arena'} Structured Financing Approved!`,
-                    message: `Deal Closed: ${seats.toLocaleString()} seats. -€${(downPayment/1000000).toFixed(1)}M down payment. Credit: €${(principal/1000000).toFixed(1)}M financed over ${termYears} years (${formatMoney(combinedMonthlyPayment)}/mo, ${formatMoney(combinedAnnualPayment)}/season).`,
-                    subtitle: `Deal Closed: ${seats.toLocaleString()} seats. -€${(downPayment/1000000).toFixed(1)}M down payment. Credit: €${(principal/1000000).toFixed(1)}M financed over ${termYears} years (${formatMoney(combinedMonthlyPayment)}/mo, ${formatMoney(combinedAnnualPayment)}/season).`,
+                    message: `Deal Closed: ${seats.toLocaleString()} seats. -${formatMoney(downPayment)} down payment. Credit: ${formatMoney(principal)} financed over ${termYears} years (${formatMoney(combinedMonthlyPayment)}/mo, ${formatMoney(combinedAnnualPayment)}/season).`,
+                    subtitle: `Deal Closed: ${seats.toLocaleString()} seats. -${formatMoney(downPayment)} down payment. Credit: ${formatMoney(principal)} financed over ${termYears} years (${formatMoney(combinedMonthlyPayment)}/mo, ${formatMoney(combinedAnnualPayment)}/season).`,
                     read: false
                 },
                 ...(o.notifications || [])
@@ -1417,7 +1420,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             } : p)
         };
     }),
-    pitchSponsor: (type) => set((n) => {
+    pitchSponsor: (type, contractYears = 1) => set((n) => {
         const currentCommercial = (n.sponsorsPitchedThisSeason || 0);
         const limitCommercial = 3;
         if (currentCommercial >= limitCommercial) {
@@ -1431,7 +1434,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             };
         }
 
-        const prevDeals = ((n.sponsorsPitchedThisSeason || 0) > 0 && n.seasonSponsorDeals && n.seasonSponsorDealsYear === n.year) ? n.seasonSponsorDeals : {};
+        const prevDeals = (n.seasonSponsorDeals && n.seasonSponsorDealsYear === n.year) ? n.seasonSponsorDeals : {};
         if ((type !== 0 && (prevDeals[type]?.status === 'signed' || prevDeals[type]?.status === 'failed')) || (type === 2 && n.activePerformanceDeal)) {
             return {
                 notifications: [...(n.notifications || []), {
@@ -1445,17 +1448,33 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             };
         }
 
+        const years: 1 | 2 | 3 = contractYears === 3 ? 3 : contractYears === 2 ? 2 : 1;
+        const durationMult = years === 3 ? 1.10 : years === 2 ? 1.05 : 1.00;
+        const megaOddsPenalty = years === 3 ? 0.10 : years === 2 ? 0.05 : 0;
+
         const hasSalesmaster = (n.managerSkills || []).includes('sponsor_boost') || (n.managerSkills || []).includes('salesmaster');
         const hasPlaymakerPhilosophy = n.tactic === 'Playmaker Focus' || n.tactic === 'Total Handball';
         const terms = getDynamicSponsorPitchTerms(n);
 
-        const prob = type === 0 ? 1.0 : type === 1 ? terms.megaSuccessProb : 1.0;
+        const effectiveMegaProb = Math.max(0.15, Math.min(0.95, terms.megaSuccessProb - megaOddsPenalty));
+        const effectiveMegaPct = Math.round(effectiveMegaProb * 100);
+        const prob = type === 0 ? 1.0 : type === 1 ? effectiveMegaProb : 1.0;
         const success = Math.random() < prob;
         let income = 0;
 
-        if (type === 0) income = terms.standardPayout;
-        else if (type === 1 && success) income = terms.megaPayout;
-        else if (type === 2 && success) income = terms.performanceUpfront;
+        const rawStdPayout = terms.baseStandardPayout ?? terms.standardPayout;
+        const rawMegaPayout = terms.baseMegaPayout ?? terms.megaPayout;
+        const rawPerfUpfront = terms.basePerformanceUpfront ?? terms.performanceUpfront;
+        const rawPerfBonus = terms.basePerformanceBonus ?? terms.performanceBonus;
+
+        const scaledStandard = Math.round(rawStdPayout * durationMult);
+        const scaledMega = Math.round(rawMegaPayout * durationMult);
+        const scaledPerfUpfront = Math.round(rawPerfUpfront * durationMult);
+        const scaledPerfBonus = Math.round(rawPerfBonus * durationMult);
+
+        if (type === 0) income = scaledStandard;
+        else if (type === 1 && success) income = scaledMega;
+        else if (type === 2 && success) income = scaledPerfUpfront;
 
         const partnerBrand = type === 0
             ? terms.standardBrand
@@ -1470,13 +1489,15 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                 brandName: partnerBrand.name,
                 brandLogo: partnerBrand.logo,
                 payout: income,
-                ...(type === 2 ? { bonus: terms.performanceBonus } : {})
+                contractYears: years,
+                yearsRemaining: years,
+                ...(type === 2 ? { bonus: scaledPerfBonus } : {})
             }
             : (prevSlot?.status === 'signed'
                 ? prevSlot
                 : { status: 'failed' as const, brandName: 'Empty', brandLogo: '' });
 
-        const lockedDeals: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number }> = {
+        const lockedDeals: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number; contractYears?: 1 | 2 | 3; yearsRemaining?: number }> = {
             0: prevDeals[0] || { status: 'available', brandName: terms.standardBrand.name, brandLogo: terms.standardBrand.logo, payout: terms.standardPayout },
             1: prevDeals[1] || { status: 'available', brandName: terms.megaBrand.name, brandLogo: terms.megaBrand.logo, payout: terms.megaPayout },
             2: prevDeals[2] || { status: 'available', brandName: terms.perfBrand.name, brandLogo: terms.perfBrand.logo, payout: terms.performanceUpfront, bonus: terms.performanceBonus },
@@ -1484,13 +1505,15 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             [type]: nextSlot
         };
 
+        const durationLabel = `${years}-Year`;
         const message = success 
-            ? `${partnerBrand.logo} ${partnerBrand.name} (${type === 0 ? "Standard Partner" : type === 1 ? "Anchor Megadeal" : "Performance Contract"}) signed! ${hasSalesmaster ? '(+10% Commercial Negotiator) ' : ''}${hasPlaymakerPhilosophy ? '(+15% Playmaker Focus) ' : ''}+${formatMoney(income)} added to budget.` 
-            : `${partnerBrand.logo} ${partnerBrand.name} ${type === 1 ? "Megadeal" : "Performance"} negotiations broke down (${terms.megaSuccessPct}% odds). The board is not pleased.`;
+            ? `${partnerBrand.logo} ${partnerBrand.name} (${durationLabel} ${type === 0 ? "Standard Partner" : type === 1 ? "Anchor Megadeal" : "Performance Contract"}) signed! ${hasSalesmaster ? '(+10% Commercial Negotiator) ' : ''}${hasPlaymakerPhilosophy ? '(+15% Playmaker Focus) ' : ''}+${formatMoney(income)}/yr added to budget${years > 1 ? ` (${formatMoney(income * years)} total over ${years} seasons)` : ''}.` 
+            : `${partnerBrand.logo} ${partnerBrand.name} ${durationLabel} ${type === 1 ? "Megadeal" : "Performance"} negotiations broke down (${effectiveMegaPct}% odds). The board is not pleased.`;
             
         trackEvent('sponsor_pitched', {
             pitch_type: type === 0 ? 'standard' : type === 1 ? 'megadeal' : 'performance',
             sponsor_brand: partnerBrand.name,
+            contract_years: years,
             success,
             income,
             club_name: n.club.name,
@@ -1554,14 +1577,16 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             }
         ];
 
+        const nextIpoBudget = state.budget + raisedCapital;
         return {
-            budget: state.budget + raisedCapital,
+            budget: nextIpoBudget,
+            ...(nextIpoBudget >= 0 ? { seasonsInDebt: 0, bankruptcyPending: false } : {}),
             club: {
                 ...state.club,
                 isPublic: true,
                 ipoPrice: offeringPrice,
                 stockPrice: resultingStockPrice,
-                currentBudget: state.budget + raisedCapital
+                currentBudget: nextIpoBudget
             },
             worldClubs: {
                 ...(state.worldClubs || {}),
@@ -1875,7 +1900,17 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             isSacked = true;
         }
         
-        set({ clubImpactScore: clubImpact, immunityShields: shields, isSacked });
+        const hasBoardDarling = (state.managerSkills || []).includes('vorstandsliebling');
+        if (hasBoardDarling && !isSacked) {
+            clubImpact = Math.max(15, clubImpact);
+        }
+        
+        set({
+            clubImpactScore: clubImpact,
+            immunityShields: shields,
+            isSacked,
+            ...(isSacked ? { tenureYears: 0 } : {})
+        });
         return { isSacked, toast };
     },
     applyPlayoffTierChange: (newTier: number, swapOpponentName?: string) => set((state) => {
@@ -2065,9 +2100,72 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         const validEuroStatus = (newTier === 1 || (newTier === 2 && state.euroStatus === 'EL' && lastHist?.trophiesThisYear?.dfb))
             ? state.euroStatus
             : null;
+
+        // Refresh unpitched available sponsor brands if playoff outcome changed the club's next-season tier
+        let updatedSeasonSponsorDeals = state.seasonSponsorDeals ? { ...state.seasonSponsorDeals } : undefined;
+        if (newTier !== prevSimulatedNextTier && updatedSeasonSponsorDeals) {
+            for (const slotIdx of [0, 1, 2]) {
+                const existingSlot = updatedSeasonSponsorDeals[slotIdx];
+                if (!existingSlot || existingSlot.status === 'available') {
+                    const freshBrand = getSponsorBrandForClub(club.country || 'GER', slotIdx, state.year, club.name, 0, newTier);
+                    updatedSeasonSponsorDeals[slotIdx] = {
+                        status: 'available',
+                        brandName: freshBrand.name,
+                        brandFullName: freshBrand.fullName,
+                        brandTag: freshBrand.tag,
+                        brandLogo: freshBrand.logo
+                    };
+                }
+            }
+        }
+
+        // Re-evaluate Board Roadmap after playoff promotion/survival updates club.tier and history.
+        // Note: When postSeasonPending is true, Dashboard.tsx's finishSimulation authoritatively evaluates
+        // _preSimRoadmap and awards MP/cash bonuses once after all postseason matches conclude.
+        let updatedBudget = state.budget;
+        let updatedSkillPoints = state.skillPoints || 0;
+        let updatedBoardRoadmap = state.boardRoadmap;
+        if (state.boardRoadmap) {
+            const syncedPlayoffRoadmap = getOrGenerateRoadmap(
+                state.boardRoadmap,
+                { ...club, currentBudget: state.budget },
+                state.year,
+                history
+            );
+            if (!state.postSeasonPending) {
+                let playoffMpBonus = 0;
+                let playoffCashBonus = 0;
+                const claimedGoals = syncedPlayoffRoadmap.goals.map(syncedGoal => {
+                    const prevGoal = state.boardRoadmap?.goals?.find(g => g.id === syncedGoal.id || g.targetType === syncedGoal.targetType);
+                    if (syncedGoal.completed && (!prevGoal || (!prevGoal.completed && !prevGoal.rewardClaimed))) {
+                        playoffMpBonus += syncedGoal.rewardMp || 0;
+                        playoffCashBonus += syncedGoal.rewardCash || 0;
+                        return { ...syncedGoal, rewardClaimed: true };
+                    }
+                    return {
+                        ...syncedGoal,
+                        rewardClaimed: Boolean(syncedGoal.rewardClaimed || prevGoal?.rewardClaimed)
+                    };
+                });
+                updatedBoardRoadmap = {
+                    ...syncedPlayoffRoadmap,
+                    goals: claimedGoals
+                };
+                updatedSkillPoints += playoffMpBonus;
+                updatedBudget += playoffCashBonus;
+            } else {
+                updatedBoardRoadmap = syncedPlayoffRoadmap;
+            }
+            club.currentBudget = updatedBudget;
+        }
         
         return { 
             club, 
+            budget: updatedBudget,
+            skillPoints: updatedSkillPoints,
+            boardRoadmap: updatedBoardRoadmap,
+            ...(updatedBudget >= 0 ? { seasonsInDebt: 0, bankruptcyPending: false } : {}),
+            ...(updatedSeasonSponsorDeals ? { seasonSponsorDeals: updatedSeasonSponsorDeals } : {}),
             worldClubs: newWorldClubs, 
             boardTargetPos, 
             boardExpectation,
@@ -3542,20 +3640,43 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         const rawCurDeals = (state.seasonSponsorDeals && state.seasonSponsorDealsYear === state.year)
             ? state.seasonSponsorDeals
             : {};
-        const completedSeasonSponsorDeals: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number }> = {
+        const completedSeasonSponsorDeals: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number; contractYears?: 1 | 2 | 3; yearsRemaining?: number }> = {
             0: rawCurDeals[0] || { status: 'available', brandName: currentSeasonTerms.standardBrand.name, brandLogo: currentSeasonTerms.standardBrand.logo, payout: currentSeasonTerms.standardPayout },
             1: rawCurDeals[1] || { status: 'available', brandName: currentSeasonTerms.megaBrand.name, brandLogo: currentSeasonTerms.megaBrand.logo, payout: currentSeasonTerms.megaPayout },
             2: rawCurDeals[2] || { status: 'available', brandName: currentSeasonTerms.perfBrand.name, brandLogo: currentSeasonTerms.perfBrand.logo, payout: currentSeasonTerms.performanceUpfront, bonus: currentSeasonTerms.performanceBonus }
         };
         (histItem as any).seasonSponsorDeals = completedSeasonSponsorDeals;
 
-        // Carry over unpitched sponsor brands to next season if staying in the same tier so unpitched sponsors never vanish;
-        // if a slot was pitched ('signed' or 'failed') or the club changed division tier, assign a fresh tier-scaled brand for next season.
-        const nextSeasonSponsorDeals: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number }> = {};
+        // Carry over multi-year signed contracts (decrementing yearsRemaining and crediting annual installment),
+        // or carry over unpitched sponsor brands if staying in the same tier.
+        const nextSeasonSponsorDeals: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number; contractYears?: 1 | 2 | 3; yearsRemaining?: number }> = {};
+        let recurringSponsorPayout = 0;
+        let activeMultiYearCount = 0;
+        let nextActivePerfDeal = false;
+
         ([0, 1, 2] as const).forEach((slotIdx) => {
             const curSlot = completedSeasonSponsorDeals[slotIdx];
             const wasPitched = curSlot && (curSlot.status === 'signed' || curSlot.status === 'failed');
-            if (!wasPitched && playedTier === nextTier && curSlot?.brandName && curSlot.brandName !== 'Empty') {
+            const remYears = (curSlot?.status === 'signed' && (curSlot.yearsRemaining || 1) > 1)
+                ? (curSlot.yearsRemaining || 1) - 1
+                : 0;
+
+            if (remYears > 0 && curSlot) {
+                nextSeasonSponsorDeals[slotIdx] = {
+                    status: 'signed',
+                    brandName: curSlot.brandName,
+                    brandLogo: curSlot.brandLogo || '',
+                    payout: curSlot.payout,
+                    bonus: curSlot.bonus,
+                    contractYears: curSlot.contractYears || 2,
+                    yearsRemaining: remYears
+                };
+                recurringSponsorPayout += (curSlot.payout || 0);
+                activeMultiYearCount += 1;
+                if (slotIdx === 2) {
+                    nextActivePerfDeal = true;
+                }
+            } else if (!wasPitched && playedTier === nextTier && curSlot?.brandName && curSlot.brandName !== 'Empty') {
                 nextSeasonSponsorDeals[slotIdx] = {
                     status: 'available',
                     brandName: curSlot.brandName,
@@ -3573,6 +3694,22 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                 };
             }
         });
+
+        if (recurringSponsorPayout > 0) {
+            budget += recurringSponsorPayout;
+            extraNotifications.push({
+                id: Math.random().toString(),
+                type: 'success',
+                title: 'MULTI-YEAR SPONSORSHIP INSTALLMENT',
+                message: `🤝 Active multi-year sponsorship contract(s) paid out +${formatMoney(recurringSponsorPayout)} into the club treasury for the new season.`,
+                read: false
+            });
+        }
+
+        if (budget + roadmapCashBonus >= 0) {
+            seasonsInDebt = 0;
+            bankruptcyPending = false;
+        }
 
         const ue = {
             ...state,
@@ -3653,8 +3790,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             schoolTrialistsThisSeason: 0,
             lastGenerationalTurnoverYear: triggeredGenerationalYear,
             squadSalesThisSeason: 0,
-            sponsorsPitchedThisSeason: 0,
-            activePerformanceDeal: false,
+            sponsorsPitchedThisSeason: activeMultiYearCount,
+            activePerformanceDeal: nextActivePerfDeal,
             failedSponsorTargetNextSeason: false,
             seasonSponsorDeals: nextSeasonSponsorDeals,
             seasonSponsorDealsYear: state.year + 1,
@@ -3662,7 +3799,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             regionalToursThisSeason: 0,
             brandCampaignsThisSeason: 0,
             teamBondingThisSeason: 0,
-            sponsorIncome: 0,
+            sponsorIncome: recurringSponsorPayout,
             investmentsThisSeason: 0,
             jobMarketSearchesThisSeason: 0,
             transferSpend: 0,
@@ -4147,6 +4284,13 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                 bankruptcyPending: false, 
                 history: i, 
                 budget: 0, 
+                sponsorIncome: 0,
+                ...(choice === 'insolvency' ? {
+                    sponsorsPitchedThisSeason: 0,
+                    activePerformanceDeal: false,
+                    seasonSponsorDeals: {},
+                    seasonSponsorDealsYear: r.year
+                } : {}),
                 activeLoan: null,
                 isSacked: newIsSacked,
                 club: newClub,
@@ -4352,7 +4496,9 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         set({
             activeLoan: newLoan,
             budget: newBudget,
+            club: { ...state.club, currentBudget: newBudget },
             seasonsInDebt: newBudget >= 0 ? 0 : state.seasonsInDebt,
+            ...(newBudget >= 0 ? { bankruptcyPending: false } : {}),
             notifications: [
                 {
                     id: Math.random().toString(),
@@ -4577,8 +4723,10 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
 
         set({
             budget: newBudget,
+            club: { ...state.club, currentBudget: newBudget },
             lastPatronRescueYear: state.year,
             seasonsInDebt: newBudget >= 0 ? 0 : state.seasonsInDebt,
+            ...(newBudget >= 0 ? { bankruptcyPending: false } : {}),
             notifications: [
                 {
                     id: Math.random().toString(),
@@ -4747,13 +4895,23 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             return { success: false, message: 'Prospect has already completed an affiliate farm loan and cannot be loaned out again.' };
         }
 
+        if ((prospect.timer || 0) <= 0) {
+            return { success: false, message: 'Graduated prospects are ready for senior squad promotion or transfer and cannot be sent on a youth farm loan.' };
+        }
+
         const updatedPipeline = pipeline.map(p => {
             if (p.id === prospectId) {
+                const newBoost = Math.min(5, (p.boost || 1) + 1);
+                const newType: 'local' | 'top_prospect' | 'generational' = newBoost >= 3
+                    ? (p.type === 'generational' ? 'generational' : 'top_prospect')
+                    : (p.type || 'local');
                 return {
                     ...p,
                     isLoanedOut: true,
                     loanReturnSeason: state.year + 1,
-                    boost: Math.min(5, (p.boost || 1) + 1)
+                    boost: newBoost,
+                    type: newType,
+                    tierType: newType
                 };
             }
             return p;
@@ -4850,6 +5008,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
 
         let fee = 0;
         let buyer = '';
+        const activeDbClubs = getActiveClubs().filter(c => c.name !== state.club.name && !isReserveClub(c.name));
 
         if (isExportPowerhouse) {
             if (prospect.type === 'generational' || boostVal >= 3) {
@@ -4859,8 +5018,11 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             } else {
                 fee = 150000 + boostVal * 50000;
             }
-            const euroGiants = ['FC Barcelona', 'Paris Saint-Germain', 'THW Kiel', 'SC Magdeburg', 'Telekom Veszprém', 'Industria Kielce', 'Aalborg Håndbold', 'Füchse Berlin'];
-            buyer = euroGiants[Math.floor(Math.random() * euroGiants.length)];
+            const topEuroBuyers = activeDbClubs.filter(c => c.tier === 1 && (c.baseOvr || 75) >= 82);
+            const buyerPool = topEuroBuyers.length > 0 ? topEuroBuyers : activeDbClubs.filter(c => c.tier === 1);
+            buyer = buyerPool.length > 0
+                ? buyerPool[Math.floor(Math.random() * buyerPool.length)].name
+                : 'Continental Division 1 Club';
         } else {
             const effBoost = Math.min(3, Math.max(1, boostVal));
             const tier1BaseFee: Record<number, number> = {
@@ -4873,14 +5035,16 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             if (prospect.type === 'generational') fee = Math.round(fee * 1.25);
             else if (prospect.type === 'top_prospect') fee = Math.round(fee * 1.15);
 
-            const buyerClubsByTier: Record<number, string[]> = {
-                1: ['THW Kiel', 'SC Magdeburg', 'SG Flensburg-Handewitt', 'Füchse Berlin', 'FC Barcelona', 'Telekom Veszprém', 'Industria Kielce', 'Paris Saint-Germain', 'Aalborg Håndbold'],
-                2: ['VfL Potsdam', 'TuS N-Lübbecke', 'HBW Balingen', 'Eintracht Hagen', 'Billère Handball', 'Dijon Métropole', 'BM Guadalajara'],
-                3: ['HC Empor Rostock', 'EHV Aue', 'HSG Krefeld', 'TuS Ferndorf', 'MTV Braunschweig', 'Sélestat Alsace'],
-                4: ['Regional Academy League', 'Upper Tier Scout Pool', 'State Handball Federation Center', 'Youth Olympic Training Hub']
-            };
-            const buyerList = buyerClubsByTier[Math.min(4, tier)] || buyerClubsByTier[4];
-            buyer = buyerList[Math.floor(Math.random() * buyerList.length)];
+            const targetBuyerTier = Math.max(1, Math.min(3, tier - (effBoost >= 2 ? 1 : 0)));
+            const sameCountryBuyers = activeDbClubs.filter(
+                c => normalizeCountry(c.country || 'GER') === normalizeCountry(cleanCountry) && c.tier === targetBuyerTier
+            );
+            const tierBuyers = sameCountryBuyers.length > 0
+                ? sameCountryBuyers
+                : activeDbClubs.filter(c => c.tier === targetBuyerTier);
+            buyer = tierBuyers.length > 0
+                ? tierBuyers[Math.floor(Math.random() * tierBuyers.length)].name
+                : (activeDbClubs[0]?.name || 'Regional Academy League');
         }
 
         const newPipeline = pipeline.filter(p => p.id !== prospectId);
@@ -4889,6 +5053,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
 
         set({
             budget: newBudget,
+            club: { ...state.club, currentBudget: newBudget },
+            ...(newBudget >= 0 ? { seasonsInDebt: 0, bankruptcyPending: false } : {}),
             youthPipeline: newPipeline,
             youthSalesThisSeason: newSalesCount,
             youthSalesSeasonYear: state.year,
@@ -4963,13 +5129,16 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         const slotLimit = getAcademySlotLimit(club.academyLevel || 1);
         const loanedOutProspects = (state.youthPipeline || []).filter(p => p.isLoanedOut);
         const sortedActive = (state.youthPipeline || []).filter(p => !p.isLoanedOut).sort((a, b) => {
+            if (Boolean(a.isProtected) !== Boolean(b.isProtected)) return a.isProtected ? -1 : 1;
             if ((a.timer || 0) !== (b.timer || 0)) return (a.timer || 0) - (b.timer || 0);
             return (b.boost || 1) - (a.boost || 1);
         });
         const newPipeline = [...loanedOutProspects, ...sortedActive.slice(0, Math.max(0, slotLimit - 2)), p1, p2];
+        const nextRebuildBudget = state.budget + windfall;
 
         club.baseOvr = newOvr;
         club.squadSize = newSquadSize;
+        club.currentBudget = nextRebuildBudget;
 
         const newLog = {
             id: Math.random().toString(36).substring(7),
@@ -4986,13 +5155,15 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                 [club.id]: {
                     ...(state.worldClubs?.[club.id] || club),
                     baseOvr: newOvr,
-                    squadSize: newSquadSize
+                    squadSize: newSquadSize,
+                    currentBudget: nextRebuildBudget
                 }
             },
             lastOvr: typeof state.lastOvr === 'number' ? state.lastOvr : currentOvr,
             startOfSeasonOvr: typeof state.startOfSeasonOvr === 'number' ? state.startOfSeasonOvr : currentOvr,
             squadSalesThisSeason: (state.squadSalesThisSeason || 0) + veteransSold,
-            budget: state.budget + windfall,
+            budget: nextRebuildBudget,
+            ...(nextRebuildBudget >= 0 ? { seasonsInDebt: 0, bankruptcyPending: false } : {}),
             youthPipeline: newPipeline,
             lastGenerationalTurnoverYear: state.year,
             lastGenerationalRebuildYear: state.year,

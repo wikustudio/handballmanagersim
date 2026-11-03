@@ -1067,7 +1067,7 @@ export function simulateGlobalLeagues(
         // Domestic Regional / Amateur Cup (when user competed or resolved a Regional Cup run)
         const runRegWinnerName = confirmedRegCup?.winnerName || relevantCupRuns.find(r => isRegionalCupRun(r) && r.won === false && r.winnerName)?.winnerName;
         if (userTrophiesThisYear?.reg || confirmedRegCup || regCupEliminated) {
-            const defaultRegCupName = userNormCountry === 'GER' ? 'DHB-Amateurpokal' : 'Regional Cup';
+            const defaultRegCupName = 'Regional Cup';
             const userWonReg = !regCupEliminated && Boolean((userTrophiesThisYear?.reg && !regCupEliminated) || (confirmedRegCup?.userWon && (confirmedRegCup.year === currentYear || !confirmedRegCup.year)));
             const regPool = agedClubs.filter(c =>
                 c.tier >= 2 &&

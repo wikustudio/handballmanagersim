@@ -878,7 +878,9 @@ export const generateRandomEvent = (currentState: GameState): GameEvent | null =
     ];
 
     const extraEvents: GameEvent[] = [];
-    const unprotectedYouth = currentState.youthPipeline?.find(y => !y.isProtected && y.boost >= 3);
+    const unprotectedYouth = (currentState.club.academyLevel || 1) >= 3
+      ? undefined
+      : currentState.youthPipeline?.find(y => !y.isProtected && !y.isLoanedOut && y.boost >= 3);
     const poachingCost = getLeagueScaledVal(tier, 25000, clubCountry);
 
     if (unprotectedYouth) {
@@ -1221,6 +1223,8 @@ export const resolveDynamicEvent = (
       updated.budget += (effects.budget || effects.money || 0);
     }
   }
+
+  updated.club.currentBudget = updated.budget;
 
   const toastMsg = isSuccess ? getLocalizedText(opt.goodTxt) : getLocalizedText(opt.badTxt);
   const toastType = isSuccess ? 'success' : 'error';
