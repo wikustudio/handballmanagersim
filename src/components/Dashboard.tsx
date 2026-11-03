@@ -588,15 +588,16 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     // If waiting for winter break after cup quarter-final
     if (winterBreakPending) {
       setWinterBreakPending(false);
-      if (!state.midSeasonCrisisTriggered && Math.random() < 0.25) {
-          const crisis = generateMidSeasonCrisis(state);
+      const liveStateAfterToast = useGameStore.getState();
+      if (!liveStateAfterToast.midSeasonCrisisTriggered && Math.random() < 0.25) {
+          const crisis = generateMidSeasonCrisis(liveStateAfterToast);
           if (crisis) {
               useGameStore.getState().updateState({ midSeasonCrisisTriggered: true });
               setActiveEvent(crisis);
               return;
           }
       }
-      useGameStore.getState().updateState({ winterBreakSeenYear: state.year });
+      useGameStore.getState().updateState({ winterBreakSeenYear: liveStateAfterToast.year });
       setShowWinterBreak(true);
       return;
     }
@@ -919,7 +920,9 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
 
   const handleResolveActiveEvent = (choiceIndex: number) => {
     const isMidSeasonCrisis = activeEvent?.type === 'injury_crisis' || activeEvent?.type === 'sponsor_pullout' || activeEvent?.type === 'fan_protest';
-    const result = resolveDynamicEvent(state, activeEvent, choiceIndex, team.tier);
+    const currentStoreState = useGameStore.getState();
+    const currentTier = currentStoreState.club?.tier || team.tier;
+    const result = resolveDynamicEvent(currentStoreState, activeEvent, choiceIndex, currentTier);
     if (result) {
       if (result.acceptJobClub) {
         useGameStore.getState().acceptJobOffer(result.acceptJobClub);
@@ -945,7 +948,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     }
     setActiveEvent(null);
     if (isMidSeasonCrisis) {
-        useGameStore.getState().updateState({ winterBreakSeenYear: state.year });
+        useGameStore.getState().updateState({ winterBreakSeenYear: useGameStore.getState().year });
         setShowWinterBreak(true);
     }
   };
@@ -972,10 +975,10 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           // Play Cup Quarter-Final before winter break! (Never use a Supercup name for QF/SF)
           const isSupercupStr = (s?: string) => Boolean(s && /(supercup|super cup|superpokal|superkup|supercoppa|supertaca|supertaça|supercopa|szuperkupa|superpuchar)/i.test(s));
           const rawCupName = isAmateurpokal
-            ? (realDataActive ? bPackage.regionalCupName : (isGer ? 'DHB-Amateurpokal' : 'Regional Cup'))
+            ? (realDataActive ? bPackage.regionalCupName : 'Regional Cup')
             : (realDataActive ? bPackage.nationalCupName : (isGer ? 'DHB-Pokal' : 'National Cup'));
           const cupName = isSupercupStr(rawCupName)
-            ? (isAmateurpokal ? (isGer ? 'DHB-Amateurpokal' : 'Regional Cup') : (isGer ? 'DHB-Pokal' : 'National Cup'))
+            ? (isAmateurpokal ? 'Regional Cup' : (isGer ? 'DHB-Pokal' : 'National Cup'))
             : rawCupName;
 
           let cupTournament = state.activeCupTournament;
@@ -1074,8 +1077,9 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           }
         }
 
-        if (!state.midSeasonCrisisTriggered && Math.random() < 0.25) { // 25% chance of mid-season crisis
-            const crisis = generateMidSeasonCrisis(state);
+        const liveMidSeasonState = useGameStore.getState();
+        if (!liveMidSeasonState.midSeasonCrisisTriggered && Math.random() < 0.25) { // 25% chance of mid-season crisis
+            const crisis = generateMidSeasonCrisis(liveMidSeasonState);
             if (crisis) {
                 useGameStore.getState().updateState({ midSeasonCrisisTriggered: true });
                 setActiveEvent(crisis);
@@ -1085,7 +1089,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             }
         }
 
-        useGameStore.getState().updateState({ winterBreakSeenYear: state.year });
+        useGameStore.getState().updateState({ winterBreakSeenYear: liveMidSeasonState.year });
         setShowWinterBreak(true);
         setSimulationPhase("idle");
         isSimulatingRef.current = false;
@@ -1108,6 +1112,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         const preSimDrought = state.trophyDrought || 0;
         const preSimEuroStatus = state.euroStatus || null;
         const result: any = simulateSeason();
+        const preSimOvr = result.preSimOvr ?? state.club.baseOvr;
         result._preSimMeta = { preSimTenure, preSimShields, preSimImpact, preSimDrought };
         result.euroThisSeason = preSimEuroStatus;
         const simSeasonYear = result.year;
@@ -1158,7 +1163,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
 
              const safeRegCupName = (realDataActive && bPackage.regionalCupName && !/(supercup|super cup|superpokal|superkup|supercoppa|supertaca|supertaça|supercopa)/i.test(bPackage.regionalCupName))
                  ? bPackage.regionalCupName
-                 : (isGer ? "DHB-Amateurpokal" : "Regional Cup");
+                 : "Regional Cup";
              cupRunQueue.push({
                  type: "cup_sf",
                  title: "SEMI-FINAL",
@@ -1355,8 +1360,8 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                  isDirect: directMatch,
                  tier: tier,
                  numTeams: numTeams,
-                 opponentOvr: result.club.baseOvr + (Math.floor(Math.random() * 5) - 2),
-                 playerOvr: state.club.baseOvr,
+                 opponentOvr: preSimOvr + (Math.floor(Math.random() * 5) - 2),
+                 playerOvr: preSimOvr,
                  playerClubName: state.club.name,
                  baseWinProb: 50,
                  standings: getDecisionDayStandingsSlice(
@@ -1374,7 +1379,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                ? clubsDb.find(c => c.name === upperPlayoffRow.name || String(c.id) === String(upperPlayoffRow.id))
                : undefined;
              const promoPlayoffOppName = upperPlayoffRow?.name || clubsDb.filter(c => c.tier === Math.max(1, tier - 1) && normalizeCountry(c.country || 'GER') === clubCountry && c.name !== state.club.name && !isReserveClub(c.name)).sort((a,b) => a.baseOvr - b.baseOvr)[2]?.name || (clubCountry === 'FRA' ? 'Dunkerque HGL' : clubCountry === 'POL' ? 'MMTS Kwidzyn' : clubCountry === 'AUT' ? 'BT Füchse' : clubCountry === 'SUI' ? 'BSV Bern' : 'TVB Stuttgart');
-             const promoPlayoffOppOvr = upperPlayoffClub?.baseOvr || (result.club.baseOvr + (Math.floor(Math.random() * 5) - 2) + 4);
+             const promoPlayoffOppOvr = upperPlayoffClub?.baseOvr || (preSimOvr + (Math.floor(Math.random() * 5) - 2) + 4);
 
              cupRunQueue.push({
                  type: "playoff",
@@ -1386,9 +1391,9 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                  numTeams: numTeams,
                  opponentName: promoPlayoffOppName,
                  opponentOvr: promoPlayoffOppOvr,
-                 playerOvr: state.club.baseOvr,
+                 playerOvr: preSimOvr,
                  playerClubName: state.club.name,
-                 baseWinProb: Math.round(Math.max(0.1, Math.min(0.9, 0.5 + (state.club.baseOvr - promoPlayoffOppOvr) * 0.02)) * 100),
+                 baseWinProb: Math.round(Math.max(0.1, Math.min(0.9, 0.5 + (preSimOvr - promoPlayoffOppOvr) * 0.02)) * 100),
                  standings: getDecisionDayStandingsSlice(
                    generateLeagueTable(
                      useGameStore.getState(),
@@ -1513,7 +1518,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                  useGameStore.getState().updateState({ history: curHistReleg });
                }
 
-               const relegationOppOvr = isCrossTier ? (lowerPlayoffClub?.baseOvr || (result.club.baseOvr - 2)) : (result.club.baseOvr + (Math.floor(Math.random() * 5) - 2) - 4);
+               const relegationOppOvr = isCrossTier ? (lowerPlayoffClub?.baseOvr || (preSimOvr - 2)) : (preSimOvr + (Math.floor(Math.random() * 5) - 2) - 4);
                cupRunQueue.push({
                    type: "relegation_playoff",
                    title: "DECISION DAY!",
@@ -1527,9 +1532,9 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                    opponentName,
                    rivalName: isCrossTier ? opponentName : relegationRivalName,
                    opponentOvr: relegationOppOvr,
-                   playerOvr: state.club.baseOvr,
+                   playerOvr: preSimOvr,
                    playerClubName: state.club.name,
-                   baseWinProb: Math.round(Math.max(0.1, Math.min(0.9, 0.5 + (state.club.baseOvr - relegationOppOvr) * 0.02)) * 100),
+                   baseWinProb: Math.round(Math.max(0.1, Math.min(0.9, 0.5 + (preSimOvr - relegationOppOvr) * 0.02)) * 100),
                    standings: getDecisionDayStandingsSlice(
                      relegPreTable,
                      result.seasonStats.pos,
@@ -1913,6 +1918,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         latestStore.updateState({
           skillPoints: finalSp,
           budget: finalBudget,
+          ...(finalBudget >= 0 ? { seasonsInDebt: 0, bankruptcyPending: false } : {}),
           club: { ...latestStore.club, currentBudget: finalBudget },
           boardRoadmap: nextPostRoadmap,
           notifications: [...roadmapNotifs, ...nonRoadmapNotifs].slice(0, 50)
@@ -2016,7 +2022,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
       }
       setIsSimulating(false);
       const currentStore = useGameStore.getState();
-      if (currentStore.budget >= 0 && currentStore.seasonsInDebt > 0) {
+      if (currentStore.budget >= 0 && (currentStore.seasonsInDebt > 0 || currentStore.bankruptcyPending)) {
           currentStore.updateState({ seasonsInDebt: 0, bankruptcyPending: false });
       }
       // Note: performance deal result is integrated directly into SeasonFinishModal banner & notifications
@@ -2051,7 +2057,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     let cupTitle = '';
     let movementType: 'champion' | 'intl_cup' = 'intl_cup';
     const defaultDomCupTitle = getFAInfo(normCountry).cup || 'National Cup';
-    const defaultRegCupTitle = normCountry === 'GER' ? 'DHB-Amateurpokal' : 'Regional Cup';
+    const defaultRegCupTitle = 'Regional Cup';
     
     if (cupKey === 'bl' || cupKey === 'lower') {
       movementType = 'champion';
@@ -4254,15 +4260,16 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
 
             if (winterBreakPending) {
                 setWinterBreakPending(false);
-                if (!state.midSeasonCrisisTriggered && Math.random() < 0.25) {
-                    const crisis = generateMidSeasonCrisis(state);
+                const liveAfterMatchState = useGameStore.getState();
+                if (!liveAfterMatchState.midSeasonCrisisTriggered && Math.random() < 0.25) {
+                    const crisis = generateMidSeasonCrisis(liveAfterMatchState);
                     if (crisis) {
                         useGameStore.getState().updateState({ midSeasonCrisisTriggered: true });
                         setActiveEvent(crisis);
                         return;
                     }
                 }
-                useGameStore.getState().updateState({ winterBreakSeenYear: state.year });
+                useGameStore.getState().updateState({ winterBreakSeenYear: liveAfterMatchState.year });
                 setShowWinterBreak(true);
                 return;
             } else if (newToastToTrigger) {
@@ -5116,7 +5123,8 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             if (!res || !res.success) {
               return res || { success: false, message: 'Recruitment failed' };
             }
-            const updatedPipeline = useGameStore.getState().youthPipeline || [];
+            const latestStoreAfterRecruit = useGameStore.getState();
+            const updatedPipeline = latestStoreAfterRecruit.youthPipeline || [];
             const newest = res.prospect || updatedPipeline[updatedPipeline.length - 1];
             if (newest) {
                 if (newest.boost >= 3 || newest.type === 'generational') {
@@ -5124,7 +5132,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                         type: newest.type === 'generational' ? 'superstar' : newest.type === 'top_prospect' ? 'key' : 'youth',
                         cost: cost,
                         gain: newest.boost,
-                        ovr: state.club.baseOvr || 60,
+                        ovr: latestStoreAfterRecruit.club.baseOvr || 60,
                         name: newest.name
                     });
                 }
@@ -5133,8 +5141,9 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           }}
           protectionCost={Math.round(getLeagueScaledVal(state.club.tier, 35000, state.club.country))}
           onProtectYouth={(id) => {
-             const cost = Math.round(getLeagueScaledVal(state.club.tier, 35000, state.club.country));
-             stateStore.protectYouth(id, cost);
+             const liveStore = useGameStore.getState();
+             const cost = Math.round(getLeagueScaledVal(liveStore.club.tier, 35000, liveStore.club.country));
+             liveStore.protectYouth(id, cost);
           }}
           onGachaReveal={setGachaRevealData}
           onClose={() => setShowYouth(false)}

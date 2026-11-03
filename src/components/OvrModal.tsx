@@ -58,14 +58,14 @@ export const OvrModal: React.FC<OvrModalProps> = ({ state, lang, onClose }) => {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 14 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
-        className="bg-[#14151e] w-full max-w-md rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden relative z-10 flex flex-col max-h-[88vh] cursor-default"
+        className="bg-[#14151e] w-full max-w-md rounded-[28px] border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden relative z-10 flex flex-col max-h-[88vh] cursor-default"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Subtle Ambient Radial Glow matching rating status */}
         <div className={`absolute inset-0 pointer-events-none opacity-40 ${tierConfig.ambientGlow}`} />
 
         {/* Top Ambient Highlight matching rating status */}
-        <div className={`absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent ${tierConfig.glowLine} to-transparent pointer-events-none`} />
+        <div className={`absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent ${tierConfig.glowLine} to-transparent pointer-events-none`} />
 
         {/* Modal Header */}
         <div className="p-5 pb-4 border-b border-white/[0.04] flex justify-between items-center relative shrink-0">
@@ -212,7 +212,7 @@ export const OvrModal: React.FC<OvrModalProps> = ({ state, lang, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/[0.04] flex justify-end shrink-0">
+        <div className="p-4 border-t border-white/[0.04] bg-[#10121a] flex justify-end shrink-0">
           <button 
             onClick={onClose} 
             className="w-full py-2.5 font-semibold text-xs rounded-xl transition cursor-pointer bg-emerald-500/[0.05] hover:bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 shadow-sm"

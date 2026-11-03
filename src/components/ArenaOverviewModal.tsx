@@ -408,7 +408,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/40 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-sky-400/40 to-transparent pointer-events-none" />
 
         {/* Modal Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 pb-3 border-b border-white/[0.04] shrink-0">
@@ -1487,7 +1487,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                             onClick={() => handleExecuteExpansion(opt.cost, seatsToAdd, opt.fanBoost)}
                             className={`px-4 py-2 rounded-xl font-semibold text-xs tracking-wide transition cursor-pointer active:scale-95 ${
                               affordable && !isMaxed && !isBlockedBySeasonQuota
-                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_4px_20px_rgba(37,99,235,0.25)] border border-blue-400/30'
+                                ? 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30'
                                 : 'bg-white/[0.04] text-zinc-500 cursor-not-allowed border border-white/[0.04]'
                             }`}
                           >
@@ -1505,7 +1505,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
         </div>
 
         {/* Action Button Footer */}
-        <div className="p-3.5 sm:p-4 border-t border-white/[0.04] bg-[#14151e] flex items-center justify-between gap-3 shrink-0">
+        <div className="p-3.5 sm:p-4 border-t border-white/[0.04] bg-[#10121a] flex items-center justify-between gap-3 shrink-0">
           <div className="flex flex-col">
             <span className="text-[10px] text-zinc-500 font-medium">
               Expansion Season Status:

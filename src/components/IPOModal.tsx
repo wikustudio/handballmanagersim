@@ -180,11 +180,11 @@ export const IPOModal: React.FC<IPOModalProps> = ({ isOpen, state, onClose }) =>
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.15, ease: 'easeOut' }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[560px] bg-[#14151e] rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] flex flex-col max-h-[92vh] overflow-hidden cursor-default pointer-events-auto"
+        className="relative w-full max-w-[560px] bg-[#14151e] rounded-[28px] border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] flex flex-col max-h-[92vh] overflow-hidden cursor-default pointer-events-auto"
       >
         {/* Top Ambient Glow */}
         <div
-          className={`absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent ${
+          className={`absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent ${
             isPublic
               ? isSurging
                 ? 'via-emerald-400/30'
@@ -545,7 +545,7 @@ export const IPOModal: React.FC<IPOModalProps> = ({ isOpen, state, onClose }) =>
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#14151e] shrink-0 flex items-center justify-between gap-3 relative z-20">
+        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#10121a] shrink-0 flex items-center justify-between gap-3 relative z-20">
           <button
             onClick={onClose}
             className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white text-xs font-medium transition border border-white/[0.04] active:scale-95 cursor-pointer"

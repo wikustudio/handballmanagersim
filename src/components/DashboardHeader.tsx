@@ -347,7 +347,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
   const domCupTitle = getDomesticCupInfo(state.club.country, 1).name || 'National Cup';
   const domSupercupTitle = getDomesticSupercupInfo(state.club.country).name || 'Supercup';
-  const regCupTitle = state.club.country === 'GER' ? 'DHB-Amateurpokal' : 'Regional Cup';
+  const regCupTitle = 'Regional Cup';
 
   const earnedTrophyBadges = [
     { key: 'cwc', label: 'Super Globe', count: clubTrophies.cwc },

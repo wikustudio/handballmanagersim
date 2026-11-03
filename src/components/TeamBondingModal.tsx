@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { GameState, Language } from '../types';
 import { formatMoney } from '../data/gameConstants';
-import { t as tr } from '../data/translations';
+import { ClubLogo } from './ClubLogo';
 import { useModalDismiss } from '../utils/modalUtils';
 
 interface TeamBondingModalProps {
@@ -14,127 +14,260 @@ interface TeamBondingModalProps {
   canAfford: boolean;
 }
 
-export const TeamBondingModal: React.FC<TeamBondingModalProps> = ({ state, lang, cost, onClose, onConfirm, canAfford }) => {
+export const TeamBondingModal: React.FC<TeamBondingModalProps> = ({
+  state,
+  cost,
+  onClose,
+  onConfirm,
+  canAfford,
+}) => {
   const t = (en: string, _de?: string) => en;
-  
+
   useModalDismiss(onClose);
 
   const hasBonded = (state.teamBondingThisSeason || 0) >= 1;
-  const currentMorale = state.club.morale ?? 100;
+  const currentMorale = Math.round(state.club.morale ?? 100);
   const newMorale = Math.min(100, currentMorale + 30);
+  const moraleDelta = Math.max(0, newMorale - currentMorale);
   const costScaleInfo = `Camp costs scale based on league tier (Tier ${state.club.tier}).`;
 
+  const moraleStatus =
+    currentMorale < 40
+      ? t('Critical Unrest', 'Kabinenkrise')
+      : currentMorale < 75
+      ? t('Stable Cohesion', 'Stabile Stimmung')
+      : t('Optimal Harmony', 'Optimale Harmonie');
+
+  const moraleColorClass =
+    currentMorale < 40
+      ? 'text-rose-400'
+      : currentMorale < 75
+      ? 'text-amber-400'
+      : 'text-emerald-400';
+
+  const moraleDotClass =
+    currentMorale < 40
+      ? 'bg-rose-400'
+      : currentMorale < 75
+      ? 'bg-amber-400'
+      : 'bg-emerald-400';
+
+  const canExecute = !hasBonded && canAfford && currentMorale < 100;
+
   return (
-    <div 
-      onClick={onClose} 
-      className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-2xl cursor-pointer"
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-2xl cursor-pointer animate-in fade-in duration-150"
     >
-      <motion.div 
-        initial={{ scale: 0.95, opacity: 0, y: 12 }}
+      <motion.div
+        initial={{ scale: 0.96, opacity: 0, y: 12 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
-        exit={{ scale: 0.95, opacity: 0, y: 8 }}
-        transition={{ type: 'spring', damping: 26, stiffness: 340 }}
+        exit={{ scale: 0.96, opacity: 0, y: 8 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 380 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] border border-white/[0.04] rounded-2xl max-w-sm w-full p-6 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.85)] relative overflow-hidden flex flex-col max-h-[92vh] cursor-default"
+        className="w-full max-w-lg bg-[#14151e] border border-white/[0.04] rounded-[28px] shadow-[0_25px_70px_rgba(0,0,0,0.85)] relative overflow-hidden flex flex-col max-h-[90vh] cursor-default text-white"
       >
-        {/* Ambient Top Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-purple-400/30 to-transparent pointer-events-none" />
+        {/* Top Ambient Hairline */}
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/25 to-transparent pointer-events-none" />
 
-        <button 
-          aria-label="Close modal" 
-          onClick={onClose}
-          className="active:scale-95 absolute top-5 right-5 w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer z-10"
-        >
-          <i className="fas fa-xmark text-sm" />
-        </button>
-
-        <div className="overflow-y-auto custom-scrollbar flex-1 min-h-0 pr-1 -mr-1">
-
-        <div className="flex flex-col items-center text-center">
-          <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-xl mb-3">
-            <i className="fas fa-handshake" />
+        {/* Modal Header */}
+        <div className="p-5 pb-3 border-b border-white/[0.04] flex items-center justify-between gap-3 shrink-0 bg-[#14151e]">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-base shrink-0">
+              <i className="fas fa-handshake" />
+            </div>
+            <div className="min-w-0 flex flex-col">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 leading-none">
+                  {t('SQUAD & TRANSFERS', 'KADER & TRANSFERS')}
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/[0.03] border border-white/[0.06] text-zinc-400 tabular-nums leading-none">
+                  {state.teamBondingThisSeason || 0} / 1
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-none truncate">
+                {t('Team Retreat', 'Team-Trainingslager')}
+              </h2>
+            </div>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[10px] font-medium uppercase tracking-wider mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-            {t('Squad Chemistry', 'Teammoral & Zusammenhalt')}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="hidden sm:flex items-center gap-2 bg-[#10121a] border border-white/[0.04] px-3 py-1.5 rounded-xl">
+              <ClubLogo
+                name={state.club.name}
+                logo={state.club.logo}
+                fallbackLogo={state.club.fallbackLogo}
+                color={state.club.color}
+                className="w-4 h-4 object-contain shrink-0"
+                fallbackClassName="w-4 h-4 text-[7px] rounded flex items-center justify-center font-bold text-white shrink-0"
+              />
+              <span className="text-xs font-medium text-zinc-300 truncate max-w-[120px]">
+                {state.club.name}
+              </span>
+            </div>
+            <button
+              aria-label="Close modal"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer active:scale-95"
+            >
+              <i className="fas fa-xmark text-sm" />
+            </button>
           </div>
-
-          <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tight mb-2">
-            {t('Team Bonding Camp', 'Team-Building Camp')}
-          </h3>
-          
-          <p className="text-xs text-zinc-400 leading-relaxed mb-4 max-w-xs">
-            {t(
-              'Organize a focused training retreat to restore squad morale, unify big personalities, and arrest negative momentum.',
-              'Organisiere ein intensives Teamevent, um die Stimmung zu heben, Egos zu einen und Negativspiralen zu stoppen.'
-            )}
-          </p>
         </div>
 
-        {/* Morale Delta Bento Card */}
-        <div className="bg-[#181924] rounded-2xl p-4 mb-4 border border-white/[0.04] flex flex-col gap-2.5">
-          <div className="flex justify-between items-center pb-2 border-b border-white/[0.04]">
-            <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Squad Morale</span>
-            <div className="flex items-center gap-2 font-medium text-sm tabular-nums">
-              <span className={currentMorale < 40 ? 'text-rose-400' : currentMorale < 70 ? 'text-amber-400' : 'text-zinc-300'}>
-                {currentMorale}%
+        {/* Scrollable Body */}
+        <div className="p-5 space-y-3.5 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+          {/* 3-Column KPI Bento Box */}
+          <div className="bg-[#10121a] border border-white/[0.04] rounded-2xl p-3.5 sm:p-4 grid grid-cols-3 gap-3">
+            <div>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-1">
+                {t('CURRENT MORALE', 'AKTUELLE MORAL')}
               </span>
-              <i className="fas fa-arrow-right text-zinc-600 text-[10px]" />
-              <span className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-                +{newMorale - currentMorale}% ({newMorale}%)
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-lg sm:text-xl font-semibold tracking-tight tabular-nums ${moraleColorClass}`}>
+                  {currentMorale}%
+                </span>
+              </div>
+            </div>
+
+            <div className="border-l border-white/[0.04] pl-3">
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-1">
+                {t('PROJECTED', 'PROGNOSE')}
+              </span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg sm:text-xl font-semibold tracking-tight tabular-nums text-white">
+                  {newMorale}%
+                </span>
+                {moraleDelta > 0 && (
+                  <span className="text-xs font-mono font-medium text-emerald-400 tabular-nums">
+                    +{moraleDelta}%
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="border-l border-white/[0.04] pl-3 text-right">
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-1">
+                {t('CAMP COST', 'KOSTEN')}
+              </span>
+              <span className={`text-lg sm:text-xl font-semibold tracking-tight tabular-nums ${canAfford ? 'text-white' : 'text-rose-400'}`}>
+                {formatMoney(cost)}
               </span>
             </div>
           </div>
-          
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Camp Cost</span>
-            <span className="font-medium text-white text-sm tabular-nums">{formatMoney(cost)}</span>
+
+          {/* Retreat Progression & Locker Room Status Card */}
+          <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 sm:p-5 space-y-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  {t('DRESSING ROOM ATMOSPHERE', 'KABINENSTIMMUNG')}
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-white/[0.03] border border-white/[0.06] text-zinc-300 flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${moraleDotClass}`} />
+                {moraleStatus}
+              </span>
+            </div>
+
+            {/* Dual-Stage Progress Bar (Current + Projected Recovery) */}
+            <div className="space-y-1.5">
+              <div className="w-full h-2 rounded-full bg-white/[0.05] overflow-hidden flex">
+                <div
+                  className={`h-full transition-colors ${
+                    currentMorale < 40 ? 'bg-rose-500' : currentMorale < 75 ? 'bg-amber-400' : 'bg-emerald-400'
+                  }`}
+                  style={{ width: `${Math.max(0, Math.min(100, currentMorale))}%` }}
+                />
+                {moraleDelta > 0 && !hasBonded && (
+                  <div
+                    className="h-full bg-emerald-400/35 border-l border-black/40"
+                    style={{ width: `${moraleDelta}%` }}
+                  />
+                )}
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-zinc-500 tabular-nums">
+                <span>{t('40% Star Transfer Threshold', '40% Mindestmoral für Top-Transfers')}</span>
+                <span className="font-mono text-zinc-400">
+                  {currentMorale}% → {newMorale}%
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed pt-2 border-t border-white/[0.04]">
+              {t(
+                'Organize a focused training retreat to restore squad morale, unify big personalities, and arrest negative momentum.',
+                'Organisiere ein intensives Teamevent, um die Stimmung zu heben, Egos zu einen und Negativspiralen zu stoppen.'
+              )}
+            </p>
           </div>
-          
-          <div className="text-[10px] text-zinc-500 text-right tabular-nums">
-            {costScaleInfo}
+
+          {/* Operational Impact Breakdown */}
+          <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-[#181924] border border-white/[0.06] flex items-center justify-center text-emerald-400 text-xs shrink-0">
+                <i className="fas fa-arrow-trend-up" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-white truncate">
+                  {t('Immediate Effect: +30% Squad Morale', 'Soforteffekt: +30% Team-Moral')}
+                </div>
+                <div className="text-[11px] text-zinc-500 truncate tabular-nums">
+                  {costScaleInfo}
+                </div>
+              </div>
+            </div>
+            <span className="px-2 py-1 rounded-lg bg-[#181924] border border-white/[0.06] text-[10px] font-mono text-emerald-400 shrink-0 tabular-nums">
+              +30% MAX
+            </span>
           </div>
         </div>
 
-        {/* Benefits Note */}
-        <div className="bg-purple-500/[0.05] border border-purple-500/20 rounded-xl p-3 mb-5 flex gap-2.5 items-start">
-          <i className="fas fa-sparkles text-purple-400 mt-0.5 text-xs shrink-0" />
-          <p className="text-[11px] text-purple-200/90 leading-relaxed font-normal">
-            <strong className="text-purple-300 font-semibold mr-1">{t('Immediate Effect:', 'Soforteffekt:')}</strong>
-            {t('Instantly restores up to +30% Squad Morale, directly strengthening matchday resilience.', 'Stellt sofort bis zu +30% Moral wieder her und stärkt die mentale Spielstärke.')}
-          </p>
-        </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col gap-2.5">
+        {/* Modal Footer */}
+        <div className="p-4 border-t border-white/[0.04] bg-[#10121a] flex items-center justify-between gap-3 shrink-0">
           <button
-            onClick={onConfirm}
-            disabled={hasBonded || !canAfford || currentMorale === 100}
-            className={`w-full py-3.5 px-5 rounded-2xl font-semibold text-sm transition-all duration-150 active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer ${
-              hasBonded || currentMorale === 100
-                ? 'bg-white/[0.04] text-zinc-500 border border-white/[0.06] cursor-not-allowed'
-                : !canAfford
-                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/25 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-500 hover:from-purple-500 hover:to-indigo-500 text-white shadow-[0_8px_25px_rgba(168,85,247,0.35)] border border-purple-400/30'
-            }`}
-          >
-            {hasBonded
-              ? t('Limit Reached (1 per season)', 'Limit erreicht (1 pro Saison)')
-              : currentMorale === 100
-              ? t('Morale Already Maxed (100%)', 'Moral bereits maximal (100%)')
-              : !canAfford 
-              ? t('Insufficient Funds', 'Nicht genügend Budget') 
-              : t('Authorize Camp', 'Camp veranstalten')}
-          </button>
-          
-          <button 
             aria-label="Close modal"
             onClick={onClose}
-            className="w-full py-2.5 rounded-2xl text-xs font-semibold text-zinc-400 hover:text-white transition active:scale-[0.99] cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-xs font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer"
           >
             {t('Decline', 'Abbrechen')}
+          </button>
+
+          <button
+            onClick={onConfirm}
+            disabled={!canExecute}
+            className={`flex-1 py-2.5 px-4 rounded-xl font-medium text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 tabular-nums ${
+              hasBonded
+                ? 'bg-white/[0.03] text-zinc-500 border border-white/[0.04] cursor-not-allowed'
+                : currentMorale === 100
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 cursor-default'
+                : !canAfford
+                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/25 cursor-not-allowed'
+                : 'bg-[#181924] hover:bg-white/[0.08] text-white border border-white/[0.1] cursor-pointer active:scale-[0.99]'
+            }`}
+          >
+            {hasBonded ? (
+              <>
+                <i className="fas fa-check text-xs text-zinc-500" />
+                <span>{t('Limit Reached (1 per season)', 'Limit erreicht (1 pro Saison)')}</span>
+              </>
+            ) : currentMorale === 100 ? (
+              <>
+                <i className="fas fa-check text-xs text-emerald-400" />
+                <span>{t('Morale Already Maxed (100%)', 'Moral bereits maximal (100%)')}</span>
+              </>
+            ) : !canAfford ? (
+              <>
+                <i className="fas fa-triangle-exclamation text-xs text-rose-400" />
+                <span>{t('Insufficient Funds', 'Nicht genügend Budget')}</span>
+              </>
+            ) : (
+              <>
+                <i className="fas fa-campground text-xs text-emerald-400" />
+                <span>{t('Authorize Camp', 'Camp veranstalten')}</span>
+                <span className="font-mono text-emerald-400">-{formatMoney(cost)}</span>
+              </>
+            )}
           </button>
         </div>
       </motion.div>

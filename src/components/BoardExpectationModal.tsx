@@ -80,10 +80,10 @@ export const BoardExpectationModal: React.FC<BoardExpectationModalProps> = ({ st
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: 'spring', damping: 26, stiffness: 340 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-[#14151e] rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col p-4 sm:p-7 relative max-h-[min(92dvh,92vh)] overflow-y-auto custom-scrollbar cursor-default"
+        className="w-full max-w-lg bg-[#14151e] rounded-[28px] border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col p-4 sm:p-7 relative max-h-[min(92dvh,92vh)] overflow-y-auto custom-scrollbar cursor-default"
       >
         {/* Ambient Top Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/30 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-sky-400/30 to-transparent pointer-events-none" />
 
         {/* Header with Club Emblem */}
         <div className="flex flex-col items-center text-center mb-5">
@@ -240,7 +240,7 @@ export const BoardExpectationModal: React.FC<BoardExpectationModalProps> = ({ st
         {/* Action Button */}
         <button
           onClick={onClose}
-          className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3.5 px-5 rounded-2xl transition-all shadow-[0_4px_20px_rgba(37,99,235,0.25)] border border-blue-400/30 active:scale-[0.99] text-xs sm:text-sm cursor-pointer tracking-wide"
+          className="w-full bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 font-semibold py-3.5 px-5 rounded-xl transition-all border border-sky-500/30 active:scale-[0.99] text-xs sm:text-sm cursor-pointer tracking-wide"
         >
           {isNewAppointment ? 'Accept Challenge & Begin' : 'Understood'}
         </button>

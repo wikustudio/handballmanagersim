@@ -246,10 +246,10 @@ export const NewBuildModal: React.FC<NewBuildModalProps> = ({
         exit={{ opacity: 0, scale: 0.95, y: 14 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] rounded-2xl border border-white/[0.04] w-full max-w-xl relative z-10 overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-[90vh] cursor-default pointer-events-auto"
+        className="bg-[#14151e] rounded-[28px] border border-white/[0.04] w-full max-w-xl relative z-10 overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-[90vh] cursor-default pointer-events-auto"
       >
         {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-400/30 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent pointer-events-none" />
 
         {/* Modal Header */}
         <div className="flex items-center justify-between p-5 pb-4 border-b border-white/[0.04] shrink-0">
@@ -662,7 +662,7 @@ export const NewBuildModal: React.FC<NewBuildModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.04] flex items-center justify-between shrink-0">
+        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#10121a] flex items-center justify-between shrink-0">
           {structuringOpt ? (
             <>
               <button 

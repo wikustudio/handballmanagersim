@@ -285,7 +285,12 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
       );
     }
 
-    // MDR Sport im Osten (German Regional Cup - Landespokal)
+    const regionalBadgeLabel =
+      typeof packageOrKey === 'object' && packageOrKey?.networkBadge
+        ? packageOrKey.networkBadge
+        : 'REGIONAL CUP';
+
+    // MDR Sport (German Regional / Lower-Tier Broadcaster)
     if (key === 'MDR') {
       return (
         <div className={`flex items-center gap-1.5 ${dims.h} select-none`}>
@@ -294,17 +299,17 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
           </div>
           <div className="flex flex-col leading-none">
             <span className="font-sans font-black text-white text-[10px] sm:text-[11px] tracking-tight">
-              Sport im Osten
+              Sport
             </span>
             <span className="text-[6.5px] sm:text-[7px] font-mono text-sky-400 font-bold tracking-wider uppercase">
-              LANDESPOKAL
+              {regionalBadgeLabel}
             </span>
           </div>
         </div>
       );
     }
 
-    // WDR Sport im Westen (German Regional Cup - Landespokal)
+    // WDR Sport (German Regional / Lower-Tier Broadcaster)
     if (key === 'WDR') {
       return (
         <div className={`flex items-center gap-1.5 ${dims.h} select-none`}>
@@ -313,17 +318,17 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
           </div>
           <div className="flex flex-col leading-none">
             <span className="font-sans font-black text-white text-[10px] sm:text-[11px] tracking-tight">
-              Sport im Westen
+              Sport
             </span>
             <span className="text-[6.5px] sm:text-[7px] font-mono text-red-400 font-bold tracking-wider uppercase">
-              LANDESPOKAL
+              {regionalBadgeLabel}
             </span>
           </div>
         </div>
       );
     }
 
-    // BR Sport (German Regional Cup - Landespokal)
+    // BR Sport (German Regional / Lower-Tier Broadcaster)
     if (key === 'BR') {
       return (
         <div className={`flex items-center gap-1.5 ${dims.h} select-none`}>
@@ -335,14 +340,14 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
               Sport
             </span>
             <span className="text-[6.5px] sm:text-[7px] font-mono text-blue-300 font-bold tracking-wider uppercase">
-              LANDESPOKAL
+              {regionalBadgeLabel}
             </span>
           </div>
         </div>
       );
     }
 
-    // SWR Sport (German Regional Cup - Landespokal)
+    // SWR Sport (German Regional / Lower-Tier Broadcaster)
     if (key === 'SWR') {
       return (
         <div className={`flex items-center gap-1.5 ${dims.h} select-none`}>
@@ -354,14 +359,14 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
               Sport
             </span>
             <span className="text-[6.5px] sm:text-[7px] font-mono text-rose-300 font-bold tracking-wider uppercase">
-              LANDESPOKAL
+              {regionalBadgeLabel}
             </span>
           </div>
         </div>
       );
     }
 
-    // Sport1 (German Cup - Pokal Live)
+    // Sport1 (German Cup - Cup Live)
     if (key === 'SPORT1') {
       return (
         <div className={`flex items-center gap-1.5 ${dims.h} select-none`}>
@@ -369,13 +374,13 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
             SPORT1
           </div>
           <span className="font-sans font-black text-white text-[10px] sm:text-[11px] tracking-wider uppercase leading-none">
-            POKAL LIVE
+            CUP LIVE
           </span>
         </div>
       );
     }
 
-    // Sporttotal.tv (German Regional Cup - Landespokal)
+    // Sporttotal.tv (German Regional / Lower-Tier Broadcaster)
     if (key === 'SPORTTOTAL') {
       return (
         <div className={`flex items-center gap-1.5 ${dims.h} select-none`}>
@@ -383,7 +388,7 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
             sporttotal.tv
           </div>
           <span className="font-sans font-black text-white text-[10px] sm:text-[11px] tracking-wider uppercase leading-none">
-            LANDESPOKAL
+            {regionalBadgeLabel}
           </span>
         </div>
       );

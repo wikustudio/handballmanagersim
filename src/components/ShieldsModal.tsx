@@ -24,10 +24,10 @@ export const ShieldsModal: React.FC<ShieldsModalProps> = ({ state, onClose }) =>
         exit={{ opacity: 0, scale: 0.95, y: 14 }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] w-full max-w-md rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden relative z-10 flex flex-col max-h-[88vh] cursor-default"
+        className="bg-[#14151e] w-full max-w-md rounded-[28px] border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.85)] overflow-hidden relative z-10 flex flex-col max-h-[88vh] cursor-default"
       >
         {/* Top Ambient Highlight */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-400/30 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent pointer-events-none" />
 
         {/* Header */}
         <div className="p-5 pb-4 border-b border-white/[0.04] flex justify-between items-center relative shrink-0">
@@ -95,7 +95,7 @@ export const ShieldsModal: React.FC<ShieldsModalProps> = ({ state, onClose }) =>
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/[0.04] flex justify-end shrink-0">
+        <div className="p-4 border-t border-white/[0.04] bg-[#10121a] flex justify-end shrink-0">
           <button 
             onClick={onClose} 
             className="w-full py-2.5 bg-amber-500/[0.05] hover:bg-amber-500/10 text-amber-300 font-semibold text-xs rounded-xl transition cursor-pointer border border-amber-500/20 shadow-sm"

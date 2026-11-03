@@ -83,48 +83,59 @@ export const FacilityModal: React.FC<FacilityModalProps> = ({ type, state, lang,
         exit={{ scale: 0.96, opacity: 0, y: 8 }} 
         transition={{ duration: 0.15, ease: 'easeOut' }} 
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] border border-white/[0.04] rounded-2xl max-w-lg w-full p-6 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative overflow-hidden flex flex-col max-h-[92vh] cursor-default"
+        className="bg-[#14151e] border border-white/[0.04] rounded-[28px] max-w-lg w-full shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative overflow-hidden flex flex-col max-h-[92vh] cursor-default"
       >
         {/* Ambient Top Glow */}
-        <div className={`absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent ${ambientGlow} to-transparent pointer-events-none`} />
+        <div className={`absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent ${ambientGlow} to-transparent pointer-events-none`} />
 
-        <button 
-          aria-label="Close modal" 
-          onClick={onClose}
-          className="active:scale-95 absolute top-5 right-5 w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer z-10"
-        >
-          <i className="fas fa-xmark text-sm" />
-        </button>
-
-        <div className="overflow-y-auto custom-scrollbar flex-1 min-h-0 pr-1 -mr-1">
-
-        <div className="flex flex-col items-center text-center">
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl mb-3 ${
-            isAcademy 
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-              : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-          }`}>
-            <i className={`fas ${isAcademy ? 'fa-seedling' : 'fa-heart-pulse'}`} />
+        {/* Header */}
+        <div className="p-5 pb-3 border-b border-white/[0.04] flex items-center justify-between gap-3 shrink-0 bg-[#14151e]">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-base shrink-0 ${
+              isAcademy 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+            }`}>
+              <i className={`fas ${isAcademy ? 'fa-seedling' : 'fa-heart-pulse'}`} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                  isAcademy
+                    ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                    : 'text-purple-400 bg-purple-500/10 border-purple-500/20'
+                }`}>
+                  {t('Club Infrastructure', 'Vereins-Infrastruktur')}
+                </span>
+                <span className="text-[11px] text-zinc-400 font-normal tabular-nums">
+                  {t('Cranes', 'Baukräne')}: {currentInfra}/2
+                </span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tight truncate">
+                {isAcademy ? 'Upgrade Youth Academy' : 'Upgrade Medical Center'}
+              </h3>
+            </div>
           </div>
 
-          <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-1">
-            {t('Club Infrastructure', 'Vereins-Infrastruktur')} · {t('Cranes', 'Baukräne')}: {currentInfra}/2
-          </div>
+          <button 
+            aria-label="Close modal" 
+            onClick={onClose}
+            className="active:scale-95 w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
+          >
+            <i className="fas fa-xmark text-sm" />
+          </button>
+        </div>
 
-          <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tight mb-2">
-            {isAcademy ? 'Upgrade Youth Academy' : 'Upgrade Medical Center'}
-          </h3>
-          
-          <p className="text-xs text-zinc-400 leading-relaxed mb-4 max-w-sm font-normal">
+        <div className="p-5 overflow-y-auto custom-scrollbar flex-1 min-h-0 flex flex-col gap-4">
+          <p className="text-xs text-zinc-400 leading-relaxed font-normal">
             {isAcademy 
               ? `Investing in your academy improves youth potential and capacity (${getAcademySlotLimit(currentLevel)}${!isMaxLevel ? ` → ${getAcademySlotLimit(nextLevel)}` : ''} slots).`
               : `A top-tier medical department mitigates aging decay (${Math.max(0, (currentLevel - 1) * 12)}%${!isMaxLevel ? ` → ${(nextLevel - 1) * 12}%` : ''}) and cushions against injuries.`
             }
           </p>
-        </div>
 
         {/* Milestone Capability Unlocks (Lvl 2-5) */}
-        <div className="bg-[#10121a] rounded-2xl p-4 mb-4 border border-white/[0.04] flex flex-col gap-2">
+        <div className="bg-[#10121a] rounded-2xl p-4 border border-white/[0.04] flex flex-col gap-2">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-0.5">
             Milestone Capability Unlocks
           </div>
@@ -182,7 +193,7 @@ export const FacilityModal: React.FC<FacilityModalProps> = ({ type, state, lang,
         </div>
 
         {/* Level & Financials Bento */}
-        <div className="bg-[#10121a] rounded-2xl p-4 mb-4 border border-white/[0.04] flex flex-col gap-2.5">
+        <div className="bg-[#10121a] rounded-2xl p-4 border border-white/[0.04] flex flex-col gap-2.5">
           <div className="flex justify-between items-center pb-2 border-b border-white/[0.04]">
             <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Facility Level</span>
             <div className="flex items-center gap-2 font-semibold text-sm tabular-nums">
@@ -215,7 +226,7 @@ export const FacilityModal: React.FC<FacilityModalProps> = ({ type, state, lang,
         </div>
 
         {/* Warning Note */}
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 mb-5 flex gap-2.5 items-start">
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 flex gap-2.5 items-start">
           <i className="fas fa-circle-info text-amber-400 mt-0.5 text-xs shrink-0" />
           <p className="text-[11px] text-amber-200/90 leading-relaxed font-normal">
             <strong className="text-amber-300 font-medium mr-1">{t('Fixed Cost Advisory:', 'Fiskalischer Hinweis:')}</strong>
@@ -224,19 +235,26 @@ export const FacilityModal: React.FC<FacilityModalProps> = ({ type, state, lang,
         </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-col gap-2.5">
+        {/* Actions Footer */}
+        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#10121a] flex items-center justify-between gap-2.5 shrink-0">
+          <button 
+            aria-label="Close modal"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl text-xs font-medium bg-white/[0.03] hover:bg-white/[0.06] text-zinc-300 hover:text-white border border-white/[0.06] transition active:scale-[0.99] cursor-pointer"
+          >
+            {t('Cancel', 'Abbrechen')}
+          </button>
           <button
             onClick={onConfirm}
             disabled={!canAfford || isCranesLocked || isUpgradedThisSeason || isMaxLevel}
-            className={`w-full py-3 px-5 rounded-2xl font-semibold text-sm tracking-wide transition-all duration-150 active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
+            className={`flex-1 py-2.5 px-5 rounded-xl font-semibold text-xs sm:text-sm tracking-wide transition-all duration-150 active:scale-[0.99] cursor-pointer flex items-center justify-center gap-2 ${
               isMaxLevel || isUpgradedThisSeason || isCranesLocked
                 ? 'bg-white/[0.02] text-zinc-500 cursor-not-allowed border border-white/[0.04]'
                 : !canAfford
                 ? 'bg-rose-500/10 text-rose-400 cursor-not-allowed border border-rose-500/20'
                 : isAcademy 
-                ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/30' 
-                : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30'
+                ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30' 
+                : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30'
             }`}
           >
             {isMaxLevel
@@ -248,13 +266,6 @@ export const FacilityModal: React.FC<FacilityModalProps> = ({ type, state, lang,
               : !canAfford 
               ? t('Insufficient Funds', 'Nicht genügend Budget') 
               : t('Authorize Upgrade', 'Ausbau autorisieren')}
-          </button>
-          <button 
-            aria-label="Close modal"
-            onClick={onClose}
-            className="w-full py-3 rounded-2xl text-xs font-medium bg-white/[0.02] hover:bg-white/[0.05] text-zinc-300 hover:text-white border border-white/[0.04] transition active:scale-[0.99] cursor-pointer"
-          >
-            {t('Cancel', 'Abbrechen')}
           </button>
         </div>
       </motion.div>

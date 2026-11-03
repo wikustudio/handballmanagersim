@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { GameState, BoardRoadmap } from '../types';
 import { getOrGenerateRoadmap } from '../utils/roadmapManager';
 import { formatMoney } from '../data/gameConstants';
@@ -55,13 +55,16 @@ export const BoardRoadmapModal: React.FC<BoardRoadmapModalProps> = ({
 
     const isDifferent = !storedRoadmap || JSON.stringify(storedRoadmap.goals) !== JSON.stringify(updatedRoadmap.goals);
     if (isDifferent) {
+      const nextBudget = store.budget + newlyCompletedCash;
       store.updateState({
         boardRoadmap: updatedRoadmap,
         ...(newlyCompletedMp > 0 ? {
           skillPoints: (store.skillPoints || 0) + newlyCompletedMp,
         } : {}),
         ...(newlyCompletedCash > 0 ? {
-          budget: store.budget + newlyCompletedCash,
+          budget: nextBudget,
+          club: { ...store.club, currentBudget: nextBudget },
+          ...(nextBudget >= 0 ? { seasonsInDebt: 0, bankruptcyPending: false } : {}),
         } : {}),
       });
     }
@@ -94,10 +97,10 @@ export const BoardRoadmapModal: React.FC<BoardRoadmapModalProps> = ({
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: 'spring', damping: 26, stiffness: 340 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl bg-[#14151e] border border-white/[0.04] rounded-2xl shadow-[0_25px_70px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col max-h-[92vh] cursor-default relative"
+        className="w-full max-w-2xl bg-[#14151e] border border-white/[0.04] rounded-[28px] shadow-[0_25px_70px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col max-h-[92vh] cursor-default relative"
       >
         {/* Ambient Top Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/25 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-sky-400/25 to-transparent pointer-events-none" />
 
         {/* Modal Header */}
         <div className="relative p-5 sm:p-6 pb-4 border-b border-white/[0.04] bg-[#14151e] flex items-center justify-between shrink-0">
@@ -347,7 +350,7 @@ export const BoardRoadmapModal: React.FC<BoardRoadmapModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#14151e] flex items-center justify-between gap-3 shrink-0">
+        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#10121a] flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2 text-xs text-zinc-400">
             <i className="fas fa-circle-info text-sky-400 text-xs" />
             <span>
@@ -357,7 +360,7 @@ export const BoardRoadmapModal: React.FC<BoardRoadmapModalProps> = ({
 
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-500 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs sm:text-sm transition-all cursor-pointer shadow-[0_8px_25px_rgba(37,99,235,0.35)] border border-blue-400/30 active:scale-[0.99]"
+            className="px-6 py-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 font-semibold text-xs sm:text-sm transition-all cursor-pointer border border-sky-500/30 active:scale-[0.99]"
           >
             Got it
           </button>

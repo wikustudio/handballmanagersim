@@ -83,10 +83,10 @@ export const JobMarketModal: React.FC<JobMarketModalProps> = ({
         exit={{ scale: 0.95, y: 10, opacity: 0 }} 
         transition={{ type: 'spring', damping: 26, stiffness: 340 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] border border-white/[0.04] rounded-2xl max-w-4xl w-full p-5 sm:p-6 shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative my-auto max-h-[92vh] flex flex-col overflow-hidden cursor-default pointer-events-auto"
+        className="bg-[#14151e] border border-white/[0.04] rounded-[28px] max-w-4xl w-full p-5 sm:p-6 shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative my-auto max-h-[92vh] flex flex-col overflow-hidden cursor-default pointer-events-auto"
       >
         {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/25 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-sky-400/25 to-transparent pointer-events-none" />
 
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/[0.04] bg-[#14151e] shrink-0 gap-3">
@@ -168,7 +168,7 @@ export const JobMarketModal: React.FC<JobMarketModalProps> = ({
           
           {/* Veteran Ringer Promotion Gamble Lifeline (Tiers 3-6) */}
           {!state.isSacked && (state.club.tier || 1) >= 3 && onOpenTransfers && (
-            <div className="bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/5 border border-amber-500/30 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+            <div className="bg-[#10121a] border border-amber-500/25 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-start sm:items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 text-sm shrink-0">
                   <i className="fas fa-medal" />

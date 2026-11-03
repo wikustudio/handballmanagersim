@@ -46,10 +46,10 @@ export const ManagerSkillsModal: React.FC<ManagerSkillsModalProps> = ({
         exit={{ scale: 0.95, y: 10, opacity: 0 }} 
         transition={{ type: 'spring', damping: 26, stiffness: 340 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] border border-white/[0.04] rounded-2xl max-w-3xl w-full p-5 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative my-auto max-h-[92vh] flex flex-col overflow-hidden cursor-default pointer-events-auto"
+        className="bg-[#14151e] border border-white/[0.04] rounded-[28px] max-w-3xl w-full p-5 sm:p-7 shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative my-auto max-h-[92vh] flex flex-col overflow-hidden cursor-default pointer-events-auto"
       >
         {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-400/25 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/25 to-transparent pointer-events-none" />
 
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/[0.04] shrink-0 gap-3">

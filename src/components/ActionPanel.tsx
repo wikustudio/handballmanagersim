@@ -6,6 +6,7 @@ import { t } from '../data/translations';
 import { LoanModal } from './LoanModal';
 import { MarketingPRModal } from './MarketingPRModal';
 import { IPOModal } from './IPOModal';
+import { SponsorModal } from './SponsorModal';
 import { getBaseLoanPrincipal } from '../utils/loanManager';
 
 interface ActionPanelProps {
@@ -63,6 +64,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [showMarketingModal, setShowMarketingModal] = useState(false);
   const [showIPOModal, setShowIPOModal] = useState(false);
+  const [showSponsorModal, setShowSponsorModal] = useState(false);
+  const [selectedSponsorDeal, setSelectedSponsorDeal] = useState<0 | 1 | 2>(0);
   const stateStore = useGameStore();
   const tr = (en: string, _de?: string, _es?: string) => en;
   const accordionRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -88,9 +91,9 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     }
   };
 
-  // Preserve scroll position when loan/marketing/ipo modals open and close
+  // Preserve scroll position when loan/marketing/ipo/sponsor modals open and close
   const scrollPositionRef = React.useRef<number>(0);
-  const modalOpen = Boolean(showLoanModal || showMarketingModal || showIPOModal);
+  const modalOpen = Boolean(showLoanModal || showMarketingModal || showIPOModal || showSponsorModal);
   const prevModalOpenRef = React.useRef<boolean>(false);
 
   React.useEffect(() => {
@@ -124,7 +127,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   const canUpgradeAcademy = currentInfra < maxInfra && academyLevel < 5 && (stateStore.academyUpgradedThisSeason || 0) < 1;
   const canUpgradeMedical = currentInfra < maxInfra && medicalLevel < 5 && (stateStore.medicalUpgradedThisSeason || 0) < 1;
 
-  const hasSalesmaster = (stateStore.managerSkills || []).includes('salesmaster') || (stateStore.managerSkills || []).includes('sponsor_boost');
   const sponsorTerms = getDynamicSponsorPitchTerms(stateStore);
   const standardPayout = sponsorTerms.standardPayout;
   const megaPayout = sponsorTerms.megaPayout;
@@ -189,205 +191,108 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
             <div className="bg-[#181924] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[11px] font-medium text-zinc-400 tracking-wider uppercase">
-                  {tr('Commercial Limit', 'Sponsoring-Kontingent')}
+                  {tr('Commercial Limit', 'Sponsoring-Limit')}
                 </span>
                 <span className="text-white font-medium tabular-nums">{currentCommercial} / {limitCommercial}</span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-relaxed font-normal">
+              <p className="text-[12px] text-zinc-400 leading-snug font-normal mt-0.5">
                 {tr(
                   'You can negotiate up to 3 commercial sponsorship deals per season. Pitching megadeals carries higher risk with anchor corporate sponsors.',
-                  'Du kannst bis zu 3 Sponsoring-Deals pro Saison abschließen. Megadeal-Pitches um Hauptsponsoren tragen ein höheres Verhandlungsrisiko.'
+                  'Du kannst bis zu 3 Sponsorenverträge pro Saison verhandeln. Megadeal-Pitches bergen ein höheres Risiko bei Hauptsponsoren.'
                 )}
               </p>
             </div>
 
-            {/* Commercial Negotiator Active Perk Showcase */}
-            {hasSalesmaster && (
-              <div className="bg-[#181924] border border-white/[0.06] border-l-2 border-l-amber-500 rounded-2xl p-3 sm:p-3.5 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-white/[0.03] text-zinc-400 border border-white/[0.06] flex items-center justify-center text-xs shrink-0">
-                  <i className="fas fa-briefcase" />
-                </div>
-                <div className="flex flex-col flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-white tracking-tight flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                      {tr('Commercial Negotiator Active', 'Chef-Unterhändler Aktiv')}
-                    </span>
-                    <span className="text-[9px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                      Active Perk
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed mt-0.5 font-normal">
-                    {tr(
-                      `+10% sponsor deal payouts applied & ${sponsorTerms.megaSuccessPct}% Megadeal negotiation success rate.`,
-                      `+10% höhere Sponsorengelder & ${sponsorTerms.megaSuccessPct}% Erfolgsquote bei Megadeals.`
-                    )}
-                  </p>
-                </div>
-              </div>
-            )}
-            
-            {/* Card 2: Standard Deal */}
+            {/* Card 2: Sponsorship Deals (Combined Standard, Megadeal & Performance) */}
             {(() => {
-              const isStandardSigned = Boolean(stateStore.seasonSponsorDealsYear === stateStore.year && stateStore.seasonSponsorDeals?.[0]?.status === 'signed');
-              return (
-                <button
-                  onClick={() => stateStore.pitchSponsor(0)}
-                  disabled={currentCommercial >= limitCommercial || isStandardSigned || sponsorTerms.standardBrand.name === 'Empty'}
-                  className="bg-[#181924] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#181924] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-semibold text-white tracking-tight">{tr('Standard Deal', 'Standard-Deal')}</span>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded truncate ${
-                        sponsorTerms.standardBrand.name === 'Empty'
-                          ? 'text-zinc-500 bg-white/[0.03] border border-white/[0.06]'
-                          : 'text-zinc-300 bg-white/[0.04] border border-white/[0.07]'
-                      }`}>
-                        {sponsorTerms.standardBrand.logo ? `${sponsorTerms.standardBrand.logo} ` : ''}{sponsorTerms.standardBrand.name}
-                      </span>
-                      {isStandardSigned && (
-                        <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <span className="w-1 h-1 rounded-full bg-emerald-400" />
-                          {tr('Signed', 'Aktiv')}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-emerald-400 font-medium tabular-nums text-sm sm:text-base">+{formatMoney(standardPayout)}</span>
-                    </div>
-                  </div>
-                  <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                    {tr('100% Guaranteed regional/kit partner. Funds added immediately to treasury.', '100% Sicherer Ausrüster-/Regionalpartner. Sofortige Gutschrift.')}
-                  </p>
-                </button>
-              );
-            })()}
+              const curDeals = stateStore.seasonSponsorDealsYear === stateStore.year ? stateStore.seasonSponsorDeals : undefined;
+              const signedCount =
+                (curDeals?.[0]?.status === 'signed' ? 1 : 0) +
+                (curDeals?.[1]?.status === 'signed' ? 1 : 0) +
+                (curDeals?.[2]?.status === 'signed' || stateStore.activePerformanceDeal ? 1 : 0);
+              const maxAvailablePayout =
+                curDeals?.[1]?.status !== 'failed'
+                  ? megaPayout
+                  : curDeals?.[2]?.status !== 'failed'
+                  ? performanceUpfront + performanceBonus
+                  : standardPayout;
 
-            {/* Card 3: Megadeal Pitch */}
-            {(() => {
-              const isMegaSigned = Boolean(stateStore.seasonSponsorDealsYear === stateStore.year && stateStore.seasonSponsorDeals?.[1]?.status === 'signed');
               return (
                 <button
-                  onClick={() => stateStore.pitchSponsor(1)}
-                  disabled={currentCommercial >= limitCommercial || sponsorTerms.megaBrand.name === 'Empty' || isMegaSigned}
-                  className="bg-[#181924] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#181924] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+                  type="button"
+                  onClick={() => {
+                    setSelectedSponsorDeal(0);
+                    setShowSponsorModal(true);
+                  }}
+                  className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-semibold text-white tracking-tight">{tr('Megadeal Pitch', 'Megadeal-Verhandlung')}</span>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded truncate ${
-                        sponsorTerms.megaBrand.name === 'Empty'
-                          ? 'text-zinc-500 bg-white/[0.03] border border-white/[0.06]'
-                          : 'text-purple-300 bg-purple-500/10 border border-purple-500/20'
-                      }`}>
-                        {sponsorTerms.megaBrand.logo ? `${sponsorTerms.megaBrand.logo} ` : ''}{sponsorTerms.megaBrand.name}
+                    <span className="text-sm font-semibold text-white tracking-tight">
+                      {tr('Sponsorship Deals', 'Sponsorenverträge')}
+                    </span>
+                    {signedCount > 0 ? (
+                      <span className="text-zinc-300 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1 tabular-nums">
+                        <span className="w-1 h-1 rounded-full bg-emerald-400" />
+                        {signedCount}/3 {tr('Active', 'Aktiv')}
                       </span>
-                      {isMegaSigned && (
-                        <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <span className="w-1 h-1 rounded-full bg-emerald-400" />
-                          {tr('Signed', 'Aktiv')}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="text-emerald-400 font-medium tabular-nums text-sm sm:text-base">+{formatMoney(megaPayout)}</span>
-                    </div>
+                    ) : currentCommercial >= limitCommercial ? (
+                      <span className="text-zinc-400 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] tabular-nums">
+                        {currentCommercial}/{limitCommercial} {tr('Pitched', 'Verhandelt')}
+                      </span>
+                    ) : (
+                      <span className="text-emerald-400 font-semibold tabular-nums text-xs sm:text-sm">
+                        {tr('Up to', 'Bis zu')} +{formatMoney(maxAvailablePayout)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-[12px] text-zinc-400 leading-snug font-normal">
                     {tr(
-                      `Anchor corporate negotiation. ${sponsorTerms.megaSuccessPct}% chance of success based on club prestige & reputation.`,
-                      `Hauptsponsor-Verhandlung. ${sponsorTerms.megaSuccessPct}% Erfolgschance basierend auf Vereins-Renommee.`
+                      'Negotiate Standard, Megadeal, and Performance contracts over 1 to 3 years.',
+                      'Verhandle Standard-, Megadeal- und Leistungsverträge über 1 bis 3 Jahre Laufzeit.'
                     )}
                   </p>
                 </button>
               );
             })()}
 
-            {/* Card 4: Performance Deal */}
-            <button
-              onClick={() => stateStore.pitchSponsor(2)}
-              disabled={currentCommercial >= limitCommercial || Boolean(stateStore.activePerformanceDeal)}
-              className="bg-[#181924] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#181924] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm font-semibold text-white tracking-tight">{tr('Performance Deal', 'Leistungsvertrag')}</span>
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded truncate ${
-                    sponsorTerms.perfBrand.name === 'Empty'
-                      ? 'text-zinc-500 bg-white/[0.03] border border-white/[0.06]'
-                      : 'text-sky-300 bg-sky-500/10 border border-sky-500/20'
-                  }`}>
-                    {sponsorTerms.perfBrand.logo ? `${sponsorTerms.perfBrand.logo} ` : ''}{sponsorTerms.perfBrand.name}
-                  </span>
-                  {stateStore.activePerformanceDeal && (
-                    <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                      <span className="w-1 h-1 rounded-full bg-emerald-400" />
-                      {tr('Active', 'Aktiv')}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-emerald-400 font-medium tabular-nums text-sm sm:text-base">+{formatMoney(performanceUpfront)}</span>
-                </div>
-              </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {stateStore.activePerformanceDeal
-                  ? tr(
-                      `Contract active. Finish Upper Half for +${formatMoney(performanceBonus)} end-of-season bonus.`,
-                      `Vertrag aktiv. Obere Tabellenhälfte bringt +${formatMoney(performanceBonus)} Saisonprämie.`
-                    )
-                  : tr(
-                      `Upfront signing fee + ${formatMoney(performanceBonus)} bonus if finishing in the Upper Half.`,
-                      `Sofortige Unterschriftsprämie + ${formatMoney(performanceBonus)} Bonus bei oberer Tabellenhälfte.`
-                    )}
-              </p>
-            </button>
-
-            {/* Card 4.5: Go Public (IPO) / Stock Market */}
+            {/* Card 5: Go Public (IPO) / Stock Market */}
             {(() => {
               const isPublic = Boolean(stateStore?.club?.isPublic || state?.club?.isPublic || (stateStore as any)?.isPublic || (state as any)?.isPublic);
               return (
                 <button
+                  type="button"
                   onClick={() => { if (onShowIPO) onShowIPO(); else setShowIPOModal(true); }}
-                  className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99] w-full"
+                  className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-white tracking-tight">
-                      {isPublic ? tr('Stock Market', 'Börsenmarkt') : tr('Go Public (IPO)', 'Börsengang (IPO)')}
+                      {isPublic ? tr('Stock Market & Shares', 'Börsenmarkt') : tr('Go Public (IPO)', 'Börsengang (IPO)')}
                     </span>
-                    <span className="text-zinc-300 font-medium text-xs uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
+                    <span className="text-zinc-300 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
                       <span className={`w-1 h-1 rounded-full ${isPublic ? 'bg-emerald-400' : 'bg-sky-400'}`} />
-                      {isPublic ? tr('Active', 'Aktiv') : tr('Available', 'Verfügbar')}
+                      {isPublic ? tr('Listed', 'Börsennotiert') : tr('Available', 'Verfügbar')}
                     </span>
                   </div>
                   <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                    {isPublic ? (
-                      tr(
-                        'Watch your stock price progress, but beware of shareholder dynamics and dividend obligations.',
-                        'Beobachte die Entwicklung deines Aktienkurses, aber achte auf Aktionärsdynamiken und Dividenden.'
-                      )
-                    ) : (
-                      tr(
-                        'Issue 1,000,000 shares to raise upfront capital. Beware shareholder dividend traps!',
-                        '1.000.000 Aktien emittieren für Sofortkapital. Achtung vor der Dividendenfalle!'
-                      )
-                    )}
+                    {isPublic
+                      ? tr('Track club share price, equity valuation & dividends.', 'Aktienkurs, Börsenwert und Dividenden verwalten.')
+                      : tr('Issue 1,000,000 shares to raise upfront capital. Beware shareholder dividend traps!', 'Emittiere 1.000.000 Aktien für großes Sofortkapital. Vorsicht vor Dividenden-Fallen!')}
                   </p>
                 </button>
               );
             })()}
 
-            {/* Card 5: Marketing & PR */}
+            {/* Card 6: Marketing & PR */}
             <button
+              type="button"
               onClick={() => { if (onShowMarketing) onShowMarketing(); else setShowMarketingModal(true); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99] w-full"
+              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-white tracking-tight">
                   {tr('Marketing & PR', 'Marketing & PR')}
                 </span>
-                <span className="text-zinc-300 font-medium text-xs uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
+                <span className="text-zinc-300 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
                   <span className={`w-1 h-1 rounded-full ${(stateStore.brandCampaignsThisSeason || 0) >= 1 ? 'bg-emerald-400' : 'bg-sky-400'}`} />
                   {(stateStore.brandCampaignsThisSeason || 0) >= 1 ? tr('Active', 'Aktiv') : tr('Available', 'Verfügbar')}
                 </span>
@@ -395,21 +300,22 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
               <p className="text-[12px] text-zinc-400 leading-snug font-normal">
                 {tr(
                   "Launch promotional drives to expand your club's addressable supporter base and national brand awareness.",
-                  'Marketing-Offensiven starten, um das Fanpotenzial und die nationale Markenbekanntheit zu vergrößern.'
+                  'Starte Werbekampagnen, um das Fanpotenzial und die nationale Markenbekanntheit zu steigern.'
                 )}
               </p>
             </button>
 
-            {/* Card 6: Commercial Bank Loan */}
+            {/* Card 7: Commercial Bank Loan */}
             <button
+              type="button"
               onClick={() => { if (onShowLoan) onShowLoan(); else setShowLoanModal(true); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99] w-full"
+              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-white tracking-tight">
                   {tr('Commercial Bank Loan', 'Gewerblicher Bankkredit')}
                 </span>
-                <span className="text-zinc-300 font-medium text-xs uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
+                <span className="text-zinc-300 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
                   <span className={`w-1 h-1 rounded-full ${state.activeLoan ? 'bg-emerald-400' : 'bg-sky-400'}`} />
                   {state.activeLoan ? tr('Active', 'Aktiv') : tr('Available', 'Verfügbar')}
                 </span>
@@ -417,7 +323,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
               <p className="text-[12px] text-zinc-400 leading-snug font-normal">
                 {tr(
                   'Contract an institutional bank loan over 10, 15, or 25 years. Immediate liquidity to overcome debt crises and prevent 3-year insolvency.',
-                  'Institutionellen Kredit über 10, 15 oder 25 Jahre aufnehmen. Sofortige Liquidität zur Abwendung der Insolvenz.'
+                  'Institutioneller Bankkredit über 10, 15 oder 25 Jahre. Sofortige Liquidität zur Überwindung von Schuldenkrisen.'
                 )}
               </p>
             </button>
@@ -863,6 +769,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           lang={lang}
           state={state}
           onClose={() => setShowIPOModal(false)}
+        />
+      )}
+
+      {/* Sponsorship Details & Brand Portfolio Modal */}
+      {showSponsorModal && (
+        <SponsorModal
+          isOpen={showSponsorModal}
+          initialDealIndex={selectedSponsorDeal}
+          lang={lang}
+          onClose={() => setShowSponsorModal(false)}
         />
       )}
     </div>

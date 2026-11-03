@@ -134,6 +134,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
       type: matchData.type,
       title: matchData.title,
       subtitle: matchData.subtitle,
+      tier: matchData.tier || clubState?.tier || 1,
       year: matchData.year || 2024,
       clubName: matchData.playerClubName || clubState?.name,
       isModActive,

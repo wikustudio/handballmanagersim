@@ -100,30 +100,34 @@ export const LoanModal: React.FC<LoanModalProps> = ({
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.15, ease: 'easeOut' }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[560px] bg-[#14151e] rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] text-white flex flex-col max-h-[92vh] overflow-hidden cursor-default pointer-events-auto"
+        className="relative w-full max-w-[560px] bg-[#14151e] rounded-[28px] border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] text-white flex flex-col max-h-[92vh] overflow-hidden cursor-default pointer-events-auto"
       >
           {/* Top Ambient Highlight */}
-          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-purple-400/30 to-transparent pointer-events-none" />
+          <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-purple-400/30 to-transparent pointer-events-none" />
 
           {/* Header */}
-          <div className="flex items-center justify-between p-5 pb-4 border-b border-white/[0.04] bg-[#14151e]">
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
-                  {t('Commercial Treasury', 'Vereinskasse')}
-                </span>
-                <span className="text-xs text-zinc-400 font-normal">
-                  {state?.club?.name || 'Club'}
-                </span>
+          <div className="flex items-center justify-between p-5 pb-3 border-b border-white/[0.04] bg-[#14151e] shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-base shrink-0">
+                <i className="fas fa-landmark" />
               </div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight flex items-center gap-2">
-                <i className="fas fa-landmark text-purple-400" />
-                {t('Institutional Bank Loan', 'Institutioneller Bankkredit')}
-              </h2>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+                    {t('Commercial Treasury', 'Vereinskasse')}
+                  </span>
+                  <span className="text-xs text-zinc-400 font-normal truncate">
+                    {state?.club?.name || 'Club'}
+                  </span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight truncate">
+                  {t('Institutional Bank Loan', 'Institutioneller Bankkredit')}
+                </h2>
+              </div>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.1] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer border border-white/[0.04] active:scale-95"
+              className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.1] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer border border-white/[0.04] active:scale-95 shrink-0"
               aria-label="Close"
             >
               <i className="fas fa-xmark text-sm" />
@@ -267,7 +271,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
 
                       {canAffordEarlyPay ? (
                         showConfirmEarlyPay && isFullPayoffSelected ? (
-                          <div className="bg-emerald-950/40 border border-emerald-500/40 rounded-xl p-3 flex flex-col gap-2.5">
+                          <div className="bg-[#10121a] border border-emerald-500/30 rounded-xl p-3 flex flex-col gap-2.5">
                             <div className="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
                               <i className="fas fa-circle-check" />
                               <span>{t('Confirm Full Debt Retirement', 'Vollständige Tilgung bestätigen')}?</span>
@@ -702,6 +706,23 @@ export const LoanModal: React.FC<LoanModalProps> = ({
                 )}
               </div>
             )}
+          </div>
+
+          {/* Modal Footer */}
+          <div className="p-4 border-t border-white/[0.04] bg-[#10121a] flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2 text-xs text-zinc-400">
+              <span>{t('Treasury:', 'Kassenbestand:')}</span>
+              <span className={`font-semibold tabular-nums ${state.budget >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {formatMoney(state.budget)}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-xs font-medium text-zinc-200 hover:text-white transition cursor-pointer active:scale-95"
+            >
+              {t('Close', 'Schließen')}
+            </button>
           </div>
         </motion.div>
       </div>

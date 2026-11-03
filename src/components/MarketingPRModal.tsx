@@ -185,10 +185,10 @@ export const MarketingPRModal: React.FC<MarketingPRModalProps> = ({
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.15, ease: 'easeOut' }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[560px] bg-[#14151e] rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] flex flex-col max-h-[92vh] overflow-hidden cursor-default pointer-events-auto"
+        className="relative w-full max-w-[560px] bg-[#14151e] rounded-[28px] border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] flex flex-col max-h-[92vh] overflow-hidden cursor-default pointer-events-auto"
       >
         {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-400/30 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent pointer-events-none" />
 
         {/* Modal Header */}
         <div className="flex items-center justify-between p-5 pb-4 border-b border-white/[0.04] bg-[#14151e] shrink-0">
@@ -532,7 +532,7 @@ export const MarketingPRModal: React.FC<MarketingPRModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#14151e] flex justify-between items-center shrink-0">
+        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#10121a] flex justify-between items-center shrink-0">
           <div className="text-[11px] text-zinc-400">
             <span>Treasury: <strong className="text-white font-semibold tabular-nums">{formatMoney(budget)}</strong></span>
             <span className="mx-2 text-zinc-600">·</span>

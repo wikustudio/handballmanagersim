@@ -255,10 +255,10 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
         exit={{ scale: 0.95, y: 16, opacity: 0 }} 
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] w-full max-w-lg rounded-2xl border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] text-white pointer-events-auto relative cursor-default max-h-[92vh] flex flex-col overflow-hidden"
+        className="bg-[#14151e] w-full max-w-lg rounded-[28px] border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] text-white pointer-events-auto relative cursor-default max-h-[92vh] flex flex-col overflow-hidden"
       >
         {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400/25 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/25 to-transparent pointer-events-none" />
 
         {/* Modal Header */}
         <div className="flex items-center justify-between p-5 pb-4 border-b border-white/[0.04] bg-[#14151e] shrink-0">
@@ -336,9 +336,9 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                const pitchTerms = getDynamicSponsorPitchTerms(state);
                const deals: any = (state.seasonSponsorDeals && state.seasonSponsorDealsYear === state.year) ? state.seasonSponsorDeals : {};
                const slots = [
-                 { key: 'standard' as const, label: tr('Standard', 'Standard'), brand: deals[0]?.brandName || pitchTerms.standardBrand.name, status: deals[0]?.status || 'available', amount: deals[0]?.status === 'signed' ? (deals[0].payout ?? pitchTerms.standardPayout) : pitchTerms.standardPayout },
-                 { key: 'mega' as const, label: tr('Megadeal', 'Megadeal'), brand: deals[1]?.brandName || pitchTerms.megaBrand.name, status: deals[1]?.status || 'available', amount: deals[1]?.status === 'signed' ? (deals[1].payout ?? pitchTerms.megaPayout) : pitchTerms.megaPayout },
-                 { key: 'perf' as const, label: tr('Performance', 'Performance'), brand: deals[2]?.brandName || pitchTerms.perfBrand.name, status: deals[2]?.status || 'available', amount: deals[2]?.status === 'signed' ? (deals[2].bonus ?? pitchTerms.performanceBonus) : pitchTerms.performanceBonus }
+                 { key: 'standard' as const, label: tr('Standard', 'Standard'), brand: pitchTerms.standardBrand.name || deals[0]?.brandName, status: deals[0]?.status || 'available', yearsLeft: deals[0]?.yearsRemaining || deals[0]?.contractYears || 1, amount: deals[0]?.status === 'signed' ? (deals[0].payout ?? pitchTerms.standardPayout) : pitchTerms.standardPayout },
+                 { key: 'mega' as const, label: tr('Megadeal', 'Megadeal'), brand: pitchTerms.megaBrand.name || deals[1]?.brandName, status: deals[1]?.status || 'available', yearsLeft: deals[1]?.yearsRemaining || deals[1]?.contractYears || 1, amount: deals[1]?.status === 'signed' ? (deals[1].payout ?? pitchTerms.megaPayout) : pitchTerms.megaPayout },
+                 { key: 'perf' as const, label: tr('Performance', 'Performance'), brand: pitchTerms.perfBrand.name || deals[2]?.brandName, status: deals[2]?.status || 'available', yearsLeft: deals[2]?.yearsRemaining || deals[2]?.contractYears || 1, amount: deals[2]?.status === 'signed' ? (deals[2].bonus ?? pitchTerms.performanceBonus) : pitchTerms.performanceBonus }
                ];
                return (
                  <div className="flex flex-col gap-1.5 px-3 py-2.5 bg-sky-500/[0.05] rounded-xl border border-sky-500/20 text-xs">
@@ -354,10 +354,10 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                        <div key={s.key} className="px-2 py-1 rounded-lg bg-black/30 border border-white/[0.06] flex flex-col gap-0.5">
                          <div className="flex items-center justify-between gap-1">
                            <span className="text-[9px] uppercase tracking-wider text-zinc-500">{s.label}</span>
-                           <span className={`text-[9px] font-semibold ${
+                           <span className={`text-[9px] font-semibold tabular-nums ${
                              s.status === 'signed' ? 'text-emerald-400' : s.status === 'failed' ? 'text-rose-400' : 'text-amber-300'
                            }`}>
-                             {s.status === 'signed' ? tr('Signed', 'Aktiv') : s.status === 'failed' ? tr('Empty', 'Leer') : tr('Open', 'Offen')}
+                             {s.status === 'signed' ? (s.yearsLeft > 1 ? `${tr('Signed', 'Aktiv')} · ${s.yearsLeft}y` : tr('Signed', 'Aktiv')) : s.status === 'failed' ? tr('Empty', 'Leer') : tr('Open', 'Offen')}
                            </span>
                          </div>
                          <span className="text-[10px] font-semibold text-zinc-200 truncate">
@@ -1032,10 +1032,10 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
         </div>
 
         {/* Close Button */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#14151e] shrink-0">
+        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#10121a] shrink-0">
           <button 
             onClick={onClose} 
-            className="w-full py-3.5 px-5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white font-semibold text-xs sm:text-sm transition-all active:scale-[0.99] cursor-pointer border border-white/[0.06] flex items-center justify-center gap-2"
+            className="w-full py-3.5 px-5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white font-semibold text-xs sm:text-sm transition-all active:scale-[0.99] cursor-pointer border border-white/[0.06] flex items-center justify-center gap-2"
           >
             <span>{tr('Close Ledger', 'Schließen')}</span>
           </button>

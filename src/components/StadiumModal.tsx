@@ -92,10 +92,10 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.15, ease: 'easeOut' }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#14151e] rounded-2xl border border-white/[0.04] w-full max-w-lg relative z-10 overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-[88vh] cursor-default pointer-events-auto"
+        className="bg-[#14151e] rounded-[28px] border border-white/[0.04] w-full max-w-lg relative z-10 overflow-hidden shadow-[0_25px_70px_rgba(0,0,0,0.85)] flex flex-col max-h-[88vh] cursor-default pointer-events-auto"
       >
         {/* Top Ambient Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/30 to-transparent pointer-events-none" />
+        <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-sky-400/30 to-transparent pointer-events-none" />
 
         {/* Modal Header */}
         <div className="flex items-center justify-between p-5 pb-4 border-b border-white/[0.04] shrink-0">
@@ -304,7 +304,7 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({
         </div>
         
         {/* Footer */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.04] flex justify-end shrink-0">
+        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#10121a] flex justify-end shrink-0">
           <button 
             onClick={onClose} 
             className="w-full sm:w-auto px-6 py-2.5 bg-sky-500/[0.05] hover:bg-sky-500/10 text-sky-300 hover:text-white font-semibold text-xs rounded-xl transition cursor-pointer border border-sky-500/20 shadow-sm active:scale-95"
