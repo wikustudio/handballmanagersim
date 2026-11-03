@@ -836,7 +836,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     },
     buyPlayer: (n, r, i, a) => set((o) => {
         const maxSpendingPower = o.budget + getCreditLimit(o.club.tier, o.club.country);
-        if (maxSpendingPower < n) return o;
+        if (n > 0 && maxSpendingPower < n) return o;
         const currentSquad = o.club.squadSize || 18;
         if (currentSquad + i > 22) return o;
         if (currentSquad + i < 13) return o;
@@ -850,6 +850,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         if (a === 'loan' && (o.loansThisSeason || 0) >= 2) return o;
         if (n > 0 && o.budget - n < -getCreditLimit(o.club.tier, o.club.country)) return o;
         const preservedLastOvr = typeof o.lastOvr === 'number' ? o.lastOvr : (o.club.baseOvr || 60);
+        const preservedStartOvr = typeof o.startOfSeasonOvr === 'number' ? o.startOfSeasonOvr : preservedLastOvr;
         let c = Math.min(100, Math.max(30, (o.club.baseOvr || 60) + r));
         const actualChange = c - (o.club.baseOvr || 60);
         let ovrHistory = o.ovrHistory || [];
@@ -2308,11 +2309,13 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         let loanExpirationPenalty = 0;
         const expiringLoans = state.loansThisSeason || club.activeLoansCount || 0;
         if (expiringLoans > 0) {
-            loanExpirationPenalty = (club.temporaryOvrBoost && club.temporaryOvrBoost > 0)
-                ? club.temporaryOvrBoost
+            loanExpirationPenalty = typeof club.temporaryOvrBoost === 'number'
+                ? Math.max(0, club.temporaryOvrBoost)
                 : Math.ceil(expiringLoans * 0.75);
-            ee -= loanExpirationPenalty;
-            pushOvrLog(-loanExpirationPenalty, `Loan Expirations (${expiringLoans})`, `Leih-Rückkehrer (${expiringLoans})`);
+            if (loanExpirationPenalty > 0) {
+                ee -= loanExpirationPenalty;
+                pushOvrLog(-loanExpirationPenalty, `Loan Expirations (${expiringLoans})`, `Leih-Rückkehrer (${expiringLoans})`);
+            }
             newSquadSize -= expiringLoans;
             
             if (newSquadSize < 13) {
@@ -2552,14 +2555,6 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             const basePrize = tierPrizeMap[playedTier] || 5000;
             leaguePrize = getLeagueScaledVal(playedTier, basePrize, club.country || 'GER');
             budget += leaguePrize;
-            
-            extraNotifications.push({ 
-                id: Math.random().toString(), 
-                type: "celebration", 
-                title: "LEAGUE CHAMPIONS!",
-                message: `Prize Money Awarded: +${formatMoney(leaguePrize)}`, 
-                read: false 
-            });
         }
         const totalBonusIncome = performancePayout + poachedSolidarityCompensation + leaguePrize;
         if (totalBonusIncome > 0) {
