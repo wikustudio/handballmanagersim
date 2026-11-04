@@ -261,27 +261,27 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
         <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400/25 to-transparent pointer-events-none" />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-5 pb-4 border-b border-white/[0.04] bg-[#14151e] shrink-0">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+        <div className="flex items-start justify-between gap-3 p-4 sm:p-5 pb-3.5 sm:pb-4 border-b border-white/[0.04] bg-[#14151e] shrink-0">
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 flex-wrap">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 shrink-0">
                 {tr('Treasury & Accounts', 'Kasse & Bilanzen')}
               </span>
-              <span className="text-xs text-zinc-400 font-normal">
+              <span className="text-xs text-zinc-400 font-normal truncate">
                 {league.name}
               </span>
-              <span className="text-[10px] text-zinc-400 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/[0.04] font-medium flex items-center gap-1">
+              <span className="text-[10px] text-zinc-400 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/[0.04] font-medium flex items-center gap-1 shrink-0">
                 <i className="fas fa-layer-group text-sky-400 text-[9px]" />
                 <span>{country} · Tier {tier}</span>
               </span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">
+            <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight truncate">
               {state.club.name}
             </h2>
           </div>
           <button 
             onClick={onClose} 
-            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.04] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
             aria-label="Close"
           >
             <i className="fas fa-xmark text-sm" />
@@ -289,45 +289,45 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
         </div>
 
         {/* Scrollable Body */}
-        <div className="p-5 overflow-y-auto custom-scrollbar overscroll-contain flex flex-col gap-4">
+        <div className="p-3.5 sm:p-5 overflow-y-auto custom-scrollbar overscroll-contain flex flex-col gap-3.5 sm:gap-4">
           
           {/* Main Treasury Bento - Net Profit Spotlight */}
-          <div className="bg-[#10121a] rounded-2xl p-4 sm:p-5 border border-white/[0.04] flex flex-col gap-3">
-             <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                  <i className="fas fa-vault text-emerald-400" />
-                  {tr('Current Treasury & Net Profit', 'Aktuelle Kasse & Netto-Ergebnis')}
+          <div className="bg-[#10121a] rounded-2xl p-3.5 sm:p-5 border border-white/[0.04] flex flex-col gap-3">
+             <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5 min-w-0">
+                  <i className="fas fa-vault text-emerald-400 shrink-0" />
+                  <span className="truncate">{tr('Current Treasury & Net Profit', 'Aktuelle Kasse & Netto-Ergebnis')}</span>
                 </span>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-md border tabular-nums ${netProfit >= 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-md border tabular-nums shrink-0 whitespace-nowrap ${netProfit >= 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
                    {netProfit >= 0 ? tr('Profitable', 'Gewinnbringend') : tr('Deficit', 'Defizit')}
                 </span>
              </div>
              
              {/* Key Figures Row */}
-             <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="bg-black/30 rounded-xl p-3 border border-white/[0.04]">
-                   <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider block mb-1">
+             <div className="grid grid-cols-2 gap-2.5 sm:gap-3 pt-1">
+                <div className="bg-black/30 rounded-xl p-2.5 sm:p-3 border border-white/[0.04] min-w-0">
+                   <span className="text-[9px] sm:text-[10px] font-medium text-zinc-400 uppercase tracking-wider block mb-1 truncate">
                       {tr('Current Treasury', 'Kassenbestand')}
                    </span>
-                   <span className={`text-xl sm:text-2xl font-semibold tracking-tight tabular-nums ${currentBudget < 0 ? 'text-rose-400' : 'text-white'}`}>
+                   <span className={`text-lg sm:text-2xl font-semibold tracking-tight tabular-nums block truncate ${currentBudget < 0 ? 'text-rose-400' : 'text-white'}`}>
                       {formatMoney(currentBudget)}
                    </span>
                 </div>
 
                 {/* Net Profit highlighted */}
-                <div className="bg-black/30 rounded-xl p-3 border border-white/[0.04]">
-                   <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider block mb-1">
+                <div className="bg-black/30 rounded-xl p-2.5 sm:p-3 border border-white/[0.04] min-w-0">
+                   <span className="text-[9px] sm:text-[10px] font-medium text-zinc-400 uppercase tracking-wider block mb-1 truncate">
                       {tr('Net Profit / Loss', 'Netto-Gewinn / Verlust')}
                    </span>
-                   <span className={`text-xl sm:text-2xl font-semibold tracking-tight tabular-nums ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                   <span className={`text-lg sm:text-2xl font-semibold tracking-tight tabular-nums block truncate ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {netProfit >= 0 ? '+' : ''}{formatMoney(netProfit)}
                    </span>
                 </div>
              </div>
 
-             <div className="flex justify-between items-center text-xs pt-2 border-t border-white/[0.04]">
-                <span className="text-zinc-400 font-normal">{tr('Est. End-of-Season Balance', 'Erwarteter Endbestand')}</span>
-                <span className={`text-sm font-semibold tabular-nums ${projectedEndBalance < 0 ? 'text-rose-400' : 'text-sky-400'}`}>
+             <div className="flex justify-between items-center gap-2 text-xs pt-2 border-t border-white/[0.04]">
+                <span className="text-zinc-400 font-normal min-w-0 truncate">{tr('Est. End-of-Season Balance', 'Erwarteter Endbestand')}</span>
+                <span className={`text-sm font-semibold tabular-nums shrink-0 ${projectedEndBalance < 0 ? 'text-rose-400' : 'text-sky-400'}`}>
                    {formatMoney(projectedEndBalance)}
                 </span>
              </div>
@@ -341,27 +341,27 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                  { key: 'perf' as const, label: tr('Performance', 'Performance'), brand: pitchTerms.perfBrand.name || deals[2]?.brandName, status: deals[2]?.status || 'available', yearsLeft: deals[2]?.yearsRemaining || deals[2]?.contractYears || 1, amount: deals[2]?.status === 'signed' ? (deals[2].bonus ?? pitchTerms.performanceBonus) : pitchTerms.performanceBonus }
                ];
                return (
-                 <div className="flex flex-col gap-1.5 px-3 py-2.5 bg-sky-500/[0.05] rounded-xl border border-sky-500/20 text-xs">
-                   <div className="flex justify-between items-center text-sky-300">
-                     <span className="font-normal flex items-center gap-1.5">
-                       <i className="fas fa-handshake text-sky-400 text-xs" />
-                       {tr('Season Sponsor Slots (Pitched Income):', 'Saison-Sponsoren-Plätze (Pitches):')}
+                 <div className="flex flex-col gap-1.5 px-2.5 sm:px-3 py-2.5 bg-sky-500/[0.05] rounded-xl border border-sky-500/20 text-xs">
+                   <div className="flex justify-between items-center gap-2 text-sky-300">
+                     <span className="font-normal flex items-center gap-1.5 min-w-0">
+                       <i className="fas fa-handshake text-sky-400 text-xs shrink-0" />
+                       <span className="truncate">{tr('Season Sponsor Slots (Pitched Income):', 'Saison-Sponsoren-Plätze (Pitches):')}</span>
                      </span>
-                     <span className="font-semibold tabular-nums">+{formatMoney(state.sponsorIncome || 0)}</span>
+                     <span className="font-semibold tabular-nums shrink-0">+{formatMoney(state.sponsorIncome || 0)}</span>
                    </div>
                    <div className="grid grid-cols-3 gap-1.5 pt-1">
                      {slots.map(s => (
-                       <div key={s.key} className="px-2 py-1 rounded-lg bg-black/30 border border-white/[0.06] flex flex-col gap-0.5">
-                         <div className="flex items-center justify-between gap-1">
-                           <span className="text-[9px] uppercase tracking-wider text-zinc-500">{s.label}</span>
-                           <span className={`text-[9px] font-semibold tabular-nums ${
-                             s.status === 'signed' ? 'text-emerald-400' : s.status === 'failed' ? 'text-rose-400' : 'text-amber-300'
-                           }`}>
-                             {s.status === 'signed' ? (s.yearsLeft > 1 ? `${tr('Signed', 'Aktiv')} · ${s.yearsLeft}y` : tr('Signed', 'Aktiv')) : s.status === 'failed' ? tr('Empty', 'Leer') : tr('Open', 'Offen')}
-                           </span>
-                         </div>
-                         <span className="text-[10px] font-semibold text-zinc-200 truncate">
+                       <div key={s.key} className="px-2 py-1.5 rounded-lg bg-black/30 border border-white/[0.06] flex flex-col justify-between gap-0.5 min-w-0 overflow-hidden">
+                         <span className="text-[8px] sm:text-[9px] uppercase tracking-wider text-zinc-500 truncate block">
+                           {s.label}
+                         </span>
+                         <span className="text-[10px] font-semibold text-zinc-200 truncate block">
                            {s.status === 'failed' ? tr('Empty', 'Leer') : s.brand}
+                         </span>
+                         <span className={`text-[9px] font-semibold tabular-nums truncate block ${
+                           s.status === 'signed' ? 'text-emerald-400' : s.status === 'failed' ? 'text-rose-400' : 'text-amber-300'
+                         }`}>
+                           {s.status === 'signed' ? (s.yearsLeft > 1 ? `${tr('Signed', 'Aktiv')} · ${s.yearsLeft}y` : tr('Signed', 'Aktiv')) : s.status === 'failed' ? tr('Empty', 'Leer') : tr('Open', 'Offen')}
                          </span>
                        </div>
                      ))}
@@ -373,15 +373,17 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
 
           {/* Active Bank Loan Tracker */}
           {activeLoan && (
-            <div className="bg-purple-500/[0.04] border border-purple-500/20 rounded-2xl p-4 text-left flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 font-semibold text-purple-300">
-                  <i className="fas fa-landmark text-purple-400" />
-                  {activeLoan.loanType === 'arena_syndicate' 
-                    ? tr('Arena Project Syndicate Credit', 'Arena-Infrastruktur-Kredit')
-                    : tr('Institutional Bank Loan', 'Institutioneller Bankkredit')}
+            <div className="bg-purple-500/[0.04] border border-purple-500/20 rounded-2xl p-3.5 sm:p-4 text-left flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-1.5 font-semibold text-purple-300 min-w-0">
+                  <i className="fas fa-landmark text-purple-400 shrink-0" />
+                  <span className="truncate">
+                    {activeLoan.loanType === 'arena_syndicate' 
+                      ? tr('Arena Project Syndicate Credit', 'Arena-Infrastruktur-Kredit')
+                      : tr('Institutional Bank Loan', 'Institutioneller Bankkredit')}
+                  </span>
                 </span>
-                <span className="bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-lg text-[11px] font-medium tabular-nums">
+                <span className="bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-lg text-[11px] font-medium tabular-nums shrink-0 whitespace-nowrap">
                   {loanPercentPaid}% {tr('Paid Off', 'Abbezahlt')}
                 </span>
               </div>
@@ -391,11 +393,11 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   style={{ width: `${loanPercentPaid}%` }}
                 />
               </div>
-              <div className="flex justify-between items-center text-xs text-zinc-300 pt-0.5">
+              <div className="flex flex-wrap justify-between items-center gap-1 text-xs text-zinc-300 pt-0.5">
                 <span className="text-zinc-400">
-                  {tr('Remaining Debt:', 'Restschuld:')} <strong className="text-rose-400">{formatMoney(activeLoan.remainingBalance)}</strong>
+                  {tr('Remaining Debt:', 'Restschuld:')} <strong className="text-rose-400 tabular-nums">{formatMoney(activeLoan.remainingBalance)}</strong>
                 </span>
-                <span className="text-zinc-400">
+                <span className="text-zinc-400 tabular-nums">
                   {activeLoan.yearsRemaining} / {activeLoan.termYears} {tr('years', 'Jahre')} ({formatMoney(Math.round(activeLoan.annualPayment / 12))}/mo)
                 </span>
               </div>
@@ -423,9 +425,9 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
 
                 {showEarlyPayoff && (
                   <div className="bg-[#10121a] rounded-xl p-3 border border-purple-500/20 flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-400">
                       <span>{tr('Early Repayment Strategy:', 'Tilgungsstrategie:')}</span>
-                      <span className="text-[10px] text-emerald-300 font-medium bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] text-emerald-300 font-medium bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap">
                         8% Interest Rebate
                       </span>
                     </div>
@@ -540,13 +542,13 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
 
           {/* Public Joint-Stock Corporation (AG) Equity & Capital Markets Monitor */}
           {state.club.isPublic && (
-            <div className="bg-[#10121a] border border-amber-500/20 rounded-2xl p-4 text-left flex flex-col gap-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 font-semibold text-amber-300">
-                  <i className="fas fa-chart-line text-amber-400" />
-                  {state.club.name} {corpInfo.legalForm} · {tr(corpInfo.fullName, corpInfo.fullNameDe)}
+            <div className="bg-[#10121a] border border-amber-500/20 rounded-2xl p-3.5 sm:p-4 text-left flex flex-col gap-2.5">
+              <div className="flex items-start sm:items-center justify-between gap-2 text-xs">
+                <span className="flex items-center gap-1.5 font-semibold text-amber-300 min-w-0">
+                  <i className="fas fa-chart-line text-amber-400 shrink-0" />
+                  <span className="leading-snug">{state.club.name} {corpInfo.legalForm} · {tr(corpInfo.fullName, corpInfo.fullNameDe)}</span>
                 </span>
-                <span className={`px-2 py-0.5 rounded text-[11px] font-medium tabular-nums border ${
+                <span className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-medium tabular-nums border shrink-0 whitespace-nowrap ${
                   (() => {
                     const sp = state.club.stockPrice || 0;
                     const ipo = state.club.ipoPrice || sp;
@@ -571,11 +573,11 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-[#14151e] p-2.5 rounded-xl border border-white/[0.04]">
-                  <span className="text-[10px] text-zinc-400 uppercase tracking-wider block mb-0.5 font-medium">
+                <div className="bg-[#14151e] p-2.5 rounded-xl border border-white/[0.04] min-w-0">
+                  <span className="text-[9px] sm:text-[10px] text-zinc-400 uppercase tracking-wider block mb-0.5 font-medium truncate">
                     {tr('Live Stock / IPO Price', 'Aktienkurs / IPO-Basis')}
                   </span>
-                  <div className="flex items-baseline gap-1.5">
+                  <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
                     <span className="text-white font-semibold text-sm tabular-nums">
                       {currencySymbol}{(state.club.stockPrice || 0).toFixed(2)}
                     </span>
@@ -584,11 +586,11 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                     </span>
                   </div>
                 </div>
-                <div className="bg-[#14151e] p-2.5 rounded-xl border border-white/[0.04]">
-                  <span className="text-[10px] text-zinc-400 uppercase tracking-wider block mb-0.5 font-medium">
+                <div className="bg-[#14151e] p-2.5 rounded-xl border border-white/[0.04] min-w-0">
+                  <span className="text-[9px] sm:text-[10px] text-zinc-400 uppercase tracking-wider block mb-0.5 font-medium truncate">
                     {tr('Market Capitalization', 'Marktkapitalisierung')}
                   </span>
-                  <div className="flex items-baseline gap-1.5">
+                  <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
                     <span className="text-amber-300 font-semibold text-sm tabular-nums">
                       {formatMoney((state.club.stockPrice || 0) * 1000000, country)}
                     </span>
@@ -598,9 +600,9 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   </div>
                 </div>
               </div>
-              <div className="flex justify-between items-center text-[11px] text-zinc-400 pt-1 border-t border-white/[0.04]">
-                <span>{tr('Audited Dividend in Ledger', 'Im Jahresabschluss enthaltene Dividende')}:</span>
-                <span className={`font-semibold tabular-nums ${shareholderDividendTotal > 0 ? 'text-rose-400' : 'text-zinc-300'}`}>
+              <div className="flex justify-between items-center gap-2 text-[11px] text-zinc-400 pt-1 border-t border-white/[0.04]">
+                <span className="min-w-0 truncate">{tr('Audited Dividend in Ledger', 'Im Jahresabschluss enthaltene Dividende')}:</span>
+                <span className={`font-semibold tabular-nums shrink-0 ${shareholderDividendTotal > 0 ? 'text-rose-400' : 'text-zinc-300'}`}>
                   {shareholderDividendTotal > 0 ? `-${formatMoney(shareholderDividendTotal, country)}` : `${formatMoney(0, country)} (No operating surplus)`}
                 </span>
               </div>
@@ -609,17 +611,17 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
 
           {/* Financial Regulation & Recovery Plan Status */}
           {(currentBudget < 0 || seasonsInDebt > 0 || projectedEndBalance < 0) && (
-            <div className={`rounded-2xl p-4 text-left flex flex-col gap-2.5 border ${
+            <div className={`rounded-2xl p-3.5 sm:p-4 text-left flex flex-col gap-2.5 border ${
               netProfit >= 0 
                 ? 'bg-sky-500/[0.05] border-sky-500/20' 
                 : 'bg-rose-500/[0.05] border-rose-500/20'
             }`}>
-              <div className="flex items-center justify-between text-xs font-semibold">
-                <span className={`flex items-center gap-1.5 ${netProfit >= 0 ? 'text-sky-300' : 'text-rose-400'}`}>
-                  <i className={`fas ${netProfit >= 0 ? 'fa-shield-halved text-sky-400' : 'fa-triangle-exclamation text-rose-400'}`} />
-                  {netProfit >= 0 ? `${gov.authority} Restructuring Plan Compliant` : 'Operating Deficit Risk'}
+              <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+                <span className={`flex items-center gap-1.5 min-w-0 ${netProfit >= 0 ? 'text-sky-300' : 'text-rose-400'}`}>
+                  <i className={`fas shrink-0 ${netProfit >= 0 ? 'fa-shield-halved text-sky-400' : 'fa-triangle-exclamation text-rose-400'}`} />
+                  <span className="truncate">{netProfit >= 0 ? `${gov.authority} Restructuring Plan Compliant` : 'Operating Deficit Risk'}</span>
                 </span>
-                <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                <span className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-medium border shrink-0 whitespace-nowrap ${
                   netProfit >= 0 
                     ? 'bg-sky-500/10 text-sky-200 border-sky-500/20' 
                     : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
@@ -652,26 +654,26 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
 
           {/* Regional Patron & Sponsor Rescue Package - shows when deeply in debt or just convened */}
           {(isDeeplyInDebt || Boolean(patronRescueMsg)) && (
-            <div className="bg-[#10121a] rounded-2xl p-4 border border-amber-500/20 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+            <div className="bg-[#10121a] rounded-2xl p-3.5 sm:p-4 border border-amber-500/20 flex flex-col gap-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center text-xs shrink-0">
                     <i className="fas fa-handshake" />
                   </div>
-                  <div>
-                    <h5 className="text-xs font-semibold text-white tracking-tight">
+                  <div className="min-w-0">
+                    <h5 className="text-xs font-semibold text-white tracking-tight truncate">
                       {gov.councilName}
                     </h5>
-                    <p className="text-[10px] text-zinc-400 font-normal">
+                    <p className="text-[10px] text-zinc-400 font-normal truncate">
                       {gov.councilSub}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                  <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+                <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                  <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded whitespace-nowrap">
                     {gov.heritageLabel}
                   </span>
-                  <span className="text-[10px] font-medium text-amber-200/90 bg-black/40 border border-white/[0.04] px-2 py-0.5 rounded flex items-center gap-1">
+                  <span className="text-[10px] font-medium text-amber-200/90 bg-black/40 border border-white/[0.04] px-2 py-0.5 rounded flex items-center gap-1 whitespace-nowrap">
                     <i className="fas fa-clock-rotate-left text-[9px] text-amber-400" />
                     {tr('1x every 3 seasons', '1x alle 3 Saisons')}
                   </span>
@@ -721,7 +723,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   }}
                   className="w-full py-2.5 px-3 rounded-xl bg-amber-500/[0.08] hover:bg-amber-500/[0.15] text-amber-200 border border-amber-500/20 font-medium text-xs shadow-sm active:scale-[0.99] transition cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <i className="fas fa-users-viewfinder text-amber-400" />
+                  <i className="fas fa-users-viewfinder text-amber-400 shrink-0" />
                   <span>Convene Patron Council (Absorb 50% Debt: +{formatMoney(Math.round(Math.abs(currentBudget) * 0.50))})</span>
                 </button>
               ) : (
@@ -730,7 +732,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   disabled
                   className="w-full py-2.5 px-3 rounded-xl bg-white/[0.03] border border-white/[0.04] text-zinc-500 font-medium text-xs cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  <i className="fas fa-lock text-xs text-zinc-600" />
+                  <i className="fas fa-lock text-xs text-zinc-600 shrink-0" />
                   <span>
                     {tr(
                       `Patron Council on Cooldown (Available in ${patronCooldownRemaining} season${patronCooldownRemaining === 1 ? '' : 's'})`,
@@ -744,33 +746,33 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
 
 
           {/* Income & Expense Breakdown */}
-          <div className="bg-[#10121a] rounded-2xl p-4 sm:p-5 border border-white/[0.04] flex flex-col gap-3">
+          <div className="bg-[#10121a] rounded-2xl p-3.5 sm:p-5 border border-white/[0.04] flex flex-col gap-3">
             <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
-              <i className="fas fa-chart-pie text-zinc-400" />
+              <i className="fas fa-chart-pie text-zinc-400 shrink-0" />
               <span>{tr('Annual Budget Breakdown', 'Einnahmen & Kosten im Detail')}</span>
             </h4>
             
             {/* Revenue Stream */}
             <div className="flex flex-col gap-1.5 text-xs">
-              <div className="flex justify-between items-center text-zinc-400">
-                <span className="flex items-center gap-1.5">
+              <div className="flex justify-between items-center gap-2 text-zinc-400">
+                <span className="flex items-center gap-1.5 min-w-0 flex-wrap">
                   <span>{tr('Matchday & Ticket Sales', 'Ticket- & Spieltag-Erlöse')}</span>
                   {fin.expectedAtt ? (
                     <span className="text-[10px] text-zinc-500 font-normal">({fin.expectedAtt.toLocaleString()} avg)</span>
                   ) : null}
                 </span>
-                <span className="text-white font-medium tabular-nums">+{formatMoney(fin.matchdayIncome ?? fin.matchdayIncomeK)}</span>
+                <span className="text-white font-medium tabular-nums shrink-0">+{formatMoney(fin.matchdayIncome ?? fin.matchdayIncomeK)}</span>
               </div>
               {(fin.tvPrize || 0) > 0 && (
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>{tr('TV & Broadcasting Base', 'TV- & Mediengelder')}</span>
-                  <span className="text-white font-medium tabular-nums">+{formatMoney(fin.tvPrize || 0)}</span>
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="min-w-0">{tr('TV & Broadcasting Base', 'TV- & Mediengelder')}</span>
+                  <span className="text-white font-medium tabular-nums shrink-0">+{formatMoney(fin.tvPrize || 0)}</span>
                 </div>
               )}
               <div className="flex flex-col gap-1">
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>{tr('Commercial Sponsorship', 'Sponsoring & Werbung')}</span>
-                  <span className="text-white font-medium tabular-nums">+{formatMoney(fin.sponsorInc)}</span>
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="min-w-0">{tr('Commercial Sponsorship', 'Sponsoring & Werbung')}</span>
+                  <span className="text-white font-medium tabular-nums shrink-0">+{formatMoney(fin.sponsorInc)}</span>
                 </div>
                 {Array.isArray(fin.sponsorDrivers) && fin.sponsorDrivers.length > 0 && (
                   <div className="flex flex-wrap gap-1 pl-2">
@@ -799,12 +801,12 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                 ];
                 return (
                   <div className="flex flex-col gap-1">
-                    <div className="flex justify-between items-center text-zinc-400">
-                      <span className="flex items-center gap-1.5 text-sky-300">
-                        <i className="fas fa-handshake text-[10px]" />
-                        <span>{tr('Pitched Megadeals & Partner Contracts', 'Akquirierte Megadeals & Sponsoren-Pitches')}</span>
+                    <div className="flex justify-between items-center gap-2 text-zinc-400">
+                      <span className="flex items-center gap-1.5 text-sky-300 min-w-0">
+                        <i className="fas fa-handshake text-[10px] shrink-0" />
+                        <span className="truncate">{tr('Pitched Megadeals & Partner Contracts', 'Akquirierte Megadeals & Sponsoren-Pitches')}</span>
                       </span>
-                      <span className="text-emerald-400 font-semibold tabular-nums">+{formatMoney(fin.extraSponsorInc || 0)}</span>
+                      <span className="text-emerald-400 font-semibold tabular-nums shrink-0">+{formatMoney(fin.extraSponsorInc || 0)}</span>
                     </div>
                     <div className="flex flex-wrap gap-1 pl-2">
                       {slots.map(s => (
@@ -825,34 +827,34 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   </div>
                 );
               })()}
-              <div className="flex justify-between items-center text-zinc-400">
-                <span>{tr('League Merit / Prize Money', 'Ligaprämien & Platzierung')}</span>
-                <span className="text-white font-medium tabular-nums">+{formatMoney(fin.posPrize ?? fin.posPrizeK)}</span>
+              <div className="flex justify-between items-center gap-2 text-zinc-400">
+                <span className="min-w-0">{tr('League Merit / Prize Money', 'Ligaprämien & Platzierung')}</span>
+                <span className="text-white font-medium tabular-nums shrink-0">+{formatMoney(fin.posPrize ?? fin.posPrizeK)}</span>
               </div>
               {fin.euroRev > 0 && (
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>{tr('European Competitions', 'Europapokal-Prämien')}</span>
-                  <span className="text-emerald-400 font-medium tabular-nums">+{formatMoney(fin.euroRev)}</span>
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="min-w-0">{tr('European Competitions', 'Europapokal-Prämien')}</span>
+                  <span className="text-emerald-400 font-medium tabular-nums shrink-0">+{formatMoney(fin.euroRev)}</span>
                 </div>
               )}
               {isReserve && (
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>{tr('Parent Club Grant', 'Zuschuss Profiabteilung')}</span>
-                  <span className="text-emerald-400 font-medium tabular-nums">+{formatMoney(fin.parentClubGrant)}</span>
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="min-w-0">{tr('Parent Club Grant', 'Zuschuss Profiabteilung')}</span>
+                  <span className="text-emerald-400 font-medium tabular-nums shrink-0">+{formatMoney(fin.parentClubGrant)}</span>
                 </div>
               )}
               {(fin.treasuryReserveYield || 0) > 0 && (
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span className="flex items-center gap-1.5 text-emerald-300">
-                    <i className="fas fa-piggy-bank text-[10px]" />
-                    <span>{tr('Treasury Reserve Yield (2% Dividend)', 'Zinsertrag Kassenreserve (2% Dividende)')}</span>
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="flex items-center gap-1.5 text-emerald-300 min-w-0">
+                    <i className="fas fa-piggy-bank text-[10px] shrink-0" />
+                    <span className="truncate">{tr('Treasury Reserve Yield (2% Dividend)', 'Zinsertrag Kassenreserve (2% Dividende)')}</span>
                   </span>
-                  <span className="text-emerald-400 font-medium tabular-nums">+{formatMoney(fin.treasuryReserveYield || 0)}</span>
+                  <span className="text-emerald-400 font-medium tabular-nums shrink-0">+{formatMoney(fin.treasuryReserveYield || 0)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center text-xs font-semibold pt-1 border-t border-white/[0.04]">
-                <span className="text-zinc-200">{tr('Total Projected Revenue', 'Gesamteinnahmen')}</span>
-                <span className="text-emerald-400 tabular-nums">+{formatMoney(estRevenue)}</span>
+              <div className="flex justify-between items-center gap-2 text-xs font-semibold pt-1 border-t border-white/[0.04]">
+                <span className="text-zinc-200 min-w-0">{tr('Total Projected Revenue', 'Gesamteinnahmen')}</span>
+                <span className="text-emerald-400 tabular-nums shrink-0">+{formatMoney(estRevenue)}</span>
               </div>
             </div>
 
@@ -860,43 +862,43 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
 
             {/* Operating Costs */}
             <div className="flex flex-col gap-1.5 text-xs">
-              <div className="flex justify-between items-center text-zinc-400">
-                <span>{tr('Squad & Coaching Payroll', 'Gehaltsbudget Kader & Staff')}</span>
-                <span className="text-rose-400 font-medium tabular-nums">-{formatMoney(squadWagesAndOps)}</span>
+              <div className="flex justify-between items-center gap-2 text-zinc-400">
+                <span className="min-w-0">{tr('Squad & Coaching Payroll', 'Gehaltsbudget Kader & Staff')}</span>
+                <span className="text-rose-400 font-medium tabular-nums shrink-0">-{formatMoney(squadWagesAndOps)}</span>
               </div>
-              <div className="flex justify-between items-center text-zinc-400">
-                <span>{tr('Arena Maintenance & Utilities', 'Hallenmiete & Betrieb')}</span>
-                <span className="text-rose-400 font-medium tabular-nums">-{formatMoney(stadiumTotal)}</span>
+              <div className="flex justify-between items-center gap-2 text-zinc-400">
+                <span className="min-w-0">{tr('Arena Maintenance & Utilities', 'Hallenmiete & Betrieb')}</span>
+                <span className="text-rose-400 font-medium tabular-nums shrink-0">-{formatMoney(stadiumTotal)}</span>
               </div>
-              <div className="flex justify-between items-center text-zinc-400">
-                <span>{tr('Team Travel, Admin & Operations', 'Reisekosten, Geschäftsstelle & Spielbetrieb')}</span>
-                <span className="text-rose-400 font-medium tabular-nums">-{formatMoney(travelAdminTotal)}</span>
+              <div className="flex justify-between items-center gap-2 text-zinc-400">
+                <span className="min-w-0">{tr('Team Travel, Admin & Operations', 'Reisekosten, Geschäftsstelle & Spielbetrieb')}</span>
+                <span className="text-rose-400 font-medium tabular-nums shrink-0">-{formatMoney(travelAdminTotal)}</span>
               </div>
-              <div className="flex justify-between items-center text-zinc-400">
-                <span>{tr('Medical & Physio Services', 'Medizinische Abteilung')}</span>
-                <span className="text-rose-400 font-medium tabular-nums">-{formatMoney(medicalTotal)}</span>
+              <div className="flex justify-between items-center gap-2 text-zinc-400">
+                <span className="min-w-0">{tr('Medical & Physio Services', 'Medizinische Abteilung')}</span>
+                <span className="text-rose-400 font-medium tabular-nums shrink-0">-{formatMoney(medicalTotal)}</span>
               </div>
               {youthTotal > 0 && (
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>{tr('Youth Academy Center', 'Nachwuchsleistungszentrum')}</span>
-                  <span className="text-rose-400 font-medium tabular-nums">-{formatMoney(youthTotal)}</span>
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="min-w-0">{tr('Youth Academy Center', 'Nachwuchsleistungszentrum')}</span>
+                  <span className="text-rose-400 font-medium tabular-nums shrink-0">-{formatMoney(youthTotal)}</span>
                 </div>
               )}
               {euroTravelTotal > 0 && (
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span>{tr('European Away Travel', 'Europapokal-Reisekosten')}</span>
-                  <span className="text-rose-400 font-medium tabular-nums">-{formatMoney(euroTravelTotal)}</span>
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="min-w-0">{tr('European Away Travel', 'Europapokal-Reisekosten')}</span>
+                  <span className="text-rose-400 font-medium tabular-nums shrink-0">-{formatMoney(euroTravelTotal)}</span>
                 </div>
               )}
               {tier <= 2 && luxuryTaxTotal > 0 && (
-                <div className="flex justify-between items-center text-zinc-400 bg-amber-500/[0.05] p-2 -mx-2 rounded-xl border border-amber-500/15">
-                  <div className="flex items-center gap-1.5">
-                    <i className="fas fa-scale-balanced text-amber-400 text-xs" />
-                    <div>
-                      <span className="text-amber-300 font-medium block leading-tight">
+                <div className="flex justify-between items-center gap-2 text-zinc-400 bg-amber-500/[0.05] p-2 -mx-2 rounded-xl border border-amber-500/15">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <i className="fas fa-scale-balanced text-amber-400 text-xs shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-amber-300 font-medium block leading-tight truncate">
                         {tr('Competitive Balance & Luxury Tax', 'Luxussteuer & Liga-Solidarität')}
                       </span>
-                      <span className="text-[10px] text-amber-400/80 leading-tight">
+                      <span className="text-[10px] text-amber-400/80 leading-tight block truncate">
                         {((fin as any).treasuryLuxuryTax > 0 && (fin as any).payrollLuxuryTax > 0)
                           ? tr('Surplus Treasury + Squad Payroll Cap', 'Kassenüberschuss + Gehaltscap')
                           : (fin as any).treasuryLuxuryTax > 0
@@ -905,7 +907,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                       </span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end">
+                  <div className="flex flex-col items-end shrink-0">
                     <span className="text-rose-400 font-semibold tabular-nums">-{formatMoney(luxuryTaxTotal)}</span>
                     <span className="text-[10px] text-zinc-500">
                       {(fin as any).treasuryLuxuryTax > 0 ? `-${formatMoney((fin as any).treasuryLuxuryTax)} treasury` : ''}
@@ -916,16 +918,16 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                 </div>
               )}
               {(shareholderDividendTotal > 0 || state.club.isPublic) && (
-                <div className={`flex justify-between items-center text-zinc-400 p-2 -mx-2 rounded-xl border ${
+                <div className={`flex justify-between items-center gap-2 text-zinc-400 p-2 -mx-2 rounded-xl border ${
                   shareholderDividendTotal > 0 ? 'bg-rose-500/[0.05] border-rose-500/15' : 'bg-white/[0.02] border-white/[0.05]'
                 }`}>
-                  <div className="flex items-center gap-1.5">
-                    <i className={`fas fa-chart-line text-xs ${shareholderDividendTotal > 0 ? 'text-rose-400' : 'text-zinc-500'}`} />
-                    <div>
-                      <span className={`font-medium block leading-tight ${shareholderDividendTotal > 0 ? 'text-rose-300' : 'text-zinc-300'}`}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <i className={`fas fa-chart-line text-xs shrink-0 ${shareholderDividendTotal > 0 ? 'text-rose-400' : 'text-zinc-500'}`} />
+                    <div className="min-w-0">
+                      <span className={`font-medium block leading-tight truncate ${shareholderDividendTotal > 0 ? 'text-rose-300' : 'text-zinc-300'}`}>
                         {tr('Public Shareholder Dividend', 'Aktionärsdividende')}
                       </span>
-                      <span className="text-[10px] text-zinc-400 leading-tight">
+                      <span className="text-[10px] text-zinc-400 leading-tight block truncate">
                         {shareholderDividendTotal > 0
                           ? (state.club.stockPrice && state.club.ipoPrice && Math.round(state.club.stockPrice * 100) < Math.round(state.club.ipoPrice * 100)
                             ? tr('Elevated Yield Penalty (Stock below IPO)', 'Strafdividende (Kurs unter IPO)')
@@ -934,20 +936,22 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                       </span>
                     </div>
                   </div>
-                  <span className={`font-semibold tabular-nums ${shareholderDividendTotal > 0 ? 'text-rose-400' : 'text-zinc-400'}`}>
+                  <span className={`font-semibold tabular-nums shrink-0 ${shareholderDividendTotal > 0 ? 'text-rose-400' : 'text-zinc-400'}`}>
                     {shareholderDividendTotal > 0 ? `-${formatMoney(shareholderDividendTotal, country)}` : formatMoney(0, country)}
                   </span>
                 </div>
               )}
               {loanInstallment > 0 && (
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span className="text-purple-300 flex items-center gap-1">
-                    <i className="fas fa-landmark text-[10px]" />
-                    {activeLoan?.loanType === 'arena_syndicate' 
-                      ? tr('Arena Project Syndicate Credit', 'Arena-Infrastruktur-Kredit')
-                      : tr('Bank Loan Installment', 'Bankkredit-Rate')}
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="text-purple-300 flex items-center gap-1 min-w-0">
+                    <i className="fas fa-landmark text-[10px] shrink-0" />
+                    <span className="truncate">
+                      {activeLoan?.loanType === 'arena_syndicate' 
+                        ? tr('Arena Project Syndicate Credit', 'Arena-Infrastruktur-Kredit')
+                        : tr('Bank Loan Installment', 'Bankkredit-Rate')}
+                    </span>
                   </span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <span className="text-[10px] text-zinc-500 tabular-nums">
                       ({formatMoney(Math.round(loanInstallment / 12))}/mo)
                     </span>
@@ -956,32 +960,32 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                 </div>
               )}
               {debtInterestTotal > 0 && (
-                <div className="flex justify-between items-center text-zinc-400">
-                  <span className="text-rose-300 flex items-center gap-1">
-                    <i className="fas fa-triangle-exclamation text-[10px]" />
-                    {tr('Overdraft Deficit Penalty (Interest)', 'Überziehungszinsen')}
+                <div className="flex justify-between items-center gap-2 text-zinc-400">
+                  <span className="text-rose-300 flex items-center gap-1 min-w-0">
+                    <i className="fas fa-triangle-exclamation text-[10px] shrink-0" />
+                    <span className="truncate">{tr('Overdraft Deficit Penalty (Interest)', 'Überziehungszinsen')}</span>
                   </span>
-                  <span className="text-rose-400 font-medium tabular-nums">-{formatMoney(debtInterestTotal)}</span>
+                  <span className="text-rose-400 font-medium tabular-nums shrink-0">-{formatMoney(debtInterestTotal)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center text-xs font-semibold pt-1 border-t border-white/[0.04]">
-                <span className="text-zinc-200">{tr('Total Operating Costs', 'Gesamtausgaben')}</span>
-                <span className="text-rose-400 tabular-nums">-{formatMoney(totalOpExp)}</span>
+              <div className="flex justify-between items-center gap-2 text-xs font-semibold pt-1 border-t border-white/[0.04]">
+                <span className="text-zinc-200 min-w-0">{tr('Total Operating Costs', 'Gesamtausgaben')}</span>
+                <span className="text-rose-400 tabular-nums shrink-0">-{formatMoney(totalOpExp)}</span>
               </div>
             </div>
 
             {/* Net Profit Summary */}
-            <div className="flex justify-between items-center text-xs font-semibold pt-2 border-t border-white/[0.04] bg-[#14151e] p-2.5 rounded-xl border border-white/[0.04]">
-              <span className="text-white">{tr('Projected Net Profit / Loss', 'Erwarteter Netto-Gewinn')}</span>
-              <span className={`tabular-nums text-sm font-semibold ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <div className="flex justify-between items-center gap-2 text-xs font-semibold pt-2 border-t border-white/[0.04] bg-[#14151e] p-2.5 rounded-xl border border-white/[0.04]">
+              <span className="text-white min-w-0 truncate">{tr('Projected Net Profit / Loss', 'Erwarteter Netto-Gewinn')}</span>
+              <span className={`tabular-nums text-sm font-semibold shrink-0 ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {netProfit >= 0 ? '+' : ''}{formatMoney(netProfit)}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
+          <div className="flex items-center justify-between gap-2 text-xs text-zinc-400 px-1">
             <span>{tr('Overdraft Facility:', 'Kreditlinie:')}</span>
-            <span className="font-semibold text-white tabular-nums">{formatMoney(creditLimit)}</span>
+            <span className="font-semibold text-white tabular-nums shrink-0">{formatMoney(creditLimit)}</span>
           </div>
 
           {/* Optional Collapsible Country Economic Profile */}
@@ -989,13 +993,13 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
             <button
               type="button"
               onClick={() => setShowMarketInfo(!showMarketInfo)}
-              className="w-full py-2.5 px-3 text-[11px] text-zinc-400 hover:text-zinc-200 transition flex items-center justify-between cursor-pointer"
+              className="w-full py-2.5 px-3 text-[11px] text-zinc-400 hover:text-zinc-200 transition flex items-center justify-between gap-2 cursor-pointer"
             >
-              <span className="flex items-center gap-1.5 font-medium">
-                <i className="fas fa-globe-europe text-sky-400 text-[10px]" />
-                <span>{country} Commercial Media Profile ({profile.tierName.includes(':') ? profile.tierName.split(':')[1].trim() : profile.tierName})</span>
+              <span className="flex items-center gap-1.5 font-medium min-w-0">
+                <i className="fas fa-globe-europe text-sky-400 text-[10px] shrink-0" />
+                <span className="truncate">{country} Commercial Media Profile ({profile.tierName.includes(':') ? profile.tierName.split(':')[1].trim() : profile.tierName})</span>
               </span>
-              <i className={`fas fa-chevron-${showMarketInfo ? 'up' : 'down'} text-[9px] text-zinc-500`} />
+              <i className={`fas fa-chevron-${showMarketInfo ? 'up' : 'down'} text-[9px] text-zinc-500 shrink-0`} />
             </button>
             {showMarketInfo && (
               <div className="p-3 pt-1 border-t border-white/[0.04] text-[11px] text-zinc-400 flex flex-col gap-2 bg-black/20">
@@ -1022,7 +1026,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   </div>
                 </div>
                 <div className="text-[10px] text-zinc-500 flex items-center gap-1.5 pt-0.5">
-                  <i className="fas fa-scale-balanced text-amber-400 text-[9px]" />
+                  <i className="fas fa-scale-balanced text-amber-400 text-[9px] shrink-0" />
                   <span>{tr('Progressive luxury tax activates above €8.0M treasury surplus or for squad payroll exceeding soft cap.', 'Progressive Luxussteuer reguliert übermäßige Kassenbestände (>€8M) und Gehaltsexzesse für die Liga-Parität.')}</span>
                 </div>
               </div>
@@ -1032,7 +1036,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
         </div>
 
         {/* Close Button */}
-        <div className="p-4 sm:p-5 border-t border-white/[0.04] bg-[#10121a] shrink-0">
+        <div className="p-3.5 sm:p-5 border-t border-white/[0.04] bg-[#10121a] shrink-0">
           <button 
             onClick={onClose} 
             className="w-full py-3.5 px-5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white font-semibold text-xs sm:text-sm transition-all active:scale-[0.99] cursor-pointer border border-white/[0.06] flex items-center justify-center gap-2"

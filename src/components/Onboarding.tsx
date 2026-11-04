@@ -611,10 +611,10 @@ export const Onboarding: React.FC<OnboardingProps> = ({
               <span>Step 02 · Executive Dossier</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight uppercase text-white">
-              Coach Identity & Jurisdiction
+              Coach Identity & Starting Country
             </h2>
             <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed font-normal max-w-lg mx-auto mt-1">
-              Define your coaching credentials, managerial inception era, and continental jurisdiction.
+              Define your coaching credentials, starting season, and starting country.
             </p>
           </div>
 
@@ -712,10 +712,10 @@ export const Onboarding: React.FC<OnboardingProps> = ({
               </div>
             </div>
 
-            {/* Right Card: Continental Jurisdiction & Territory */}
+            {/* Right Card: Starting Country & League Pyramids */}
             <div className="bg-[#14151e] border border-white/[0.05] rounded-2xl p-5 sm:p-6 flex flex-col justify-between shadow-[0_20px_50px_rgba(0,0,0,0.7)]">
               <div>
-                {/* Jurisdiction Header */}
+                {/* Starting Country Header */}
                 <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.04]">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-xs">
@@ -723,10 +723,10 @@ export const Onboarding: React.FC<OnboardingProps> = ({
                     </div>
                     <div>
                       <h3 className="text-xs font-semibold text-zinc-200 tracking-wider uppercase">
-                        Jurisdiction & Pyramids
+                        Starting Country
                       </h3>
                       <p className="text-[11px] text-zinc-500 font-normal">
-                        Territory Focus
+                        League Pyramid Focus
                       </p>
                     </div>
                   </div>
@@ -941,22 +941,22 @@ export const Onboarding: React.FC<OnboardingProps> = ({
           </div>
 
           {/* Action Footer */}
-          <div className="flex items-center justify-between gap-3 pt-6 mt-6 border-t border-white/[0.04] relative z-10 flex-wrap">
+          <div className="flex items-center justify-between gap-2.5 sm:gap-3 pt-6 mt-6 border-t border-white/[0.04] relative z-10">
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] font-semibold text-xs transition active:scale-95 cursor-pointer flex items-center gap-2"
+              className="px-4 sm:px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] font-semibold text-xs transition active:scale-95 cursor-pointer flex items-center gap-2 shrink-0"
             >
               <i className="fas fa-arrow-left text-xs" />
-              <span>Back to Identity</span>
+              <span>Back<span className="hidden sm:inline"> to Identity</span></span>
             </button>
 
             <button
               type="button"
               onClick={handleProceedToStep4}
-              className="bg-white hover:bg-zinc-100 text-black font-semibold text-xs sm:text-sm py-2.5 px-6 rounded-xl transition duration-150 active:scale-95 cursor-pointer shadow-[0_4px_16px_rgba(255,255,255,0.15)] flex items-center gap-2"
+              className="bg-white hover:bg-zinc-100 text-black font-semibold text-xs sm:text-sm py-2.5 px-5 sm:px-6 rounded-xl transition duration-150 active:scale-95 cursor-pointer shadow-[0_4px_16px_rgba(255,255,255,0.15)] flex items-center gap-2 shrink-0"
             >
-              <span>Proceed to Club Selection</span>
+              <span>Proceed to Club<span className="hidden sm:inline"> Selection</span></span>
               <i className="fas fa-arrow-right text-xs" />
             </button>
           </div>
@@ -1491,25 +1491,25 @@ export const Onboarding: React.FC<OnboardingProps> = ({
             </div>
 
             {/* 4. Action Footer */}
-            <div className="flex items-center justify-between gap-3 pt-5 border-t border-white/[0.04] flex-wrap">
+            <div className="flex items-center justify-between gap-2.5 sm:gap-3 pt-5 border-t border-white/[0.04]">
               <button
                 type="button"
                 onClick={() => {
                   setStep(4);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className="px-5 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] font-semibold text-xs tracking-normal transition active:scale-[0.98] cursor-pointer flex items-center gap-2"
+                className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white border border-white/[0.06] font-semibold text-xs tracking-normal transition active:scale-[0.98] cursor-pointer flex items-center gap-2 shrink-0"
               >
                 <i className="fas fa-arrow-left text-xs" />
-                <span>Back to Club Selection</span>
+                <span>Back<span className="hidden sm:inline"> to Club Selection</span></span>
               </button>
 
               <button
                 type="button"
                 onClick={handleFinalStartGame}
-                className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2 cursor-pointer shadow-amber-500/10"
+                className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs sm:text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2 cursor-pointer shadow-amber-500/10 shrink-0"
               >
-                <span>Enter Front Office & Begin Season</span>
+                <span>Enter Front Office<span className="hidden sm:inline"> & Begin Season</span></span>
                 <i className="fas fa-arrow-right text-xs" />
               </button>
             </div>
