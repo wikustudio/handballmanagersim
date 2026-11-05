@@ -318,6 +318,22 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                     <i className="fas fa-arrow-up-right-from-square text-zinc-500 text-xs group-hover:text-zinc-300 transition-transform" />
                   </a>
+                  <a
+                    href="https://basketballmanagersim.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/[0.06] transition text-left cursor-pointer w-full group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-orange-950/70 border border-orange-500/20 text-orange-400 flex items-center justify-center shrink-0">
+                        <i className="fas fa-basketball text-sm" />
+                      </div>
+                      <span className="text-zinc-200 group-hover:text-white font-medium text-sm">
+                        Basketball Manager Sim
+                      </span>
+                    </div>
+                    <i className="fas fa-arrow-up-right-from-square text-zinc-500 text-xs group-hover:text-zinc-300 transition-transform" />
+                  </a>
 
                   {/* Start Over Button when career active (mobile fallback in menu) */}
                   {hasActiveGame && (
