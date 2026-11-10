@@ -11,6 +11,7 @@ import { PrestigeTrophy } from './PrestigeTrophy';
 import { getCompetitionTheme } from '../utils/prestigeTheme';
 import { BroadcastBadge } from './BroadcastBadge';
 import { isCanadianMLSClub, rand } from '../data/gameConstants';
+import { useModalScrollLock } from '../utils/modalUtils';
 
 interface CupRunModalProps {
   clubsDb?: Club[];
@@ -275,6 +276,7 @@ export const getStadiumInfo = (opponentName: string, round: string, isDe: boolea
 };
 
 export const CupRunModal: React.FC<CupRunModalProps> = ({ cupRun, gameState, isDe, onComplete, clubsDb = [], archRivalName, isModActive }) => {
+  useModalScrollLock(true);
   const isCanadian = isCanadianMLSClub(gameState.club.name, gameState.club.id, gameState.club.country);
   const isDomesticCupRun = cupRun.id === 'dfb' || cupRun.nameEn?.toLowerCase().includes('canadian') || cupRun.nameEn?.toLowerCase().includes('voyageurs') || cupRun.nameEn?.toLowerCase().includes('open cup');
   const effectiveCountry = (isCanadian && isDomesticCupRun) ? 'CAN' : (gameState.club.country || 'GER');

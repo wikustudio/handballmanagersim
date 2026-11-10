@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { formatNum } from '../data/gameConstants';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface MatchResult {
   opponent: string;
@@ -24,6 +25,7 @@ interface GlobalTourModalProps {
 }
 
 export const GlobalTourModal: React.FC<GlobalTourModalProps> = ({ summary, lang, onClose }) => {
+  useModalDismiss(onClose);
   const isDe = lang === 'de';
 
   return (
@@ -32,6 +34,7 @@ export const GlobalTourModal: React.FC<GlobalTourModalProps> = ({ summary, lang,
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.1, ease: 'linear' }}
+      onClick={onClose}
       className="fixed inset-0 bg-black/75 backdrop-blur-2xl z-50 flex flex-col items-center justify-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain"
     >
       <motion.div 
@@ -39,6 +42,7 @@ export const GlobalTourModal: React.FC<GlobalTourModalProps> = ({ summary, lang,
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.98, opacity: 0 }}
         transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+        onClick={(e) => e.stopPropagation()}
         className="bg-[#12141c]/90 backdrop-blur-3xl border border-white/[0.08] rounded-[28px] sm:rounded-[32px] w-full max-w-md overflow-hidden shadow-[0_24px_64px_rgba(0,0,0,0.6)] relative flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shrink-0 text-left"
       >
         {/* Subtle Ambient Sky-Blue Accent */}

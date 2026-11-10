@@ -720,7 +720,7 @@ export const getQualifiedSupercupMatches = (
       oppClub = otherDomesticTier1[0];
     }
 
-    const fallbackLeagueAvg = getLeagueInfo(1, country, state)?.avgOvr || 75;
+    const fallbackLeagueAvg = getLeagueInfo(1, country)?.avgOvr || 75;
     const oppName = oppClub?.name || explicitOppName || 'National Rival';
     const oppOvr = Math.max(52, Math.min(94, oppClub?.baseOvr || Math.round(fallbackLeagueAvg + 4)));
     const userOvr = state.club.baseOvr || fallbackLeagueAvg;
@@ -1808,7 +1808,7 @@ export const getDynamicSponsorPitchTerms = (state: any): DynamicSponsorPitchTerm
     baseMegaPayout: megaPayout,
     basePerformanceUpfront: performanceUpfront,
     basePerformanceBonus: performanceBonus,
-    performanceTargetPos: Math.max(1, Math.floor((league.teams || 18) / 2)),
+    performanceTargetPos: Math.max(1, Math.floor(((league as any).teams || 18) / 2)),
     megaSuccessProb,
     megaSuccessPct,
     standardBrand: resolveSeasonBrand(0, baseStandard),

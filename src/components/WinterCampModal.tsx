@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { GameState, Language } from '../types';
 import { t } from '../data/translations';
 import { getLeagueScaledVal, formatMoney } from '../data/gameConstants';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface WinterCampModalProps {
   state: GameState;
@@ -23,6 +24,7 @@ export const WinterCampModal: React.FC<WinterCampModalProps> = ({
   onClose,
   creditLimit 
 }) => {
+  useModalDismiss(onClose);
   const tier = state.club.tier;
   const country = state.club.country || 'GER';
   
@@ -35,7 +37,7 @@ export const WinterCampModal: React.FC<WinterCampModalProps> = ({
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex flex-col justify-center items-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={onClose}></div>
       
-      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="relative w-full max-w-[500px] bg-[#1c1c1e] rounded-3xl border border-white/10 shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shrink-0 overflow-hidden">
+      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[500px] bg-[#1c1c1e] rounded-3xl border border-white/10 shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shrink-0 overflow-hidden">
         
         {/* Header */}
         <div className="p-5 sm:p-6 border-b border-white/5 bg-gradient-to-r from-emerald-900/20 to-blue-900/20 flex justify-between items-center shrink-0">

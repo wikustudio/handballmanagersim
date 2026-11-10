@@ -2104,7 +2104,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         // Refresh unpitched available sponsor brands if playoff outcome changed the club's next-season tier
         let updatedSeasonSponsorDeals = state.seasonSponsorDeals ? { ...state.seasonSponsorDeals } : undefined;
         if (newTier !== prevSimulatedNextTier && updatedSeasonSponsorDeals) {
-            for (const slotIdx of [0, 1, 2]) {
+            for (const slotIdx of [0, 1, 2] as const) {
                 const existingSlot = updatedSeasonSponsorDeals[slotIdx];
                 if (!existingSlot || existingSlot.status === 'available') {
                     const freshBrand = getSponsorBrandForClub(club.country || 'GER', slotIdx, state.year, club.name, 0, newTier);
@@ -4895,10 +4895,6 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             return { success: false, message: 'Prospect has already completed an affiliate farm loan and cannot be loaned out again.' };
         }
 
-        if ((prospect.timer || 0) <= 0) {
-            return { success: false, message: 'Graduated prospects are ready for senior squad promotion or transfer and cannot be sent on a youth farm loan.' };
-        }
-
         const updatedPipeline = pipeline.map(p => {
             if (p.id === prospectId) {
                 const newBoost = Math.min(5, (p.boost || 1) + 1);
@@ -4908,6 +4904,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                 return {
                     ...p,
                     isLoanedOut: true,
+                    loanBonusEarned: true,
                     loanReturnSeason: state.year + 1,
                     boost: newBoost,
                     type: newType,

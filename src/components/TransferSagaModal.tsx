@@ -1,6 +1,7 @@
 import React from 'react';
 import { TransferSaga, TransferSagaOption } from '../types';
 import { formatMoney } from '../data/gameConstants';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface TransferSagaModalProps {
   saga: TransferSaga;
@@ -9,6 +10,7 @@ interface TransferSagaModalProps {
 }
 
 export const TransferSagaModal: React.FC<TransferSagaModalProps> = ({ saga, onSelectOption, onClose }) => {
+  useModalDismiss(onClose);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleSelectOption = (opt: TransferSagaOption) => {

@@ -3342,7 +3342,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                      const storeNow = useGameStore.getState();
                      const latestHistAfterSurvive = [...storeNow.history];
                      // Generate and cache authentic final table with survival outcome
-                     const prevFinalTable = latestHistAfterSurvive[lastIdx]?.finalTable || latestHistAfterSurvive[lastIdx]?.fullTable || latestHistAfterSurvive[lastIdx]?.table;
+                     const prevFinalTable = latestHistAfterSurvive[lastIdx]?.finalTable || (latestHistAfterSurvive[lastIdx] as any)?.fullTable || (latestHistAfterSurvive[lastIdx] as any)?.table;
                      const defeatedName = match.rivalName || match.opponentName;
                      const existingRivalRow = Array.isArray(prevFinalTable)
                          ? prevFinalTable.find((r: any) => r.name === defeatedName)
@@ -4620,7 +4620,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             const intlRescues = intlClubs.filter(c => isLowerTierRescue(c)).sort((a, b) => a.baseOvr - b.baseOvr);
 
             const selectedOffers: any[] = [];
-            const addedIds = new Set<string>();
+            const addedIds = new Set<string | number>();
 
             const addOffer = (club: any, category?: 'fallen' | 'rescue' | 'elite') => {
               if (!club || addedIds.has(club.id)) return false;

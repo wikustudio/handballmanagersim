@@ -26,6 +26,7 @@ import {
 import confetti from 'canvas-confetti';
 import { BroadcastBadge } from './BroadcastBadge';
 import { PrestigeTrophy } from './PrestigeTrophy';
+import { useModalScrollLock } from '../utils/modalUtils';
 
 interface InternationalTournamentModalProps {
   year: number;
@@ -164,6 +165,7 @@ export const InternationalTournamentModal: React.FC<InternationalTournamentModal
   isModActive = false,
   isFreshInvite = false
 }) => {
+  useModalScrollLock(true);
   const hostNation: HostNation = useMemo(() => getHostNation(year), [year]);
   const storageKey = `fms_active_wc_state_${year}`;
 

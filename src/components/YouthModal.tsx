@@ -25,7 +25,7 @@ interface YouthModalProps {
 }
 
 export const YouthModal: React.FC<YouthModalProps> = ({
-  state,
+  state: propState,
   onRecruitYouth,
   onProtectYouth,
   onClose,
@@ -34,6 +34,8 @@ export const YouthModal: React.FC<YouthModalProps> = ({
   creditLimit = 0,
 }) => {
   useModalDismiss(onClose);
+  const storeState = useGameStore();
+  const state = (storeState && storeState.club?.name) ? storeState : propState;
   const t = (en: string, _de?: string, _ignoredEs?: string) => en;
   const [showChampionship, setShowChampionship] = useState(false);
   const [isScouting, setIsScouting] = useState(false);
@@ -565,34 +567,15 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Right: Potential or Shield Button for Developing Players */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      {!isMature && !p.isLoanedOut && academyLvl >= 3 && (
-                        p.isProtected ? (
-                          <span
-                            className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs"
-                            title="Protected from rival poachers"
-                          >
-                            <i className="fas fa-shield-halved" />
-                          </span>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onProtectYouth?.(p.id);
-                              setScoutNotice({
-                                type: 'success',
-                                text: `${p.name} contract shielded (-${formatMoney(protectionCost)})`
-                              });
-                            }}
-                            disabled={state.budget < -creditLimit + protectionCost}
-                            className="px-2.5 py-1.5 rounded-xl bg-[#181924] hover:bg-white/[0.06] text-zinc-300 border border-white/[0.06] text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 disabled:opacity-40 whitespace-nowrap"
-                            title={`Shield from poachers (-${formatMoney(protectionCost)})`}
-                          >
-                            <i className="fas fa-shield-halved text-[10px] text-emerald-400" />
-                            <span className="tabular-nums font-mono">-{formatMoney(protectionCost)}</span>
-                          </button>
-                        )
+                    {/* Right: Potential Badge (& Protected Icon) */}
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                      {!isMature && !p.isLoanedOut && p.isProtected && (
+                        <span
+                          className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs"
+                          title="Protected from rival poachers"
+                        >
+                          <i className="fas fa-shield-halved" />
+                        </span>
                       )}
 
                       <div className="px-2.5 py-1 rounded-xl bg-[#181924] border border-white/[0.04] text-right tabular-nums">
@@ -605,9 +588,53 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Action Row for Developing U19 Prospects (Loan / Protect Contract) */}
+                  {!isMature && !p.isLoanedOut && (!p.loanBonusEarned || (academyLvl >= 3 && !p.isProtected)) && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-white/[0.04]">
+                      {!p.loanBonusEarned && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const res = useGameStore.getState().loanYouthProspect(p.id);
+                            setScoutNotice({
+                              type: res.success ? 'success' : 'rejection',
+                              text: res.message
+                            });
+                          }}
+                          className="flex-1 py-1.5 px-3 rounded-xl bg-[#181924] hover:bg-sky-500/15 text-zinc-200 hover:text-white border border-white/[0.06] hover:border-sky-500/30 text-xs font-medium transition cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 whitespace-nowrap"
+                          title={t('Send on 1-season affiliate loan (+1 OVR bonus)', 'Für 1 Saison verleihen (+1 GES Bonus)')}
+                        >
+                          <i className="fas fa-repeat text-[10px] text-sky-400" />
+                          <span>{t('Farm Loan', 'Leihe')}</span>
+                          <span className="font-mono text-sky-400 tabular-nums">+1 OVR</span>
+                        </button>
+                      )}
+
+                      {academyLvl >= 3 && !p.isProtected && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onProtectYouth?.(p.id);
+                            setScoutNotice({
+                              type: 'success',
+                              text: `${p.name} contract shielded (-${formatMoney(protectionCost)})`
+                            });
+                          }}
+                          disabled={state.budget < -creditLimit + protectionCost}
+                          className="flex-1 py-1.5 px-3 rounded-xl bg-[#181924] hover:bg-emerald-500/15 text-zinc-200 hover:text-white border border-white/[0.06] hover:border-emerald-500/30 text-xs font-medium transition cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-40 whitespace-nowrap active:scale-95"
+                          title={`Shield from poachers (-${formatMoney(protectionCost)})`}
+                        >
+                          <i className="fas fa-shield-halved text-[10px] text-emerald-400" />
+                          <span>{t('Shield', 'Schützen')}</span>
+                          <span className="tabular-nums font-mono text-emerald-400">-{formatMoney(protectionCost)}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Clean 3-Button Row for Mature Graduates */}
                   {isMature && (
-                    <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-white/[0.04]">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-2.5 border-t border-white/[0.04]">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -619,15 +646,15 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                           });
                         }}
                         disabled={isSquadFull}
-                        className={`py-2 px-3 rounded-xl text-xs font-medium transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                        className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-medium transition flex items-center justify-center gap-1 sm:gap-1.5 whitespace-nowrap min-w-0 ${
                           isSquadFull
                             ? 'bg-white/[0.02] text-zinc-500 border border-white/[0.04] cursor-not-allowed'
                             : 'bg-[#181924] hover:bg-emerald-500/15 text-white border border-emerald-500/25 cursor-pointer active:scale-95'
                         }`}
                       >
-                        <i className="fas fa-arrow-up text-[10px] text-emerald-400" />
-                        <span>{isSquadFull ? t('Squad Full', 'Kader voll') : t('Promote', 'Profis')}</span>
-                        <span className="font-mono text-emerald-400 tabular-nums">+{rawBoost}</span>
+                        <i className="fas fa-arrow-up text-[10px] text-emerald-400 shrink-0" />
+                        <span className="truncate">{isSquadFull ? t('Squad Full', 'Kader voll') : t('Promote', 'Profis')}</span>
+                        <span className="font-mono text-emerald-400 tabular-nums shrink-0">+{rawBoost}</span>
                       </button>
 
                       {!p.loanBonusEarned ? (
@@ -640,15 +667,15 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                               text: res.message
                             });
                           }}
-                          className="py-2 px-3 rounded-xl bg-[#181924] hover:bg-sky-500/15 text-white border border-white/[0.06] text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap"
+                          className="py-2 px-2 sm:px-3 rounded-xl bg-[#181924] hover:bg-sky-500/15 text-white border border-white/[0.06] text-xs font-medium transition flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap min-w-0"
                         >
-                          <i className="fas fa-repeat text-[10px] text-sky-400" />
-                          <span>{t('Loan', 'Leihe')}</span>
-                          <span className="font-mono text-sky-400 tabular-nums">+1 OVR</span>
+                          <i className="fas fa-repeat text-[10px] text-sky-400 shrink-0" />
+                          <span className="truncate">{t('Loan', 'Leihe')}</span>
+                          <span className="font-mono text-sky-400 tabular-nums shrink-0">+1 OVR</span>
                         </button>
                       ) : (
-                        <div className="py-2 px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-zinc-500 text-xs font-medium flex items-center justify-center whitespace-nowrap">
-                          <span>{t('Loaned Out', 'Verliehen')}</span>
+                        <div className="py-2 px-2 sm:px-3 rounded-xl bg-white/[0.02] border border-white/[0.04] text-zinc-500 text-xs font-medium flex items-center justify-center whitespace-nowrap min-w-0">
+                          <span className="truncate">{t('Loaned Out', 'Verliehen')}</span>
                         </div>
                       )}
 
@@ -661,10 +688,10 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                             text: res.message
                           });
                         }}
-                        className="py-2 px-3 rounded-xl bg-[#181924] hover:bg-white/[0.08] text-zinc-200 border border-white/[0.06] text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap"
+                        className="py-2 px-2 sm:px-3 rounded-xl bg-[#181924] hover:bg-white/[0.08] text-zinc-200 border border-white/[0.06] text-xs font-medium transition flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap min-w-0"
                       >
-                        <span>{t('Sell', 'Verkauf')}</span>
-                        <span className="font-mono text-emerald-400 tabular-nums">+{formatMoney(fee)}</span>
+                        <span className="truncate">{t('Sell', 'Verkauf')}</span>
+                        <span className="font-mono text-emerald-400 tabular-nums shrink-0">+{formatMoney(fee)}</span>
                       </button>
                     </div>
                   )}
@@ -677,14 +704,14 @@ export const YouthModal: React.FC<YouthModalProps> = ({
         {/* Modal Footer: Clean Scouting Controls */}
         <div className="p-4 border-t border-white/[0.04] bg-[#10121a] flex flex-col gap-2.5 shrink-0">
           {!isAcademyFull && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
               {canAfford && (
                 <button
                   onClick={handleScoutNewTalent}
                   disabled={isScouting || isScoutingRef.current || isScoutingLimitReached}
-                  className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#181924] hover:bg-white/[0.06] text-white border border-white/[0.06] text-xs font-medium transition active:scale-[0.99] cursor-pointer flex items-center justify-between disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="flex-1 min-w-[140px] py-2.5 px-3 sm:px-3.5 rounded-xl bg-[#181924] hover:bg-white/[0.06] text-white border border-white/[0.06] text-xs font-medium transition active:scale-[0.99] cursor-pointer flex items-center justify-between gap-2 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 sm:gap-2">
                     <i className="fas fa-magnifying-glass text-emerald-400 text-xs" />
                     <span>{t('Scout Talent', 'Talent scouten')}</span>
                     <span className="text-[10px] font-mono text-zinc-500 tabular-nums">
@@ -701,9 +728,9 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                 <button
                   onClick={handleScoutForeignImport}
                   disabled={isScouting || isScoutingRef.current || isScoutingLimitReached}
-                  className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#181924] hover:bg-white/[0.06] text-white border border-white/[0.06] text-xs font-medium transition active:scale-[0.99] cursor-pointer flex items-center justify-between disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="flex-1 min-w-[120px] py-2.5 px-3 sm:px-3.5 rounded-xl bg-[#181924] hover:bg-white/[0.06] text-white border border-white/[0.06] text-xs font-medium transition active:scale-[0.99] cursor-pointer flex items-center justify-between gap-2 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 sm:gap-2">
                     <i className="fas fa-earth-europe text-sky-400 text-xs" />
                     <span>{t('Foreign', 'Ausland')}</span>
                   </span>
@@ -716,7 +743,7 @@ export const YouthModal: React.FC<YouthModalProps> = ({
               <button
                 onClick={handleScoutSchoolTrialist}
                 disabled={isScouting || isScoutingRef.current || isTrialistLimitReached}
-                className="py-2.5 px-3.5 rounded-xl bg-[#181924] hover:bg-white/[0.06] text-zinc-200 border border-white/[0.06] text-xs font-medium transition active:scale-[0.99] cursor-pointer flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 whitespace-nowrap"
+                className="flex-1 sm:flex-initial py-2.5 px-3 sm:px-3.5 rounded-xl bg-[#181924] hover:bg-white/[0.06] text-zinc-200 border border-white/[0.06] text-xs font-medium transition active:scale-[0.99] cursor-pointer flex items-center justify-center sm:justify-start gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 whitespace-nowrap"
               >
                 <i className="fas fa-seedling text-emerald-400 text-xs" />
                 <span>{t('Free Trial', 'Schultalent')}</span>

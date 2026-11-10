@@ -9,6 +9,7 @@ import { BroadcastBadge } from './BroadcastBadge';
 import { TEAMS } from '../mod-data/teams';
 import { ALL_CLUBS as CLUBS } from '../data/clubsData';
 import { getLeagueInfo } from '../data/gameConstants';
+import { useModalScrollLock } from '../utils/modalUtils';
 
 interface DecisionDayModalProps {
   resolve: (result: {
@@ -59,6 +60,7 @@ const DecisionDayModal: React.FC<DecisionDayModalProps> = ({
   userPos = 4,
   standings,
 }) => {
+  useModalScrollLock(true);
   const theme = useMemo(() => getCompetitionTheme(ddType, gameState.club.country, ddType), [ddType, gameState.club.country]);
   
   const isPlayoff = ddType === 'promotion_playoff';

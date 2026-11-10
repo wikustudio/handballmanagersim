@@ -5,6 +5,7 @@ import { ClubLogo } from './ClubLogo';
 import { formatMoney, getLeagueInfo, getClubHistoricContext, TACTICS } from '../data/gameConstants';
 import { generateBoardVision } from '../engine/boardVisionEngine';
 import { t as tr } from '../data/translations';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface ClubIntroModalProps {
   club: Club;
@@ -29,6 +30,7 @@ export const ClubIntroModal: React.FC<ClubIntroModalProps> = ({
   isModActive: isModActiveProp,
   onConfirm,
 }) => {
+  useModalDismiss(onConfirm);
   const isDe = lang === 'de';
   const t = (en: string, de?: string) => tr((lang || 'en') as Language, en, de);
 

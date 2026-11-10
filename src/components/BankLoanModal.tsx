@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { formatMoney, getLoanOptions, LoanTermOption } from '../data/gameConstants';
 import { Language } from '../types';
 import { t } from '../data/translations';
+import { useModalScrollLock } from '../utils/modalUtils';
 
 interface BankLoanModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const BankLoanModal: React.FC<BankLoanModalProps> = ({
   clubName,
   lang,
 }) => {
+  useModalScrollLock(isOpen);
   const [selectedTenure, setSelectedTenure] = useState<10 | 15 | 25>(15);
   const isDe = lang === 'de';
   const tr = (en: string, de?: string) => t(lang, en, de);

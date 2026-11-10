@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import { useModalScrollLock } from '../utils/modalUtils';
 
 export interface OffSeasonEvent {
   id: 'wonderkid' | 'stadium' | 'billionaire';
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export const OffSeasonEventModal: React.FC<Props> = ({ event }) => {
+  useModalScrollLock(true);
   const isGold = event.id === 'billionaire';
 
   const [isProcessing, setIsProcessing] = React.useState(false);

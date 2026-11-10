@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { GameState } from '../types';
 import { formatMoney, getLeagueScaledFans } from '../data/gameConstants';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface PrestigeModalProps {
   state: GameState;
@@ -10,6 +11,7 @@ interface PrestigeModalProps {
 }
 
 export const PrestigeModal: React.FC<PrestigeModalProps> = ({ state, onClose, onPrestigePurchase }) => {
+  useModalDismiss(onClose);
   const isTier1 = state.club.tier === 1;
   const hasWealth = state.budget >= 250000;
   const country = state.club.country || 'GER';
@@ -19,7 +21,7 @@ export const PrestigeModal: React.FC<PrestigeModalProps> = ({ state, onClose, on
   if (!isTier1 || !hasWealth) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={onClose}>
-        <div className="bg-[#12141c] border border-white/10 rounded-3xl p-8 max-w-sm text-center shadow-2xl">
+        <div className="bg-[#12141c] border border-white/10 rounded-3xl p-8 max-w-sm text-center shadow-2xl" onClick={e => e.stopPropagation()}>
           <i className="fa-solid fa-lock text-3xl text-zinc-600 mb-4"></i>
           <h2 className="text-lg font-bold text-white mb-2">VIP Access Denied</h2>
           <p className="text-xs text-zinc-400">Reach Tier 1 and accumulate {formatMoney(250000, country)} to unlock Billionaire Prestige Investments.</p>

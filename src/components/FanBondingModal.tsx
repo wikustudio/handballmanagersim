@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { GameState } from '../types';
 import { formatMoney } from '../data/gameConstants';
 import { t } from '../data/translations';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface FanBondingModalProps {
   state: GameState;
@@ -14,6 +15,7 @@ interface FanBondingModalProps {
 }
 
 export const FanBondingModal: React.FC<FanBondingModalProps> = ({ state, lang, cost, onConfirm, onClose, creditLimit }) => {
+  useModalDismiss(onClose);
   const [isProcessing, setIsProcessing] = useState(false);
   const canAfford = state.budget - cost >= -(creditLimit || 0);
   const isAlreadyDone = Boolean(state.fanBondingThisSeason);
@@ -28,7 +30,7 @@ export const FanBondingModal: React.FC<FanBondingModalProps> = ({ state, lang, c
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex flex-col justify-center items-center p-2.5 sm:p-4 overflow-y-auto overscroll-contain">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
-      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="relative w-full max-w-[400px] max-h-[92vh] sm:max-h-[88vh] min-h-0 shrink-0 overflow-y-auto custom-scrollbar overscroll-contain my-auto bg-[#1c1c1e] rounded-3xl border border-white/10 shadow-2xl p-5 sm:p-6 text-left">
+      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[400px] max-h-[92vh] sm:max-h-[88vh] min-h-0 shrink-0 overflow-y-auto custom-scrollbar overscroll-contain my-auto bg-[#1c1c1e] rounded-3xl border border-white/10 shadow-2xl p-5 sm:p-6 text-left">
         <div className="text-center mb-6">
           <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 mx-auto flex items-center justify-center text-3xl mb-4 border border-amber-500/30">
             <i className='fas fa-bullhorn'></i>

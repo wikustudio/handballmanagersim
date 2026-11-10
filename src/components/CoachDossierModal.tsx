@@ -8,6 +8,7 @@ import {
   ensureCoachHiddenAttributes, 
   getCoachArchetypeConfig 
 } from '../engine/coachEngine';
+import { useModalScrollLock } from '../utils/modalUtils';
 
 interface CoachDossierModalProps {
   coach: Coach;
@@ -40,6 +41,7 @@ export const CoachDossierModal: React.FC<CoachDossierModalProps> = ({
   onSelectInOnboarding,
   onClose,
 }) => {
+  useModalScrollLock(true);
   const isDe = lang === 'de';
   const hiddenAttrs = ensureCoachHiddenAttributes(coach);
   const archConfig = getCoachArchetypeConfig(coach.coachArchetype || coach.archetype);

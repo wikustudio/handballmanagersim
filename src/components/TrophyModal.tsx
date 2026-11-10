@@ -9,6 +9,7 @@ import { Language } from '../types';
 import { formatMoney, getLeagueInfo, getDomesticCupInfo } from '../data/gameConstants';
 import { t as tr, getLoc } from '../data/translations';
 import { PrestigeTrophy } from './PrestigeTrophy';
+import { useModalDismiss } from '../utils/modalUtils';
 
 export type ModalType =
   | 'info'
@@ -56,6 +57,7 @@ export const TrophyModal: React.FC<TrophyModalProps> = React.memo(({
   logo,
   prizeMoney,
 }) => {
+  useModalDismiss(onClose);
   const isDe = lang === 'de';
   const t = (en: string, de?: string, _ignoredEs?: string) => tr(lang, en, de);
 
@@ -227,8 +229,8 @@ export const TrophyModal: React.FC<TrophyModalProps> = React.memo(({
       : type === 'promotion'
       ? (isDe ? 'Aufstieg gesichert ↑' : 'Promotion Achieved ↑')
       : isDe
-      ? `${getDomesticCupInfo(country, 1, clubName, clubId).name} Sieger`
-      : `${getDomesticCupInfo(country, 1, clubName, clubId).name} Winners`;
+      ? `${getDomesticCupInfo(country, 1).name} Sieger`
+      : `${getDomesticCupInfo(country, 1).name} Winners`;
 
     const gradFrom = isBl
       ? 'from-yellow-300'
@@ -312,6 +314,7 @@ export const TrophyModal: React.FC<TrophyModalProps> = React.memo(({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.1, ease: "linear" }}
+        onClick={onClose}
         className="fixed inset-0 bg-black/85 flex flex-col items-center justify-center z-[70] p-2.5 sm:p-4 backdrop-blur-xl overflow-y-auto overscroll-contain"
       >
         <motion.div
@@ -319,6 +322,7 @@ export const TrophyModal: React.FC<TrophyModalProps> = React.memo(({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.98, opacity: 0 }}
           transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+          onClick={(e) => e.stopPropagation()}
           className="relative w-full max-w-md mx-auto my-auto max-h-[92vh] sm:max-h-[88vh] min-h-0 flex flex-col rounded-[28px] bg-gradient-to-b from-[#181613] via-[#0f0e11] to-[#0a0a0c] border border-amber-500/35 shadow-[0_0_60px_-10px_rgba(245,158,11,0.3),0_25px_60px_rgba(0,0,0,0.9)] overflow-hidden shrink-0"
         >
           {/* Subtle Golden Ambient Halo at the top */}
@@ -478,8 +482,8 @@ export const TrophyModal: React.FC<TrophyModalProps> = React.memo(({
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1, ease: "linear" }} className="fixed inset-0 bg-black/60 flex flex-col items-center justify-center p-2.5 sm:p-4 z-[70] backdrop-blur-md overflow-y-auto overscroll-contain">
-      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }} className="bg-[#1c1c1e] w-full sm:max-w-sm rounded-[24px] p-5 sm:p-6 shadow-[0_10px_50px_rgba(0,0,0,0.8)] border border-white/10 text-center pointer-events-auto relative my-auto shrink-0 max-h-[92vh] sm:max-h-[88vh] min-h-0 flex flex-col overflow-y-auto overscroll-contain">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1, ease: "linear" }} onClick={onClose} className="fixed inset-0 bg-black/60 flex flex-col items-center justify-center p-2.5 sm:p-4 z-[70] backdrop-blur-md overflow-y-auto overscroll-contain">
+      <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }} onClick={(e) => e.stopPropagation()} className="bg-[#1c1c1e] w-full sm:max-w-sm rounded-[24px] p-5 sm:p-6 shadow-[0_10px_50px_rgba(0,0,0,0.8)] border border-white/10 text-center pointer-events-auto relative my-auto shrink-0 max-h-[92vh] sm:max-h-[88vh] min-h-0 flex flex-col overflow-y-auto overscroll-contain">
         <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-6 sm:hidden"></div>
         <div className={`w-16 h-16 mx-auto ${iconBg} rounded-full flex items-center justify-center mb-5`}>
           <i className={`fas ${icon} text-3xl`}></i>

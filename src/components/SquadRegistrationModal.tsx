@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { GameState, Language } from '../types';
 import { getLeagueInfo, calculateClubFinancials, formatMoney } from '../data/gameConstants';
 import { t as tr } from '../data/translations';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface SquadRegistrationModalProps {
   gameState: GameState;
@@ -16,6 +17,7 @@ export const SquadRegistrationModal: React.FC<SquadRegistrationModalProps> = ({
   onClose,
   lang = 'en',
 }) => {
+  useModalDismiss(onClose);
   const currentLang = (lang === 'de' ? 'de' : 'en') as Language;
   const t = (en: string, de?: string) => tr(currentLang, en, de);
 

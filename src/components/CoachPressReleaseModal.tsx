@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { t as tr } from '../data/translations';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface CoachPressReleaseModalProps {
   action: 'hire' | 'fire';
@@ -33,6 +34,7 @@ export const CoachPressReleaseModal: React.FC<CoachPressReleaseModalProps> = ({
   lang,
   onClose
 }) => {
+  useModalDismiss(onClose);
   const isDe = lang === 'de';
   const t = (en: string, de?: string) => tr(lang, en, de);
   const isHire = action === 'hire';
@@ -69,6 +71,7 @@ export const CoachPressReleaseModal: React.FC<CoachPressReleaseModalProps> = ({
       animate={{ opacity: 1 }} 
       exit={{ opacity: 0 }} 
       transition={{ duration: 0.1, ease: 'linear' }}
+      onClick={onClose}
       className="fixed inset-0 bg-black/80 backdrop-blur-2xl flex flex-col items-center justify-center p-2.5 sm:p-4 z-[70] text-left overflow-y-auto overscroll-contain"
     >
       <motion.div 
@@ -76,6 +79,7 @@ export const CoachPressReleaseModal: React.FC<CoachPressReleaseModalProps> = ({
         animate={{ scale: 1, opacity: 1 }} 
         exit={{ scale: 0.98, opacity: 0 }}
         transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+        onClick={(e) => e.stopPropagation()}
         className="bg-[#12141c]/95 w-full max-w-lg rounded-[28px] sm:rounded-[32px] shadow-[0_24px_64px_rgba(0,0,0,0.6)] backdrop-blur-3xl relative overflow-hidden font-sans border border-white/[0.08] text-white max-h-[92vh] sm:max-h-[88vh] flex flex-col min-h-0 my-auto shrink-0"
       >
         {/* Subtle Ambient Glow */}

@@ -23,6 +23,7 @@ interface State {
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
+  declare setState: React.Component<Props, State>['setState'];
   props: Props;
   state: State = {
     hasError: false,

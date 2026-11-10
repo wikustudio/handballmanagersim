@@ -94,7 +94,7 @@ console.log('✓ Test 2 Passed: European Supercup info and broadcasting verified
 // Test 3: Season 1 Qualification
 console.log('Test 3: Verifying Season 1 Supercup Curtain-Raiser qualification...');
 const gerTier1 = ALL_CLUBS
-  .filter(c => (c.country || 'GER') === 'GER' && c.tier === 1 && !c.isReserve)
+  .filter(c => (c.country || 'GER') === 'GER' && c.tier === 1 && !(c as any).isReserve)
   .sort((a, b) => (b.baseOvr || 0) - (a.baseOvr || 0) || (b.rep || 0) - (a.rep || 0) || String(a.id).localeCompare(String(b.id)));
 
 const topClub = gerTier1[0];

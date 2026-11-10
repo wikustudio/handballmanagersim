@@ -8,6 +8,7 @@ import {
 } from '../engine/moddingEngine';
 import { clearLogoCache } from '../utils/logoCache';
 import { safeSaveClubsDb, saveToIndexedDB } from '../utils/storageManager';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface ModModalProps {
   lang: Language;
@@ -26,6 +27,7 @@ export const ModModal: React.FC<ModModalProps> = ({
   showToast,
   onClose,
 }) => {
+  useModalDismiss(onClose);
   const isDe = lang === 'de';
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const isCustomJson = isModActive && typeof window !== 'undefined' && localStorage.getItem('fms_custom_mod_json') != null;

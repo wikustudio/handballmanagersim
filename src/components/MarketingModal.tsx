@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { GameState } from '../types';
 import { formatMoney } from '../data/gameConstants';
 import { analyzeCatchment } from '../engine/catchmentEngine';
+import { useModalDismiss } from '../utils/modalUtils';
 
 export interface TourMatch {
   opponent: string;
@@ -69,6 +70,7 @@ export const MarketingModal: React.FC<MarketingModalProps> = ({
   onCampaign,
   onTourCompleted
 }) => {
+  useModalDismiss(onClose);
   const [rollingId, setRollingId] = useState<string | null>(null);
   const [flashText, setFlashText] = useState<string>('');
   const [flashCard, setFlashCard] = useState<{ id: string; success: boolean } | null>(null);

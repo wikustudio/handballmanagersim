@@ -14,6 +14,7 @@ import {
   getCreditLimit,
 } from '../data/gameConstants';
 import { Club } from '../types';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface SimulationAuditModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export const SimulationAuditModal: React.FC<SimulationAuditModalProps> = ({
   onClose,
   lang = 'en'
 }) => {
+  useModalDismiss(onClose, isOpen);
   const isDe = lang === 'de';
   const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'performance' | 'invariants' | 'pyramids' | 'cups' | 'decision_days'>('overview');
   const [finSimTier, setFinSimTier] = useState<number>(1);

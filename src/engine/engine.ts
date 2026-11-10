@@ -831,15 +831,15 @@ export function processAging(
 
   // Pass 3: The 'Mortal' Nemesis / Hostile Rival Takeover
   // Triggers when the user is dominating Tier 1, OR organically (22% chance/season) as an ambitious investor consortium backs a challenger
+  const existingNemesis = agedTeams.find(t =>
+    !isUserMatch(t) &&
+    !isReserveClub(t.name) &&
+    t.tier === userTier &&
+    normalizeCountry(t.country || 'GER') === userCountry &&
+    Boolean(t.isNemesisActive)
+  );
   const isDominantDynasty = userTier === 1 && ((options?.consecutiveTitles || 0) >= 2 || (userOvr >= 91 && options?.userWonLeague === true));
   if (isDominantDynasty) {
-    const existingNemesis = agedTeams.find(t =>
-      !isUserMatch(t) &&
-      !isReserveClub(t.name) &&
-      t.tier === userTier &&
-      normalizeCountry(t.country || 'GER') === userCountry &&
-      Boolean(t.isNemesisActive)
-    );
     const rivalCandidates = existingNemesis
       ? (existingNemesis.baseOvr < 92 ? [existingNemesis] : [])
       : agedTeams.filter(t => 
@@ -856,7 +856,7 @@ export function processAging(
       nemesis.baseOvr = Math.min(93, nemesis.baseOvr + armsRaceBoost);
       nemesis.isNemesisActive = true;
     }
-  } else if (Math.random() < 0.22) {
+  } else if (!existingNemesis && Math.random() < 0.22) {
     // Organic Investor Takeover: an ambitious upper-mid Tier 1 challenger launches a title push
     const organicChallengers = agedTeams.filter(t =>
       !isUserMatch(t) &&

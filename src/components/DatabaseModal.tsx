@@ -5,6 +5,7 @@ import { ClubLogo } from './ClubLogo';
 import { ALL_CLUBS } from '../data/clubsData';
 import { normalizeAndValidateCustomDb } from '../engine/moddingEngine';
 import { safeSaveClubsDb } from '../utils/storageManager';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface DatabaseModalProps {
   clubs: Club[];
@@ -19,6 +20,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   onClose,
   onUpdateClubsDb 
 }) => {
+  useModalDismiss(onClose);
   const isDe = lang === 'de';
   const t = (en: string, de: string) => isDe ? de : en;
 
@@ -177,8 +179,8 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   const leagues = Array.from({ length: maxTier }, (_, i) => i + 1);
 
   return (
-    <div className="fixed inset-0 bg-black/85 flex flex-col items-center justify-center p-2 sm:p-4 z-50 backdrop-blur-2xl animate-in fade-in duration-100 overflow-y-auto overscroll-contain">
-      <div className="bg-[#12141c] w-full max-w-5xl rounded-[28px] sm:rounded-[32px] flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shadow-[0_24px_64px_rgba(0,0,0,0.8)] border border-white/10 overflow-hidden text-white animate-in zoom-in-98 duration-100 ease-out shrink-0">
+    <div onClick={onClose} className="fixed inset-0 bg-black/85 flex flex-col items-center justify-center p-2 sm:p-4 z-50 backdrop-blur-2xl animate-in fade-in duration-100 overflow-y-auto overscroll-contain">
+      <div onClick={(e) => e.stopPropagation()} className="bg-[#12141c] w-full max-w-5xl rounded-[28px] sm:rounded-[32px] flex flex-col max-h-[92vh] sm:max-h-[88vh] min-h-0 my-auto shadow-[0_24px_64px_rgba(0,0,0,0.8)] border border-white/10 overflow-hidden text-white animate-in zoom-in-98 duration-100 ease-out shrink-0">
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-4 sm:p-5 border-b border-white/10 bg-white/[0.02]">

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { formatMoney, COUNTRIES, sanitizePlayerName } from '../data/gameConstants';
+import { useModalDismiss } from '../utils/modalUtils';
 
 export interface PlayerRevealModalProps {
   ovr: number;
@@ -194,6 +195,7 @@ export const PlayerRevealModal: React.FC<PlayerRevealModalProps> = ({
   onClose,
   returnToTransferMarket = false
 }) => {
+  useModalDismiss(onClose);
   const isDe = lang === 'de';
   const isGalactico = cardType === 'galactico' || (isStar && ovr >= 4);
   const touchStartY = useRef<number | null>(null);

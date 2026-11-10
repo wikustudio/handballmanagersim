@@ -5,6 +5,7 @@ const t = (lang: string, en: string, de?: string) => en;
 import { formatMoney, TACTICS, getCreditLimit, PHILOSOPHIES, isTacticalSynergy, normalizeTactic } from '../data/gameConstants';
 import { generateCoachMarket, getCoachTraitInfo, getCoachWeaknessInfo, getCoachArchetypeConfig } from '../engine/coachEngine';
 import { CoachDossierModal } from './CoachDossierModal';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface CoachMarketModalProps {
   state: GameState;
@@ -34,6 +35,7 @@ export const CoachMarketModal: React.FC<CoachMarketModalProps> = ({
   onSelectPhilosophy,
   initialTab = 'staff'
 }) => {
+  useModalDismiss(onClose);
   const [activeTab, setActiveTab] = useState<'staff' | 'market' | 'philosophy'>(() => {
     // If no coach appointed and opened without explicit initialTab, default to job market
     if (!state.currentCoach && initialTab === 'staff') return 'market';

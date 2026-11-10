@@ -6,6 +6,7 @@ import { getLeagueInfo, isReserveClub } from '../data/gameConstants';
 import { generateMidSeasonEvent } from '../engine/midSeasonEngine';
 import { getCupName } from '../data/randomEvents';
 import { getContinentalCupNames } from '../utils/regionHelpers';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface MidSeasonModalProps {
   state: GameState;
@@ -22,6 +23,7 @@ export const MidSeasonModal: React.FC<MidSeasonModalProps> = ({
   onClose,
   onOpenCoachMarket
 }) => {
+  useModalDismiss(() => onClose());
   const [event] = useState(() => generateMidSeasonEvent(state));
   
   const expectedRank = state.boardTargetFinish || (state.club.tier === 1 ? 8 : 12);

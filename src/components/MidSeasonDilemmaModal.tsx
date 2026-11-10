@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { GameState } from '../types';
 import { getManagerialDilemmas, ManagerialDilemma } from '../engine/seasonSimEngine';
 import { playSound } from '../utils/audio';
+import { useModalScrollLock } from '../utils/modalUtils';
 
 interface MidSeasonDilemmaModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const MidSeasonDilemmaModal: React.FC<MidSeasonDilemmaModalProps> = ({
   dilemmaId,
   onResolveDilemma,
 }) => {
+  useModalScrollLock(isOpen);
   const lang = gameState.language || 'en';
   const dilemmas = getManagerialDilemmas(gameState);
   const dilemma = dilemmas.find((d) => d.id === dilemmaId) || dilemmas[0];

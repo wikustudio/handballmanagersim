@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { GameState, Language, WorldCupCampaignHistoryRecord } from '../types';
 import { BroadcastBadge } from './BroadcastBadge';
+import { useModalDismiss } from '../utils/modalUtils';
 
 interface ManagerialWorldCupModalProps {
   state: GameState;
@@ -16,6 +17,7 @@ export const ManagerialWorldCupModal: React.FC<ManagerialWorldCupModalProps> = (
   isModActive = false,
   onClose,
 }) => {
+  useModalDismiss(onClose);
   // Collect all actual campaigns without dropping any records
   const campaignsList: WorldCupCampaignHistoryRecord[] = [];
   const usedYears = new Set<number>();

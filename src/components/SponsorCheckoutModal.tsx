@@ -5,6 +5,7 @@ import { SPONSOR_PACKAGES, PressSponsor, registerActiveSponsor } from '../lib/su
 import { validateSponsorContent } from '../utils/sponsorModeration';
 import { PRESET_LOGOS, resolveLogoUrl } from '../utils/sponsorPresets';
 import { createCheckoutSession } from '../lib/stripeClientService';
+import { useModalScrollLock } from '../utils/modalUtils';
 
 export interface SlotSelectionInfo {
   slotNumber: number;
@@ -87,6 +88,7 @@ export const SponsorCheckoutModal: React.FC<SponsorCheckoutModalProps> = ({
   selectedSlot = null,
   isSoldOut = false
 }) => {
+  useModalScrollLock(isOpen);
   const [hasClaimedFree, setHasClaimedFree] = useState<boolean>(() => {
     return typeof window !== 'undefined' && localStorage.getItem('fms_free_sponsor_claimed_v1') === 'true';
   });
