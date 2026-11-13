@@ -224,6 +224,7 @@ export interface GameState {
   sponsorDealsThisSeason?: number;
   notifications?: { id: string; type: string; title?: string; subtitle?: string; message: string; read: boolean; category?: string; standings?: any[]; prizeMoney?: number; opponentName?: string }[];
   year: number;
+  startYear?: number;
   careerId?: string;
   managerName: string;
   nationality?: string;

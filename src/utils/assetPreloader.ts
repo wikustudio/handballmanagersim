@@ -25,27 +25,21 @@ export const preloadImage = (url: string): Promise<void> => {
 };
 
 /**
- * Pre-warms verified local crests and official real-world logos for clubs upfront.
- * Guarantees zero-flicker rendering across the Dashboard, Season History, and Table Modals.
+ * Pre-warms a bounded, lightweight set of verified local crests in idle time
+ * without saturating browser or proxy connection pools on initial page load.
  */
 export const preloadClubAssets = (clubs: Club[]): void => {
   if (typeof window === 'undefined' || !clubs || !Array.isArray(clubs)) return;
 
   const runBatchPreload = () => {
-    clubs.forEach((c) => {
+    const candidates = clubs.filter((c) => {
       const numericId = typeof c.id === 'number' ? c.id : Number(c.id);
-      if (!isNaN(numericId) && hasVerifiedLocalAsset(numericId)) {
-        preloadImage(getLocalAssetPath(numericId));
-      }
-      if (!isNaN(numericId) && REAL_WORLD_LOGOS[numericId]) {
-        preloadImage(REAL_WORLD_LOGOS[numericId]);
-      }
-      if (c.logo && typeof c.logo === 'string') {
-        preloadImage(c.logo);
-      }
-      if (c.fallbackLogo && typeof c.fallbackLogo === 'string') {
-        preloadImage(c.fallbackLogo);
-      }
+      return c.tier === 1 && !isNaN(numericId) && hasVerifiedLocalAsset(numericId);
+    }).slice(0, 12);
+
+    candidates.forEach((c) => {
+      const numericId = typeof c.id === 'number' ? c.id : Number(c.id);
+      preloadImage(getLocalAssetPath(numericId));
     });
   };
 
@@ -56,6 +50,6 @@ export const preloadClubAssets = (clubs: Club[]): void => {
   if (typeof win.requestIdleCallback === 'function') {
     win.requestIdleCallback(runBatchPreload);
   } else {
-    window.setTimeout(runBatchPreload, 16);
+    window.setTimeout(runBatchPreload, 300);
   }
 };

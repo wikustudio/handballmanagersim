@@ -330,7 +330,7 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                   ))}
                 </div>
               </div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-none truncate">
+              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-snug py-0.5 truncate">
                 {t('Youth Academy', 'Jugendakademie')}
               </h2>
             </div>

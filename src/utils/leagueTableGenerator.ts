@@ -193,58 +193,63 @@ export const generateLeagueTable = (
     }
   }
 
-  // Country-specific authentic fallback lists for extra fillers
-  const gerFallbackNames = [
-    'HC Essen', 'VfL Gummersbach', 'TBV Lemgo', 'HSG Wetzlar', 'TSV Hannover',
-    'Frisch Auf Göppingen', 'MT Melsungen', 'SC DHfK Leipzig', 'TVB Stuttgart', 'Bergischer HC',
-    'HBW Balingen', 'ASV Hamm', 'TuS N-Lübbecke', 'ThSV Eisenach'
+  // Country-specific authentic regional lower-tier fallback clubs (never duplicating existing country clubs or mixing countries)
+  const countryRegionalFallbacks: Record<string, string[]> = {
+    GER: ['SG Pforzheim/Eutingen', 'HC Oppenweiler/Backnang', 'TV Emsdetten', 'HSG Krefeld Niederrhein', 'TuS Spenge', 'SGSH Dragons', 'TV Gelnhausen', 'HC Empor Rostock', 'Oranienburger HC', 'MTV Braunschweig', 'TSG Altenhagen-Heepen', 'HG Saarlouis'],
+    ESP: ['BM Alcobendas', 'BM Zamora', 'BM Soria', 'BM Lanzarote', 'BM Oviedo', 'BM Alarcos Ciudad Real', 'BM Sant Quirze', 'BM Trapagaran', 'BM Reconquista Vigo', 'BM Romo'],
+    FRA: ['Bordeaux Bruges Lormont', 'Annecy CSAV HB', 'Mulhouse Sud Alsace', 'Élite Val d\'Oise', 'Saintes HB', 'Hazebrouck HB', 'Gonfreville HB', 'Dreux AC HB', 'Bagnols GRHB', 'Vernon Saint-Marcel'],
+    DEN: ['Rækker Mølle Håndbold', 'Odder Håndbold', 'HC Midtjylland', 'FIF Håndbold', 'Ajax København', 'HØJ Elite', 'Roskilde Håndbold', 'Vendsyssel Håndbold'],
+    HUN: ['Békési FKC', 'Ceglédi KKSE', 'Szigetszentmiklósi KSK', 'Ózdi KC', 'Pécsi VSE', 'DEAC Kézilabda', 'Mezőkövesdi KC', 'Vecsés SE'],
+    POL: ['Padwa Zamość', 'Stal Gorzów', 'Jurand Ciechanów', 'Nielba Wągrowiec', 'Miedź Legnica', 'Grunwald Poznań', 'Anilana Łódź', 'Olimpia Piekary Śląskie'],
+    SWE: ['Tumba HBK', 'AIK Handboll', 'Kungälvs HK', 'Vinslövs HK', 'Anderstorps SK', 'IFK Karlskrona', 'Rimbo HK', 'Skånela IF'],
+    NOR: ['Bodø Håndballklubb', 'Follo HK', 'ROS Håndball', 'Ryger Stavanger', 'Melhus Håndball', 'Charlottenlund SK', 'Falk Horten', 'Nøtterøy Håndball'],
+    ISL: ['Kórdrengir', 'Hörður Ísafirði', 'Vængir Júpiters', 'Berserkir', 'ÍH Hafnarfjörður', 'Mílan', 'Hamrarnir', 'Árborg'],
+    POR: ['Boa-Hora FC', 'SC Horta', 'Nazaré Dom Fuas', 'Arsenal da Devesa', 'Sanjoanense', 'Almada AC', 'Xico Andebol', 'GC Santo Tirso'],
+    CRO: ['RK Bjelovar', 'RK Đakovo', 'RK Zamet Rijeka', 'RK Umag', 'RK Buzet', 'RK Split', 'RK Zadar 1954', 'RK Sisak'],
+    SLO: ['RK Maribor Branik', 'RD Izola', 'RK Črnomelj', 'MRK Nova Gorica', 'RK Sevnica', 'RK Brežice', 'RK Grosuplje', 'ŠD Škofljica'],
+    SRB: ['RK Crvenka', 'RK Kikinda', 'RK Proleter Zrenjanin', 'RK Šamot 65', 'RK Rudar Kostolac', 'RK Spartak Subotica', 'RK Kolubara', 'RK Železničar Niš'],
+    MKD: ['RK Prilep', 'RK Radoviš', 'RK Struga', 'RK Kumanovo', 'RK Borec Veles', 'RK Prespa', 'RK Skopje 2020', 'RK Aerodrom'],
+    ROU: ['CSU Suceava', 'CSM Focșani', 'CSM Alexandria', 'CSU Cluj-Napoca', 'CSM Oradea', 'CSM Reșița', 'CS Medgidia', 'CSU Galați'],
+    AUT: ['UHC Tulln', 'WAT Atzgersdorf', 'Union Korneuburg', 'HIB Graz', 'HC Lustenau', 'Spiders Wels', 'UHC Salzburg', 'SG Traun'],
+    SUI: ['TV Steffisburg', 'Handball Stäfa', 'CS Chênois Genève', 'SG Wädenswil/Horgen', 'TV Birsfelden', 'TV Solothurn', 'HC Arbon', 'STV Baden'],
+  };
+
+  const fallbackList = countryRegionalFallbacks[currentCountry] || [
+    `${currentCountry} Regional HC I`,
+    `${currentCountry} Regional HC II`,
+    `${currentCountry} Athletic HB`,
+    `${currentCountry} Union HB`,
+    `${currentCountry} Sporting HB`,
+    `${currentCountry} Municipal HB`,
+    `${currentCountry} Olympic HB`,
+    `${currentCountry} Central HB`,
   ];
 
-  const espFallbackNames = [
-    'BM Granollers', 'BM Leon', 'BM Cuenca', 'BM Logroño', 'BM Huesca',
-    'BM Benidorm', 'BM Valladolid', 'BM Nava', 'BM Puente Genil', 'BM Cangas'
-  ];
-
-  const fraFallbackNames = [
-    'HBC Nantes', 'Chambéry Savoie HB', 'Fenix Toulouse HB', 'USAM Nîmes Gard', 'Saint-Raphaël VHB',
-    'Dunkerque HGL', 'Pays d\'Aix UC', 'Cesson Rennes MHB', 'US Ivry', 'Saran HB'
-  ];
-
-  const islFallbackNames = [
-    'Haukar', 'Valur', 'Afturelding', 'Stjarnan', 'Fram',
-    'FH', 'ÍBV', 'KA', 'HK', 'Grótta'
-  ];
-
-  const intlFallbackNames = [
-    'HC Bjerringbro', 'Aalborg Håndbold', 'GOG Håndbold', 'Skjern Håndbold', 'Elverum Håndball',
-    'Kolstad Håndball', 'Celje Pivovarna', 'RK Zagreb'
-  ];
-
-  const fallbackList =
-    currentCountry === 'GER' ? gerFallbackNames :
-    currentCountry === 'ESP' ? espFallbackNames :
-    currentCountry === 'FRA' ? fraFallbackNames :
-    currentCountry === 'ISL' ? islFallbackNames :
-    intlFallbackNames;
+  const allCountryNames = new Set<string>([
+    ...clubsPool
+      .filter((c) => normalizeCountry(c.country || 'GER') === currentCountry)
+      .map((c) => (c.name || '').trim().toLowerCase()),
+    ...leagueClubs.map((c) => (c.name || '').trim().toLowerCase()),
+    ...(isUserInThisTier && state.club?.name ? [state.club.name.trim().toLowerCase()] : []),
+  ]);
 
   const neededFillers = Math.max(0, targetAiCount - leagueClubs.length);
   for (let i = 0; i < neededFillers; i++) {
-    const existingNames = new Set([
-      ...leagueClubs.map((c) => c.name),
-      ...(isUserInThisTier ? [state.club.name] : [])
-    ]);
     const availableFallback =
-      fallbackList.find((n) => !existingNames.has(n)) || `HC City ${i + 1}`;
+      fallbackList.find((n) => !allCountryNames.has(n.trim().toLowerCase())) ||
+      `${currentCountry} Regional HC ${i + 1}`;
+    allCountryNames.add(availableFallback.trim().toLowerCase());
 
     leagueClubs.push({
       id: 9900 + i,
       name: availableFallback,
       tier: currentTier,
-      baseOvr: currentLeagueInfo.avgOvr + seededRand(simYear + i, -5, 5),
+      baseOvr: Math.max(42, currentLeagueInfo.avgOvr - 4 + seededRand(simYear + i, -3, 1)),
       color: '#' + Math.floor(seededRandom(simYear * 10 + i) * 16777215).toString(16).padStart(6, '0'),
-      stadium: 3000,
+      stadium: 2500,
       country: currentCountry,
-    });
+      _isSyntheticFiller: true,
+    } as any);
   }
 
   const totalMatches = (targetTotalClubs - 1) * 2;
@@ -371,7 +376,7 @@ export const generateLeagueTable = (
   };
 
   // Sort AI league clubs deterministically with authentic seasonal form & breakout/slump variance
-  const recordedChampMove = !isUserInThisTier && lastHist
+  const recordedChampMove = !(isUserInThisTier && userPos === 1) && lastHist
     ? (lastHist.universeMovements || state.universeMovements || []).find(
         (m: any) => m.year === (lastHist.year ?? simYear) &&
         m.type === 'champion' &&
@@ -406,8 +411,17 @@ export const generateLeagueTable = (
         }
         return c.baseOvr + baseNoise + narrativeSwing;
       };
+      if ((a as any)._isSyntheticFiller && !(b as any)._isSyntheticFiller) return 1;
+      if (!(a as any)._isSyntheticFiller && (b as any)._isSyntheticFiller) return -1;
       return getEffectiveSeasonRating(b) - getEffectiveSeasonRating(a);
     });
+    if (leagueClubs.length > 1 && isReserveClub(leagueClubs[0].name)) {
+      const firstNonReserveIdx = leagueClubs.findIndex((c) => !isReserveClub(c.name) && !(c as any)._isSyntheticFiller);
+      if (firstNonReserveIdx > 0) {
+        const [topNonReserve] = leagueClubs.splice(firstNonReserveIdx, 1);
+        leagueClubs.unshift(topNonReserve);
+      }
+    }
   }
 
   // Rival club setup
@@ -663,13 +677,29 @@ export const generateLeagueTable = (
   );
   const euroQualifyingCupWinners = new Set<string>();
   Object.entries(cupFinalsCtx).forEach(([k, val]: [string, any]) => {
-    if (k !== 'reg_cup' && k !== 'reg' && k !== 'cwc' && val?.winnerName && (!val.year || val.year === targetSeasonYear)) {
+    const isSuperOrNonEuroKey =
+      k === 'reg_cup' ||
+      k === 'reg' ||
+      k === 'cwc' ||
+      k === 'dom_supercup' ||
+      k === 'supercup' ||
+      k === 'sc' ||
+      k === 'esc';
+    if (!isSuperOrNonEuroKey && val?.winnerName && (!val.year || val.year === targetSeasonYear)) {
       euroQualifyingCupWinners.add(String(val.winnerName).trim().toLowerCase());
     }
   });
   seasonMovements.forEach((m: any) => {
     const title = String(m.cupTitle || '').toLowerCase();
-    const isRegOrWorld = title.includes('amateur') || title.includes('regional') || title.includes('super globe');
+    const mId = String(m.id || '').toLowerCase();
+    const isSupercup =
+      mId.endsWith('-cup-sc') ||
+      mId.endsWith('-cup-esc') ||
+      title.includes('supercup') ||
+      title.includes('super cup') ||
+      title.includes('supercopa') ||
+      title.includes('trophée des champions');
+    const isRegOrWorld = isSupercup || title.includes('amateur') || title.includes('regional') || title.includes('super globe');
     if (!isRegOrWorld && m.clubName) {
       euroQualifyingCupWinners.add(String(m.clubName).trim().toLowerCase());
     }

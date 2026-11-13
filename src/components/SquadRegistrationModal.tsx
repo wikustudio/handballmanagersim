@@ -52,7 +52,7 @@ export const SquadRegistrationModal: React.FC<SquadRegistrationModalProps> = ({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto cursor-pointer"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-2xl overflow-y-auto cursor-pointer"
       onClick={onClose}
     >
       <motion.div

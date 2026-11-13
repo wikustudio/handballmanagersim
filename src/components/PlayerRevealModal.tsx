@@ -415,7 +415,7 @@ export const PlayerRevealModal: React.FC<PlayerRevealModalProps> = ({
 
               {/* Player Name & Trait */}
               <div className="px-1">
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase leading-none truncate">
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase leading-snug py-0.5 truncate">
                   {cardData.name}
                 </h1>
                 <p className={`text-xs font-semibold mt-1 flex items-center gap-1.5 ${isGalactico ? 'text-amber-300/90' : 'text-sky-300/90'}`}>

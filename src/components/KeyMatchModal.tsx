@@ -48,6 +48,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
   const [isCupMagic, setIsCupMagic] = useState<boolean>(false);
   const [finishSuffix, setFinishSuffix] = useState<string>('');
   const intervalRef = useRef<any>(null);
+  const resultTimeoutRef = useRef<any>(null);
   const matchContextRef = useRef<{
     t: number;
     s: [number, number];
@@ -403,7 +404,13 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
     setIsCupMagic(false);
     setFinishSuffix('');
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearTimeout(intervalRef.current);
+        clearInterval(intervalRef.current);
+      }
+      if (resultTimeoutRef.current) {
+        clearTimeout(resultTimeoutRef.current);
+      }
     };
   }, [matchData]);
 
@@ -482,7 +489,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
         const won = s[0] > s[1];
         setResult(won);
         setFinishSuffix('');
-        setTimeout(() => setStage('result'), simSpeedRef.current === 2 ? 400 : 1000);
+        resultTimeoutRef.current = setTimeout(() => setStage('result'), simSpeedRef.current === 2 ? 350 : 850);
         return;
       }
 
@@ -547,7 +554,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
         setScore([...s]);
         setFinishSuffix(' (AET)');
         setResult(ctx.playerWins);
-        setTimeout(() => setStage('result'), simSpeedRef.current === 2 ? 400 : 1000);
+        resultTimeoutRef.current = setTimeout(() => setStage('result'), simSpeedRef.current === 2 ? 350 : 850);
         return;
       }
 
@@ -988,10 +995,30 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
     }
     setFinishSuffix(' (p)');
     setClutchDesc(msg);
-    setTimeout(() => {
+    resultTimeoutRef.current = setTimeout(() => {
       setStage('result');
-    }, 2500);
+    }, simSpeedRef.current === 2 ? 750 : 1300);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable)) {
+        return;
+      }
+      if (stage === 'match' && (e.key === ' ' || e.code === 'Space')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleInstantResult();
+      } else if (stage === 'result' && (e.key === ' ' || e.code === 'Space' || e.key === 'Enter')) {
+        e.preventDefault();
+        e.stopPropagation();
+        onResolve(result || false, score as [number, number]);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [stage, result, score, onResolve]);
 
   const getResultWording = () => {
     const tier = matchData.tier || useGameStore.getState().club.tier || 1;
@@ -1109,7 +1136,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_#ef4444]" />
               </span>
-              <span>LIVE</span>
+              <span>{cleanBroadcastBadge(broadcastPackage.networkBadge, isModActive)}</span>
             </div>
 
             <span className="text-zinc-600 shrink-0">·</span>
@@ -1123,6 +1150,9 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
 
           {/* Right: Broadcaster Logo */}
           <div className="flex items-center gap-2 shrink-0">
+            <span className="hidden md:inline text-[10px] font-mono text-zinc-500 uppercase tracking-wider truncate max-w-[180px]">
+              {broadcastPackage.networkTag}
+            </span>
             <BroadcastLogo packageOrKey={broadcastPackage} size="sm" isModActive={isModActive} />
           </div>
         </div>

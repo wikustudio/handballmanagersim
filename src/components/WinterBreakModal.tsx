@@ -44,6 +44,7 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
   euroQualifiedForSf,
   isSubModalOpen = false,
   onContinue,
+  onReturnToDashboard,
   onMakeTransfers,
   onTeamBonding,
   onRevampSystem
@@ -340,14 +341,23 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
       if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable)) {
         return;
       }
-      if (e.key === ' ' || e.code === 'Space' || e.key === 'Escape') {
+      if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
         onContinue();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (onReturnToDashboard) {
+          onReturnToDashboard();
+        } else {
+          onContinue();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onContinue, isSubModalOpen]);
+  }, [onContinue, onReturnToDashboard, isSubModalOpen]);
 
   const toneBadgeClasses = {
     emerald: 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30',
@@ -364,6 +374,9 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
+      onClick={() => {
+        if (onReturnToDashboard) onReturnToDashboard();
+      }}
       className="fixed inset-0 flex items-center justify-center p-3 sm:p-5 z-[100] backdrop-blur-2xl bg-black/75"
     >
       <motion.div
@@ -412,23 +425,36 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.1] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] px-3 py-1.5 rounded-2xl shrink-0">
-            <ClubLogo
-              name={state.club.name}
-              logo={state.club.logo}
-              fallbackLogo={state.club.fallbackLogo}
-              color={state.club.color}
-              className="w-5 h-5 object-contain shrink-0"
-              fallbackClassName="w-5 h-5 text-[8px] rounded-md flex items-center justify-center font-bold text-white shrink-0"
-            />
-            <div className="flex flex-col text-right">
-              <span className="text-xs font-semibold text-white truncate max-w-[130px] leading-tight">
-                {state.club.name}
-              </span>
-              <span className="text-[10px] text-zinc-400 leading-tight truncate max-w-[130px]">
-                {leagueInfo.name}
-              </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden xs:flex items-center gap-2.5 bg-white/[0.04] border border-white/[0.1] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] px-3 py-1.5 rounded-2xl shrink-0">
+              <ClubLogo
+                name={state.club.name}
+                logo={state.club.logo}
+                fallbackLogo={state.club.fallbackLogo}
+                color={state.club.color}
+                className="w-5 h-5 object-contain shrink-0"
+                fallbackClassName="w-5 h-5 text-[8px] rounded-md flex items-center justify-center font-bold text-white shrink-0"
+              />
+              <div className="flex flex-col text-right">
+                <span className="text-xs font-semibold text-white truncate max-w-[130px] leading-tight">
+                  {state.club.name}
+                </span>
+                <span className="text-[10px] text-zinc-400 leading-tight truncate max-w-[130px]">
+                  {leagueInfo.name}
+                </span>
+              </div>
             </div>
+            {onReturnToDashboard && (
+              <button
+                type="button"
+                onClick={onReturnToDashboard}
+                aria-label="Return to Club Dashboard"
+                title={t(lang, 'Return to Club Dashboard (Esc)', 'Zum Vereins-Dashboard (Esc)')}
+                className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer active:scale-95 shrink-0"
+              >
+                <i className="fas fa-xmark text-sm" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -729,12 +755,22 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
           </div>
         </div>
 
-        {/* Single Primary Action Footer */}
-        <div className="p-4 border-t border-white/[0.08] bg-black/40 backdrop-blur-2xl shrink-0 relative z-10">
+        {/* Action Footer: Manage Club (Dashboard) + Start Second Half */}
+        <div className="p-4 border-t border-white/[0.08] bg-black/40 backdrop-blur-2xl shrink-0 relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          {onReturnToDashboard && (
+            <button
+              type="button"
+              onClick={onReturnToDashboard}
+              className="py-3 sm:py-3.5 px-4 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 hover:text-white font-semibold text-xs sm:text-sm transition-all duration-150 active:scale-[0.99] cursor-pointer border border-white/[0.1] flex items-center justify-center gap-2 shrink-0"
+            >
+              <i className="fas fa-sliders text-xs text-zinc-400" />
+              <span>{t(lang, 'Manage Club', 'Verein verwalten')}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onContinue}
-            className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-semibold text-xs sm:text-sm transition-all duration-150 active:scale-[0.99] cursor-pointer shadow-[0_8px_24px_rgba(14,165,233,0.25),inset_0_1px_0_rgba(255,255,255,0.22)] border border-sky-400/30 flex items-center justify-center gap-2 group"
+            className="flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-semibold text-xs sm:text-sm transition-all duration-150 active:scale-[0.99] cursor-pointer shadow-[0_8px_24px_rgba(14,165,233,0.25),inset_0_1px_0_rgba(255,255,255,0.22)] border border-sky-400/30 flex items-center justify-center gap-2 group"
           >
             <span>{t(lang, 'Start Second Half of Season', 'Rückrunde starten')}</span>
             <i className="fas fa-arrow-right text-xs transition-transform group-hover:translate-x-1" />

@@ -158,6 +158,7 @@ const initialState: GameState = {
     winterTransfersOpenedYear: -1,
 
     year: 2024,
+    startYear: undefined,
     managerName: '',
     tactic: 'Balanced',
     mode: 'standard',
@@ -375,7 +376,9 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             ...initialState,
             startTier: baseClub.tier,
             startClubName: freshClub.name,
+            startYear: startYear,
             year: startYear,
+            lastJobOfferYear: startYear,
             managerName: headCoachName,
             tactic: philosophy,
             mode: mode as any,
@@ -1386,7 +1389,11 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             clubVision: state.clubVision
         };
         const prospectRaw = customProspect ? { ...customProspect } : generateYouthProspect(level, country, tier, options);
-        const prospect = { ...prospectRaw, enrolledYear: state.year };
+        const prospect = {
+            ...prospectRaw,
+            id: prospectRaw.id || ('youth_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+            enrolledYear: state.year
+        };
 
         r.push(prospect);
         set({
@@ -1406,14 +1413,14 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     protectYouth: (id, cost) => set((n) => {
         const creditLimit = getCreditLimit(n.club.tier || 1, n.club.country || 'GER');
         if (n.budget + creditLimit < cost) return n;
-        const target = (n.youthPipeline || []).find(p => p.id === id);
+        const target = (n.youthPipeline || []).find(p => p.id === id || p.name === id);
         if (!target || target.isProtected) return n;
         const level = n.club.academyLevel || 1;
         const defenseChance = Math.min(99, 45 + 10 * level);
         return {
             budget: n.budget - cost,
             youthSpend: (n.youthSpend || 0) + cost,
-            youthPipeline: (n.youthPipeline || []).map(p => p.id === id ? { 
+            youthPipeline: (n.youthPipeline || []).map(p => (p.id === id || p.name === id) ? { 
                 ...p, 
                 isProtected: true,
                 protectionDefenseChance: defenseChance 
@@ -2217,7 +2224,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             const progress = (te.timer > 1 && Math.random() < accelChance) ? 2 : 1;
             return { ...te, timer: Math.max(0, te.timer - progress) };
         }).filter(te => {
-            if (te.isLoanedOut) return true;
+            if (te.isLoanedOut || returningLoans.includes(te.name)) return true;
             if (hasAcademyImmunity) return true; // Level 5 academy permanent dynasty immunity
             if (poachedThisSeason >= 1) return true; // Hard cap: Max 1 prospect poached per season across entire cohort
 
@@ -2539,15 +2546,17 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             rivalToastMessage = `League rivalry paused. Different tiers.`;
         }
         
-        let currentTacticTenure = 1;
+        let consecutiveTacticSeasons = 0;
         const currentHist = (state.history || []).filter(h => !h.clubName || h.clubName === club.name);
         for (let i = currentHist.length - 1; i >= 0; i--) {
             if ((currentHist[i] as any).tactic === state.tactic) {
-                currentTacticTenure++;
+                consecutiveTacticSeasons++;
             } else {
                 break;
             }
         }
+        const recentTacticUsage = currentHist.slice(-4).filter((h: any) => h.tactic === state.tactic).length;
+        const currentTacticTenure = Math.max(consecutiveTacticSeasons + 1, recentTacticUsage + 1);
 
         // Safely deep-clone the pending state to prevent Zustand Strict Mode mutation crashes
         const seasonStats = state.pendingSeasonState 
@@ -3921,10 +3930,18 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             return m;
         });
 
+        const preSeasonScMoves = (state.universeMovements || []).filter(
+            m => m.year === state.year && m.type === 'intl_cup' && (String(m.id || '').endsWith('-cup-sc') || String(m.id || '').endsWith('-cup-esc')) &&
+            !simGlobalResult.movements.some(sm => sm.id === m.id || (String(sm.id || '').endsWith('-cup-sc') && normalizeCountry(sm.country || 'GER') === normalizeCountry(m.country || 'GER')))
+        );
+        const mergedSeasonMovements = [...preSeasonScMoves, ...simGlobalResult.movements];
+        const remainingPriorMovements = (state.universeMovements || []).filter(
+            m => !mergedSeasonMovements.some(sm => sm.id === m.id)
+        );
         ue.worldClubs = simGlobalResult.newWorldClubs;
-        ue.universeMovements = [...simGlobalResult.movements, ...(state.universeMovements || [])].slice(0, 250);
+        ue.universeMovements = [...mergedSeasonMovements, ...remainingPriorMovements].slice(0, 250);
         ue.resolvedMatchContext = validMatchContext;
-        histItem.universeMovements = simGlobalResult.movements;
+        histItem.universeMovements = mergedSeasonMovements;
         histItem.resolvedMatchContext = validMatchContext;
         histItem.insolventClubs = simGlobalResult.insolventClubs;
 
@@ -3933,15 +3950,18 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             const cupQualifiers = new Set<string>();
             if (validMatchContext?.cupFinals) {
                 Object.entries(validMatchContext.cupFinals).forEach(([k, val]: [string, any]) => {
-                    if (k !== 'reg_cup' && k !== 'reg' && k !== 'cwc' && val?.winnerName && (!val.year || val.year === state.year)) {
+                    const isNonQualCup = k === 'reg_cup' || k === 'reg' || k === 'cwc' || k === 'dom_supercup' || k === 'supercup' || k === 'sc' || k === 'esc';
+                    if (!isNonQualCup && val?.winnerName && (!val.year || val.year === state.year)) {
                         cupQualifiers.add(String(val.winnerName).trim().toLowerCase());
                     }
                 });
             }
-            (simGlobalResult.movements || []).forEach(m => {
+            (mergedSeasonMovements || []).forEach(m => {
                 if (m.year === state.year && m.type === 'intl_cup' && m.clubName) {
                     const title = String(m.cupTitle || '').toLowerCase();
-                    if (!title.includes('amateur') && !title.includes('regional') && !title.includes('super globe')) {
+                    const mId = String(m.id || '').toLowerCase();
+                    const isSupercupMove = mId.endsWith('-cup-sc') || mId.endsWith('-cup-esc') || title.includes('supercup') || title.includes('super cup') || title.includes('supercopa') || title.includes('trophée des champions');
+                    if (!isSupercupMove && !title.includes('amateur') && !title.includes('regional') && !title.includes('super globe')) {
                         cupQualifiers.add(String(m.clubName).trim().toLowerCase());
                     }
                 }
@@ -3957,7 +3977,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             }
         }
 
-        (simGlobalResult.movements || []).forEach(m => {
+        (mergedSeasonMovements || []).forEach(m => {
             if (m.type === 'intl_cup') {
                 const isClubMatch = Boolean(
                     (m.clubName && club.name && m.clubName.trim().toLowerCase() === club.name.trim().toLowerCase()) ||
@@ -3970,8 +3990,11 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                     const isDomSc = Boolean(!isEuroSc && (m.id?.endsWith('-cup-sc') || title.includes('supercup') || title.includes('super cup') || title.includes('supercopa') || title.includes('trophée des champions')));
                     if (isEuroSc) {
                         // No international supercup
-                    } else if (isDomSc) histItem.trophiesThisYear.sc = 1;
-                    else if (title.includes('super globe') && !cwcEliminated && cwcWon) histItem.trophiesThisYear.cwc = 1;
+                    } else if (isDomSc) {
+                        if (state.pendingSupercupTrophies?.sc || validMatchContext?.cupFinals?.dom_supercup?.userWon) {
+                            histItem.trophiesThisYear.sc = 1;
+                        }
+                    } else if (title.includes('super globe') && !cwcEliminated && cwcWon) histItem.trophiesThisYear.cwc = 1;
                     else if (title.includes('champions league') && !clEliminated && clWon) histItem.trophiesThisYear.cl = 1;
                     else if (title.includes('european league') && !elEliminated && elWon) histItem.trophiesThisYear.el = 1;
                     else if (title.includes('european cup') && !eclEliminated && eclWon) histItem.trophiesThisYear.ecl = 1;
@@ -4764,7 +4787,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         }
 
         const prospectIndex = prospectId 
-            ? pipeline.findIndex(p => p.id === prospectId)
+            ? pipeline.findIndex(p => p.id === prospectId || p.name === prospectId)
             : pipeline.findIndex(p => !p.isLoanedOut);
 
         if (prospectIndex === -1) {
@@ -4884,7 +4907,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     loanYouthProspect: (prospectId: string) => {
         const state = get();
         const pipeline = state.youthPipeline || [];
-        const prospect = pipeline.find(p => p.id === prospectId);
+        const prospect = pipeline.find(p => p.id === prospectId || p.name === prospectId);
         if (!prospect) {
             return { success: false, message: 'Prospect not found in academy pipeline.' };
         }
@@ -4896,7 +4919,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         }
 
         const updatedPipeline = pipeline.map(p => {
-            if (p.id === prospectId) {
+            if (p.id === prospectId || p.name === prospectId) {
                 const newBoost = Math.min(5, (p.boost || 1) + 1);
                 const newType: 'local' | 'top_prospect' | 'generational' = newBoost >= 3
                     ? (p.type === 'generational' ? 'generational' : 'top_prospect')
@@ -4937,7 +4960,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     sellYouthProspect: (prospectId: string) => {
         const state = get();
         const pipeline = state.youthPipeline || [];
-        const prospect = pipeline.find(p => p.id === prospectId);
+        const prospect = pipeline.find(p => p.id === prospectId || p.name === prospectId);
         if (!prospect) {
             return { success: false, fee: 0, message: 'Prospect not found in academy pipeline.' };
         }
@@ -5044,7 +5067,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                 : (activeDbClubs[0]?.name || 'Regional Academy League');
         }
 
-        const newPipeline = pipeline.filter(p => p.id !== prospectId);
+        const newPipeline = pipeline.filter(p => p.id !== prospectId && p.name !== prospectId);
         const newBudget = state.budget + fee;
         const newSalesCount = !isMature ? salesThisSeason + 1 : salesThisSeason;
 

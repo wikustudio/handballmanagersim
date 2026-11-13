@@ -2592,15 +2592,27 @@ export const isReserveClub = (name?: string): boolean => {
     trimmed.endsWith(' II') ||
     trimmed.endsWith(' 2') ||
     trimmed.endsWith(' B') ||
+    trimmed.endsWith(' U') ||
     trimmed.endsWith('(B)') ||
     trimmed.endsWith(' (B)') ||
+    trimmed.endsWith('(U)') ||
+    trimmed.endsWith(' (U)') ||
+    trimmed.endsWith('(II)') ||
+    trimmed.endsWith(' (II)') ||
+    /\s+(II|U19|U20|U21|U22|U23)\b/i.test(trimmed) ||
+    lower === 'veszprém fa' ||
+    lower === 'veszprem fa' ||
     lower.includes('barça atlètic') ||
     lower.includes('barca atletic') ||
     lower.includes('youngsters') ||
     lower.includes('youngstars') ||
     lower.endsWith(' amateure') ||
+    lower.endsWith(' reserve') ||
+    lower.endsWith(' reserves') ||
+    lower.endsWith(' espoirs') ||
     lower.endsWith(' u23') ||
-    lower.endsWith(' u21')
+    lower.endsWith(' u21') ||
+    lower.endsWith(' u19')
   );
 };
 

@@ -20,7 +20,11 @@ import {
 
 type ViewMode = 'main' | 'customize' | 'notice';
 
-export const ConsentBanner: React.FC = () => {
+interface ConsentBannerProps {
+  hasBottomDock?: boolean;
+}
+
+export const ConsentBanner: React.FC<ConsentBannerProps> = ({ hasBottomDock = false }) => {
   const [consent, setConsent] = useState<StoredConsentState>(getStoredConsent);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<ViewMode>('main');
@@ -403,28 +407,34 @@ export const ConsentBanner: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Discreet Re-open Button (bottom left, unobtrusive per GDPR Art 7(3)) */}
+      {/* Discreet Re-open Footer Link (in-flow at page bottom so it never overlaps HUD cards, per GDPR Art 7(3)) */}
       {!isOpen && (
-        <button
-          type="button"
-          onClick={() => {
-            const current = getStoredConsent();
-            setConsent(current);
-            setAnalytics(current.analytics);
-            setPreferences(current.preferences);
-            setMarketing(current.marketing);
-            setViewMode('customize');
-            setIsOpen(true);
-          }}
-          title="Privacy & Cookie Preferences"
-          aria-label="Privacy & Cookie Preferences"
-          className="fixed bottom-3 left-3 z-40 p-1.5 sm:px-2.5 sm:py-1.5 rounded-full bg-[#12131b]/90 hover:bg-[#1a1b26] border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white shadow-lg backdrop-blur transition active:scale-95 text-xs flex items-center gap-1.5 cursor-pointer group opacity-60 hover:opacity-100"
+        <footer
+          className={`mt-auto w-full max-w-[1380px] mx-auto px-3 sm:px-6 pt-2 flex items-center justify-center sm:justify-start ${
+            hasBottomDock ? 'pb-24 sm:pb-28' : 'pb-5'
+          }`}
         >
-          <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
-          <span className="hidden sm:inline text-[11px] font-medium text-zinc-400 group-hover:text-zinc-200">
-            Privacy Settings
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              const current = getStoredConsent();
+              setConsent(current);
+              setAnalytics(current.analytics);
+              setPreferences(current.preferences);
+              setMarketing(current.marketing);
+              setViewMode('customize');
+              setIsOpen(true);
+            }}
+            title="Privacy & Cookie Preferences"
+            aria-label="Privacy & Cookie Preferences"
+            className="px-2.5 py-1.5 rounded-full bg-[#12131b]/80 hover:bg-[#1a1b26] border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition active:scale-95 text-xs inline-flex items-center gap-1.5 cursor-pointer group opacity-70 hover:opacity-100"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+            <span className="text-[11px] font-medium text-zinc-400 group-hover:text-zinc-200">
+              Privacy Settings
+            </span>
+          </button>
+        </footer>
       )}
     </>
   );

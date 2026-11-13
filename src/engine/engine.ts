@@ -648,6 +648,13 @@ export function processAging(
   };
 
   const poachedGainsByLeague: Map<string, number> = new Map();
+  const hadIncomingNemesis = teams.some(t =>
+    !isUserMatch(t) &&
+    !isReserveClub(t.name) &&
+    t.tier === userTier &&
+    normalizeCountry(t.country || 'GER') === userCountry &&
+    Boolean(t.isNemesisActive)
+  );
 
   const agedTeams: Club[] = teams.map(t => {
     const isUserManaged = isUserMatch(t);
@@ -670,10 +677,10 @@ export function processAging(
     let remainingSurgeYears = t.goldenGenYearsRemaining || 0;
     let isCinderella = Boolean(t.isCinderellaActive);
 
-    // Champions Hangover: If a Nemesis club won the title/beat the user, remove artificial boost the following year
+    // Champions Hangover: If a Nemesis club won the title, remove artificial boost the following year
     let nemesisActive = t.isNemesisActive;
     if (nemesisActive && !isUserManaged) {
-      const wasChamp = t.wasNemesisChampion || (options?.userWonLeague === false && t.tier === userTier && normalizeCountry(t.country || 'GER') === userCountry);
+      const wasChamp = Boolean(t.wasNemesisChampion);
       if (wasChamp) {
         ovrChange -= (Math.floor(Math.random() * 3) + 2); // -2 to -4 OVR Champions Hangover
         nemesisActive = false;
@@ -856,7 +863,7 @@ export function processAging(
       nemesis.baseOvr = Math.min(93, nemesis.baseOvr + armsRaceBoost);
       nemesis.isNemesisActive = true;
     }
-  } else if (!existingNemesis && Math.random() < 0.22) {
+  } else if (!existingNemesis && !hadIncomingNemesis && Math.random() < 0.22) {
     // Organic Investor Takeover: an ambitious upper-mid Tier 1 challenger launches a title push
     const organicChallengers = agedTeams.filter(t =>
       !isUserMatch(t) &&

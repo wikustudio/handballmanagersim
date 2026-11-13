@@ -52,6 +52,7 @@ import { TransferModal } from "./TransferModal";
 import { LoanModal } from "./LoanModal";
 import { MarketingPRModal } from "./MarketingPRModal";
 import { IPOModal } from "./IPOModal";
+import { SponsorModal } from "./SponsorModal";
 import { YouthModal } from "./YouthModal";
 import { ActiveEventModal } from "./ActiveEventModal";
 import { ConfirmResetModal } from "./ConfirmResetModal";
@@ -92,6 +93,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const stateStore = storeState;
   const [modDb, setModDb] = useState<Club[]>(() => getActiveClubs(state?.club?.country));
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
     const handleModChange = () => setModDb(getActiveClubs(useGameStore.getState()?.club?.country));
     window.addEventListener('mod-state-change', handleModChange);
     window.addEventListener('storage', handleModChange);
@@ -137,6 +139,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const [showLoan, setShowLoan] = useState(false);
   const [showMarketing, setShowMarketing] = useState(false);
   const [showIPO, setShowIPO] = useState(false);
+  const [showSponsors, setShowSponsors] = useState(false);
   const [showStadium, setShowStadium] = useState(false);
   const [showArenaOverview, setShowArenaOverview] = useState(false);
   const [showNewBuild, setShowNewBuild] = useState(false);
@@ -146,6 +149,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const [showClubProfile, setShowClubProfile] = useState(false);
   const [showYouth, setShowYouth] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [showConfirmRetire, setShowConfirmRetire] = useState(false);
   const [activeEvent, setActiveEvent] = useState<any>(null);
   const [showSimulatingOverlay, setShowSimulatingOverlay] = useState(false);
   const [totalMatchdaysForOverlay, setTotalMatchdaysForOverlay] = useState(() => (getLeagueSize(state?.club?.tier || 1, state?.club?.country || 'GER') - 1) * 2);
@@ -165,6 +169,8 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const [statusChange, setStatusChange] = useState<'promotion' | 'relegation' | null>(null);
   const [pendingCupToasts, setPendingCupToasts] = useState<any[]>([]);
   const [pendingMatches, setPendingMatches] = useState<any[]>([]);
+  const [preSeasonSupercupQueue, setPreSeasonSupercupQueue] = useState<any[]>([]);
+  const [autoStartSimAfterSupercup, setAutoStartSimAfterSupercup] = useState(false);
   const [queuedCupMatches, setQueuedCupMatches] = useState<any[]>([]);
   const [queuedEuroMatches, setQueuedEuroMatches] = useState<any[]>([]);
   const [queuedSuperGlobeMatches, setQueuedSuperGlobeMatches] = useState<any[]>([]);
@@ -367,7 +373,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   // Preserve scroll position when modals open, interact, and close
   const scrollPositionRef = React.useRef<number>(0);
   const anyModalOpen = Boolean(
-    showYouth || showTransfers || showLoan || showMarketing || showIPO || showTable || showLedger || showPhilosophy ||
+    showYouth || showTransfers || showLoan || showMarketing || showIPO || showSponsors || showTable || showLedger || showPhilosophy ||
     showSkills || showCustomization || showNewBuild || showProfile || showImpact ||
     showOvrModal || showLeaderboard || showArenaOverview || showStadium ||
     showAcademy || showMedical || showJobMarket || showTeamBonding ||
@@ -375,7 +381,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     arenaInaugurationData || seasonResultData || showWinterBreak || statusChange ||
     trophyInfoModal || performanceDealResult || showSimulatingOverlay ||
     activeEvent || showRoadmap || showBoardExpectations || showClubProfile ||
-    showConfirmReset || pendingMatches.length > 0 || activeCelebrationToast ||
+    showConfirmReset || showConfirmRetire || pendingMatches.length > 0 || preSeasonSupercupQueue.length > 0 || activeCelebrationToast ||
     welcomeClub || showInboundOffers
   );
   const prevAnyModalOpenRef = React.useRef<boolean>(false);
@@ -440,11 +446,13 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         if (arenaInaugurationData) { setArenaInaugurationData(null); return; }
         if (activeCelebrationToast) { handleCloseCelebrationToast(); return; }
         if (showConfirmReset) { setShowConfirmReset(false); return; }
+        if (showConfirmRetire) { setShowConfirmRetire(false); return; }
         if (showYouth) { setShowYouth(false); return; }
         if (showTransfers) { setShowTransfers(false); return; }
         if (showLoan) { setShowLoan(false); return; }
         if (showMarketing) { setShowMarketing(false); return; }
         if (showIPO) { setShowIPO(false); return; }
+        if (showSponsors) { setShowSponsors(false); return; }
         if (showAcademy) { setShowAcademy(false); return; }
         if (showMedical) { setShowMedical(false); return; }
         if (showTeamBonding) { setShowTeamBonding(false); return; }
@@ -499,11 +507,11 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     queuedEuroMatches, queuedSuperGlobeMatches, pendingSeasonResult, performanceDealResult,
     seasonResultData, statusChange, state?.bankruptcyPending, state?.isSacked, state?.year, lastSeenYear,
     gachaRevealData, activeEvent, trophyInfoModal, arenaInaugurationData,
-    showYouth, showTransfers, showLoan, showMarketing, showIPO, showAcademy, showMedical, showTeamBonding, showPrepInfo,
+    showYouth, showTransfers, showLoan, showMarketing, showIPO, showSponsors, showAcademy, showMedical, showTeamBonding, showPrepInfo,
     showOvrModal, showShields, showMorale, showPhilosophy, showSkills, showRoadmap, showBoardExpectations,
     showCustomization, showClubProfile, showLeaderboard, showArenaOverview, showStadium,
-    showJobMarket, showInboundOffers, showConfirmReset, showImpact, showTable, showLedger, showNewBuild, showProfile,
-    stagedSeasonResultData
+    showJobMarket, showInboundOffers, showConfirmReset, showConfirmRetire, showImpact, showTable, showLedger, showNewBuild, showProfile,
+    stagedSeasonResultData, preSeasonSupercupQueue.length
   ]);
 
   // Guardrails & Save-state sanitization
@@ -720,9 +728,6 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
       }
     }, 700);
   };
-
-  const [preSeasonSupercupQueue, setPreSeasonSupercupQueue] = useState<any[]>([]);
-  const [autoStartSimAfterSupercup, setAutoStartSimAfterSupercup] = useState(false);
 
   useEffect(() => {
     setPreSeasonSupercupQueue(prev =>
@@ -4216,9 +4221,10 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                     let intTrophies = 0;
                     let totalTrophies = 0;
                     store.history.forEach(h => {
+                        const isLower = Boolean(h.promoted || (h.tier && h.tier > 1));
                         // DOM. TROPHIES: Domestic cups, Supercup, and Tier 1 titles
                         if (h.trophiesThisYear?.dfb) domTrophies++;
-                        if (h.trophiesThisYear?.bl) domTrophies++;
+                        if (!isLower && h.trophiesThisYear?.bl) domTrophies++;
                         if (h.trophiesThisYear?.sc) domTrophies++;
                         
                         // INTL. TROPHIES: Euro cups, Euro Supercup, and IHF Superglobe
@@ -4313,12 +4319,10 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const rep = Math.min(100, calculateClubReputation(team.baseOvr, team.tier));
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto w-full pb-36 sm:pb-0">
-      {/* Top Banner */}
-      <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3 sm:gap-3.5 max-w-7xl mx-auto w-full pb-36 sm:pb-0">
+      {/* Top Executive Command Deck */}
       <DashboardHeader 
         state={state}
-           
         lang={lang} 
         financials={financials}
         onShowTable={() => setShowTable(true)}
@@ -4348,75 +4352,166 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         onOpenOvrModal={() => setShowOvrModal(true)}
         onShowLeaderboard={() => setShowLeaderboard(true)}
       />
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start [overflow-anchor:none]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-3.5 items-start [overflow-anchor:none]">
         {/* Left Column */}
-        <div className="lg:col-span-5 flex flex-col gap-6 [overflow-anchor:none]">
-          <div className="flex flex-col gap-4">
-            {/* Taunting the Player: 5-Year Trophy Drought Alert (Tier 1 & trophyDrought > 4) */}
-            {state.club.tier === 1 && (state.trophyDrought || 0) > 4 && (
-              <div
-                onClick={() => setShowBoardExpectations(true)}
-                className="bg-gradient-to-r from-rose-500/20 via-rose-500/10 to-rose-500/5 border border-rose-500/40 hover:border-rose-400 rounded-2xl p-3 flex items-center justify-between gap-3 cursor-pointer transition-all duration-200 shadow-[0_0_20px_rgba(244,63,94,0.18)] animate-pulse group active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-rose-500/25 border border-rose-500/40 text-rose-400 flex items-center justify-center text-sm shrink-0">
-                    <i className="fas fa-triangle-exclamation" />
-                  </div>
-                  <div className="flex flex-col text-left min-w-0">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-rose-300 truncate">
-                      {lang === 'de' ? `${state.trophyDrought}-Jahre Titelflaute: Fans verlieren Geduld!` : `${state.trophyDrought}-Year Trophy Drought: The fanbase is losing patience.`}
-                    </span>
-                    <span className="text-[11px] text-zinc-300 truncate">
-                      {lang === 'de'
-                        ? 'Vorstand & Anhänger fordern dringend Silberware in dieser Saison.'
-                        : 'The boardroom and fanbase demand immediate silverware.'}
-                    </span>
-                  </div>
+        <div className="lg:col-span-5 flex flex-col gap-3 sm:gap-3.5 [overflow-anchor:none]">
+          {/* 5-Year Trophy Drought Alert (Tier 1 & trophyDrought > 4) */}
+          {state.club.tier === 1 && (state.trophyDrought || 0) > 4 && (
+            <div
+              onClick={() => setShowBoardExpectations(true)}
+              className="bg-[#0d0f17]/95 border border-rose-500/30 hover:border-rose-400/50 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 cursor-pointer transition-all duration-200 group active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center text-xs shrink-0">
+                  <i className="fas fa-triangle-exclamation" />
                 </div>
-                <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/25 border border-rose-500/40 px-2.5 py-1 rounded-full shrink-0 group-hover:bg-rose-500 group-hover:text-white transition">
-                  {lang === 'de' ? 'Vorgaben →' : 'Board →'}
+                <div className="flex flex-col text-left min-w-0">
+                  <span className="text-xs font-medium text-rose-300 truncate">
+                    {lang === 'de' ? `${state.trophyDrought}-Jahre Titelflaute` : `${state.trophyDrought}-Year Trophy Drought`}
+                  </span>
+                  <span className="text-[11px] text-zinc-400 truncate">
+                    {lang === 'de'
+                      ? 'Vorstand fordert dringend Silberware.'
+                      : 'Board and supporters demand silverware.'}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono font-medium text-rose-300 bg-rose-500/15 border border-rose-500/30 px-2.5 py-1 rounded-lg shrink-0 group-hover:bg-rose-500 group-hover:text-white transition">
+                {lang === 'de' ? 'Vorgaben →' : 'Board →'}
+              </span>
+            </div>
+          )}
+
+          {/* TREASURY CARD (Matches Reference Left-Top Card) */}
+          <div className="bg-[#12141c] border border-white/[0.06] rounded-[24px] p-4 sm:p-5 shadow-[0_16px_40px_rgba(0,0,0,0.45)] flex flex-col gap-3.5">
+            {/* Header Row */}
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 flex items-center justify-center text-xs shrink-0">
+                <i className="fas fa-wallet" />
+              </div>
+              <span className="text-xs font-semibold uppercase tracking-widest text-zinc-300">
+                TREASURY
+              </span>
+            </div>
+
+            {/* Balance Row */}
+            <div className="flex items-baseline justify-between gap-2 pt-0.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                BALANCE
+              </span>
+              <span className="text-2xl sm:text-3xl font-bold text-white tracking-tight tabular-nums">
+                {formatMoney(state.budget || 0)}
+              </span>
+            </div>
+
+            {/* 3-Column Financial Breakdown Pill Box */}
+            <div className="bg-[#161922] border border-white/[0.05] rounded-2xl grid grid-cols-3 divide-x divide-white/[0.05] py-2.5 px-2">
+              <div className="flex flex-col items-center justify-center gap-0.5 px-1">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
+                  EST. REV
+                </span>
+                <span className="text-xs font-bold text-emerald-400 tabular-nums">
+                  +{formatMoney(financials.estRevenue || 0)}
                 </span>
               </div>
-            )}
-
-            {/* Quick Dynasty Metrics Strip */}
-            <div className="bg-gradient-to-b from-white/[0.045] to-white/[0.015] bg-[#121319] p-3 rounded-2xl border border-white/[0.08] shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="bg-gradient-to-b from-white/[0.03] to-transparent bg-[#161722] rounded-xl p-2.5 flex flex-col items-center justify-center gap-1 border border-white/[0.05]">
-                <div className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5">
-                  <i className="fas fa-check text-[#10b981] text-[10px]"></i> Wins
-                </div>
-                <div className="text-base sm:text-lg font-bold text-white tracking-tight tabular-nums">{(state.totals?.wins || 0).toLocaleString()}</div>
+              <div className="flex flex-col items-center justify-center gap-0.5 px-1">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
+                  EXPENSES
+                </span>
+                <span className="text-xs font-bold text-rose-400 tabular-nums">
+                  -{formatMoney(Math.max(0, (financials.estRevenue || 0) - (financials.net || 0)))}
+                </span>
               </div>
-              <div onClick={() => setTrophyInfoModal('dom')} className="bg-gradient-to-b from-white/[0.03] to-transparent bg-[#161722] rounded-xl p-2.5 flex flex-col items-center justify-center gap-1 border border-white/[0.05] cursor-pointer hover:border-amber-500/30 transition active:scale-95 group">
-                <div className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5 group-hover:text-amber-300">
-                  <i className="fas fa-trophy text-[#facc15] text-[10px]"></i> Dom. Cups
-                </div>
-                <div className="text-base sm:text-lg font-bold text-[#facc15] tracking-tight tabular-nums">{(state.totals?.domTrophies || 0).toLocaleString()}</div>
-              </div>
-              <div onClick={() => setTrophyInfoModal('intl')} className="bg-gradient-to-b from-white/[0.03] to-transparent bg-[#161722] rounded-xl p-2.5 flex flex-col items-center justify-center gap-1 border border-white/[0.05] cursor-pointer hover:border-sky-500/30 transition active:scale-95 group">
-                <div className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5 group-hover:text-sky-300">
-                  <i className="fas fa-globe text-[#38bdf8] text-[10px]"></i> Intl. Cups
-                </div>
-                <div className="text-base sm:text-lg font-bold text-[#38bdf8] tracking-tight tabular-nums">{(state.totals?.intTrophies || 0).toLocaleString()}</div>
-              </div>
-              <div 
-                onClick={() => setShowArenaOverview(true)} 
-                title="Inspect Arena Overview & 5-Year Attendance"
-                className="bg-gradient-to-b from-white/[0.03] to-transparent bg-[#161722] rounded-xl p-2.5 flex flex-col items-center justify-center gap-1 border border-white/[0.05] cursor-pointer hover:border-sky-400/40 transition active:scale-95 group"
-              >
-                <div className="text-[11px] font-medium text-zinc-400 flex items-center gap-1.5 group-hover:text-sky-300 transition-colors">
-                  <i className="fas fa-building text-sky-400 text-[10px] group-hover:scale-110 transition-transform"></i> Arena
-                </div>
-                <div className="text-base sm:text-lg font-bold text-white tracking-tight tabular-nums group-hover:text-sky-200 transition-colors">{(state.club?.stadium || 0).toLocaleString()}</div>
+              <div className="flex flex-col items-center justify-center gap-0.5 px-1">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
+                  PROJ. MARGIN
+                </span>
+                <span className={`text-xs font-bold tabular-nums ${financials.net < 0 ? 'text-rose-400' : 'text-sky-400'}`}>
+                  {financials.net >= 0 ? '+' : ''}{formatMoney(financials.net || 0)}
+                </span>
               </div>
             </div>
+
+            {/* Standings & Ledger Action Buttons */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowTable(true)}
+                className="bg-[#181b26] hover:bg-[#1f2330] border border-white/[0.07] hover:border-white/[0.14] rounded-xl py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold text-zinc-200 hover:text-white transition cursor-pointer active:scale-[0.99]"
+              >
+                <i className="fas fa-list-ul text-sky-400 text-[11px]" />
+                <span>Standings</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLedger(true)}
+                className="bg-[#181b26] hover:bg-[#1f2330] border border-white/[0.07] hover:border-white/[0.14] rounded-xl py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold text-zinc-200 hover:text-white transition cursor-pointer active:scale-[0.99]"
+              >
+                <i className="fas fa-file-invoice-dollar text-emerald-400 text-[11px]" />
+                <span>Ledger</span>
+              </button>
+            </div>
           </div>
+
+          {/* 4-PILL CLUB TELEMETRY STRIP (Matches Reference Middle-Left Card) */}
+          <div className="bg-[#12141c] border border-white/[0.06] rounded-[24px] p-2 sm:p-3 shadow-[0_16px_40px_rgba(0,0,0,0.45)] grid grid-cols-4 gap-1.5 sm:gap-2">
+            <div className="bg-[#161922] border border-white/[0.05] rounded-2xl py-2.5 px-1 sm:px-1.5 flex flex-col items-center justify-center gap-1 min-w-0">
+              <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1 whitespace-nowrap">
+                <i className="fas fa-check text-emerald-400 text-[8px]" />
+                <span>WINS</span>
+              </span>
+              <span className="text-sm sm:text-lg font-bold text-white tracking-tight tabular-nums leading-none">
+                {(state.totals?.wins || 0).toLocaleString()}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTrophyInfoModal('dom')}
+              className="bg-[#161922] hover:bg-[#1b1f2b] border border-white/[0.05] hover:border-white/[0.12] rounded-2xl py-2.5 px-1 sm:px-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer transition active:scale-95 group min-w-0"
+            >
+              <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-zinc-400 group-hover:text-zinc-300 flex items-center gap-1 whitespace-nowrap">
+                <i className="fas fa-trophy text-amber-400 text-[8px]" />
+                <span className="sm:hidden">DOM.</span>
+                <span className="hidden sm:inline">DOM. TROPHIES</span>
+              </span>
+              <span className="text-sm sm:text-lg font-bold text-amber-400 tracking-tight tabular-nums leading-none">
+                {(state.totals?.domTrophies || 0).toLocaleString()}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTrophyInfoModal('intl')}
+              className="bg-[#161922] hover:bg-[#1b1f2b] border border-white/[0.05] hover:border-white/[0.12] rounded-2xl py-2.5 px-1 sm:px-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer transition active:scale-95 group min-w-0"
+            >
+              <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-zinc-400 group-hover:text-zinc-300 flex items-center gap-1 whitespace-nowrap">
+                <i className="fas fa-globe text-sky-400 text-[8px]" />
+                <span className="sm:hidden">INTL.</span>
+                <span className="hidden sm:inline">INTL. TROPHIES</span>
+              </span>
+              <span className="text-sm sm:text-lg font-bold text-sky-400 tracking-tight tabular-nums leading-none">
+                {(state.totals?.intTrophies || 0).toLocaleString()}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowArenaOverview(true)}
+              title="Inspect Arena Overview & 5-Year Attendance"
+              className="bg-[#161922] hover:bg-[#1b1f2b] border border-white/[0.05] hover:border-white/[0.12] rounded-2xl py-2.5 px-1 sm:px-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer transition active:scale-95 group min-w-0"
+            >
+              <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-zinc-400 group-hover:text-zinc-300 flex items-center gap-1 whitespace-nowrap">
+                <i className="fas fa-landmark text-zinc-400 text-[8px]" />
+                <span>ARENA</span>
+              </span>
+              <span className="text-sm sm:text-lg font-bold text-white tracking-tight tabular-nums leading-none">
+                {(state.club?.stadium || 0).toLocaleString()}
+              </span>
+            </button>
+          </div>
+
           <ActionPanel 
             isFirstHalf={state.year > winterBreakSeenYear}
             state={state}
-          
             lang={lang}
             onSimulate={handleSimulate}
             onOpenJobMarket={() => setShowJobMarket(true)}
@@ -4432,6 +4527,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             onShowLoan={() => setShowLoan(true)}
             onShowMarketing={() => setShowMarketing(true)}
             onShowIPO={() => setShowIPO(true)}
+            onShowSponsors={() => setShowSponsors(true)}
             onUpgradeAcademy={() => setShowAcademy(true)}
             onUpgradeMedical={() => setShowMedical(true)}
             onShowYouth={() => setShowYouth(true)}
@@ -4451,15 +4547,14 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             onShowImpact={() => setShowImpact(true)}
             onOpenRoadmap={() => setShowRoadmap(true)}
             onOpenMoraleModal={() => setShowImpact(true)}
-            onRetire={() => useGameStore.getState().endCareer()}
+            onRetire={() => setShowConfirmRetire(true)}
             onOpenInfo={() => setShowPrepInfo(true)}
           />
         </div>
 
         {/* Right Column: History/Standings */}
         <div className="lg:col-span-7 block">
-          <SeasonHistoryTable state={state}
-           lang={lang} />
+          <SeasonHistoryTable state={state} lang={lang} />
         </div>
       </div>
       <AnimatePresence>
@@ -4777,6 +4872,59 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           onClose={() => setShowConfirmReset(false)}
         />
       )}
+      {showConfirmRetire && (
+        <motion.div
+          key="modal-confirm-retire"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          onClick={() => setShowConfirmRetire(false)}
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10020] p-4 backdrop-blur-2xl cursor-pointer"
+        >
+          <motion.div
+            initial={{ scale: 0.95, y: 15, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.95, y: 10 }}
+            transition={{ type: 'spring', damping: 26, stiffness: 340 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#14151e] w-full max-w-sm rounded-2xl border border-white/[0.06] p-6 shadow-[0_25px_70px_rgba(0,0,0,0.85)] relative cursor-default overflow-hidden max-h-[92vh] overflow-y-auto custom-scrollbar"
+          >
+            <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-rose-500/35 to-transparent pointer-events-none" />
+            <div className="relative z-10">
+              <div className="w-12 h-12 rounded-xl bg-rose-500/[0.08] border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-400">
+                <i className="fas fa-power-off text-lg" />
+              </div>
+              <h2 className="text-lg font-semibold text-white text-center mb-2 tracking-tight">
+                Retire from Management?
+              </h2>
+              <p className="text-xs text-zinc-400 font-normal text-center mb-6 px-3 leading-relaxed">
+                Stepping down will conclude your active career at {state.club?.name || 'the club'} and finalize your Hall of Fame legacy score.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmRetire(false)}
+                  className="flex-1 py-3 rounded-xl font-medium text-xs sm:text-sm text-zinc-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] transition active:scale-[0.99] cursor-pointer"
+                >
+                  Keep Managing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfirmRetire(false);
+                    useGameStore.getState().endCareer();
+                  }}
+                  className="flex-1 py-3 rounded-xl font-medium text-xs sm:text-sm text-white bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 shadow-[0_4px_16px_rgba(244,63,94,0.25)] border border-rose-400/20 transition active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <i className="fas fa-flag-checkered text-xs" />
+                  <span>Retire Career</span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
       {showLeaderboard && (
         <LeaderboardModal
           key="modal-leaderboard"
@@ -4893,7 +5041,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
            euroQualifiedForSf={euroQualifiedForSf}
            isSubModalOpen={Boolean(
              showTransfers || showTeamBonding || showPhilosophy || gachaRevealData || showYouth ||
-             showTable || showLoan || showMarketing || showIPO || showAcademy || showMedical ||
+             showTable || showLoan || showMarketing || showIPO || showSponsors || showAcademy || showMedical ||
              showStadium || showArenaOverview || showNewBuild || showLedger || showSkills ||
              showProfile || showImpact || showOvrModal || showMorale || showShields ||
              showLeaderboard || showClubProfile || showCustomization || showRoadmap
@@ -5109,6 +5257,15 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           onClose={() => setShowIPO(false)}
         />
       )}
+      {showSponsors && (
+        <SponsorModal
+          key="modal-sponsors"
+          isOpen={showSponsors}
+          initialDealIndex={0}
+          lang={lang}
+          onClose={() => setShowSponsors(false)}
+        />
+      )}
       {showYouth && (
         <YouthModal key="modal-youth" state={state}
           lang={lang}
@@ -5310,7 +5467,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             setShowPhilosophy(false);
           }}
           skillPoints={state.skillPoints || 0}
-          hasTacticalGenius={(state.managerSkills || []).includes('tactical_mastermind')}
+          hasTacticalGenius={(state.managerSkills || []).includes('tactical_mastermind') || (state.managerSkills || []).includes('tactical_genius')}
           lang={lang}
         />
       )}

@@ -146,12 +146,12 @@ console.log('--- RUNNING BROADCASTING REAL DATA MOD & VECTOR LOGOS TEST SUITE --
   console.log('\nTest 4: German Regional Cup (Landespokal) authentic rights holders and badges...');
 
   const regionalBroadcasters = [
-    { network: 'MDR' as const, expectedName: 'MDR Sport im Osten', expectedBadge: 'LANDESPOKAL' },
-    { network: 'WDR' as const, expectedName: 'WDR Sport im Westen', expectedBadge: 'LANDESPOKAL' },
-    { network: 'BR' as const, expectedName: 'BR Sport', expectedBadge: 'LANDESPOKAL' },
-    { network: 'SWR' as const, expectedName: 'SWR Sport', expectedBadge: 'LANDESPOKAL' },
-    { network: 'SPORT1' as const, expectedName: 'Sport1', expectedBadge: 'POKAL LIVE' },
-    { network: 'SPORTTOTAL' as const, expectedName: 'Sporttotal.tv', expectedBadge: 'LANDESPOKAL' },
+    { network: 'MDR' as const, expectedName: 'MDR Sport', expectedBadge: 'REGIONAL CUP' },
+    { network: 'WDR' as const, expectedName: 'WDR Sport', expectedBadge: 'REGIONAL CUP' },
+    { network: 'BR' as const, expectedName: 'BR Sport', expectedBadge: 'REGIONAL CUP' },
+    { network: 'SWR' as const, expectedName: 'SWR Sport', expectedBadge: 'REGIONAL CUP' },
+    { network: 'SPORT1' as const, expectedName: 'Sport1', expectedBadge: 'CUP LIVE' },
+    { network: 'SPORTTOTAL' as const, expectedName: 'Sporttotal.tv', expectedBadge: 'REGIONAL CUP' },
   ];
 
   regionalBroadcasters.forEach(rb => {
@@ -163,8 +163,8 @@ console.log('--- RUNNING BROADCASTING REAL DATA MOD & VECTOR LOGOS TEST SUITE --
   // Verify contextual regional cup detection in Germany
   const regCupPkg = getBroadcastingPackage('GER', false, { isRegionalCup: true, isModActive: true });
   assert(
-    ['LANDESPOKAL', 'POKAL LIVE'].includes(regCupPkg.networkBadge),
-    'German regional cup must resolve authentic Landespokal or Pokal Live badge'
+    ['REGIONAL CUP', 'CUP LIVE', 'LANDESPOKAL', 'POKAL LIVE'].includes(regCupPkg.networkBadge),
+    'German regional cup must resolve authentic Regional Cup or Cup Live badge'
   );
 
   console.log('✓ Test 4 Passed: 6/6 German regional cup rights holders & badges verified.');

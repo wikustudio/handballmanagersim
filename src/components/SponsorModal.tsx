@@ -569,7 +569,7 @@ export const SponsorModal: React.FC<SponsorModalProps> = ({
                   {currentCommercial} / {limitCommercial}
                 </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-none truncate">
+              <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-snug py-0.5 truncate">
                 {tr('Sponsorship Deals', 'Sponsorenverträge')}
               </h2>
             </div>

@@ -1,9 +1,9 @@
 import { Club, UniverseMovement, ResolvedMatchContext } from '../types';
-import { getMaxTier, isReserveClub, normalizeCountry, getFAInfo } from '../data/gameConstants';
+import { getMaxTier, isReserveClub, normalizeCountry, getFAInfo, getDomesticSupercupInfo } from '../data/gameConstants';
 import { getLeagueSize } from './engine';
 import { processAging } from './engine';
 import { ALL_CLUBS } from '../data/clubsData';
-import { getActiveClubs, mergeClubWithWorldState } from '../utils/modManager';
+import { getActiveClubs, isAnyModActive, mergeClubWithWorldState } from '../utils/modManager';
 
 export interface LeagueSimulationResult {
     newWorldClubs: Record<string, Club>;
@@ -716,6 +716,7 @@ export function simulateGlobalLeagues(
     const resolvedCupFinals = resolvedMatchContext?.cupFinals || {};
     const confirmedCl = resolvedCupFinals['cl'] || (resolvedCupFinals['euro_cup'] && ((userClub as any).euroStatus || 'CL') === 'CL' ? resolvedCupFinals['euro_cup'] : undefined);
     const confirmedDomCup = resolvedCupFinals['nat_cup'] || resolvedCupFinals['dfb'];
+    const confirmedDomSupercup = resolvedCupFinals['dom_supercup'] || resolvedCupFinals['supercup'] || resolvedCupFinals['sc'];
     const confirmedRegCup = resolvedCupFinals['reg_cup'] || resolvedCupFinals['reg'];
     const confirmedEl = resolvedCupFinals['el'] || (resolvedCupFinals['euro_cup'] && (userClub as any).euroStatus === 'EL' ? resolvedCupFinals['euro_cup'] : undefined);
     const confirmedEcl = resolvedCupFinals['ecl'] || (resolvedCupFinals['euro_cup'] && (userClub as any).euroStatus === 'ECL' ? resolvedCupFinals['euro_cup'] : undefined);
@@ -1064,23 +1065,62 @@ export function simulateGlobalLeagues(
             isKey: true
         });
 
+        // Domestic Supercup (League Champion vs. Cup Winner Curtain-Raiser)
+        const domScName = confirmedDomSupercup?.cupName || getDomesticSupercupInfo(userNormCountry, isAnyModActive()).name || 'Supercup';
+        const scEliminated = Boolean(
+            confirmedDomSupercup && (confirmedDomSupercup.year === currentYear || !confirmedDomSupercup.year) && !confirmedDomSupercup.userWon
+        );
+        const userWonSc = !isReserveClub(userClub.name) && !scEliminated && Boolean(
+            userTrophiesThisYear?.sc || (confirmedDomSupercup?.userWon && (confirmedDomSupercup.year === currentYear || !confirmedDomSupercup.year))
+        );
+        const rawScWinnerName = confirmedDomSupercup?.winnerName;
+        const runScWinnerName = rawScWinnerName && !isReserveClub(rawScWinnerName) ? rawScWinnerName : undefined;
+        const scTopPool = agedClubs
+            .filter(c => c.tier === 1 && !isReserveClub(c.name) && normalizeCountry(c.country || 'GER') === userNormCountry)
+            .sort((a, b) => (b.baseOvr || 75) - (a.baseOvr || 75))
+            .slice(0, 4);
+        const scWinner = pickWinner(
+            scTopPool.length > 0 ? scTopPool : (domPool.length > 0 ? domPool : agedClubs.filter(c => c.tier === 1 && !isReserveClub(c.name))),
+            userWonSc,
+            'dom',
+            !userWonSc ? userClub.id : undefined,
+            runScWinnerName,
+            runScWinnerName ? confirmedDomSupercup?.winnerId : undefined
+        );
+        movements.unshift({
+            id: `${scWinner.id}-${currentYear}-cup-sc`,
+            year: currentYear,
+            clubId: String(scWinner.id),
+            clubName: scWinner.name,
+            clubLogo: scWinner.logo,
+            clubColor: scWinner.color,
+            country: userNormCountry,
+            type: 'intl_cup',
+            fromTier: scWinner.tier || 1,
+            toTier: scWinner.tier || 1,
+            cupTitle: domScName,
+            isKey: true
+        });
+
         // Domestic Regional / Amateur Cup (when user competed or resolved a Regional Cup run)
-        const runRegWinnerName = confirmedRegCup?.winnerName || relevantCupRuns.find(r => isRegionalCupRun(r) && r.won === false && r.winnerName)?.winnerName;
+        const rawRegWinnerName = confirmedRegCup?.winnerName || relevantCupRuns.find(r => isRegionalCupRun(r) && r.won === false && r.winnerName)?.winnerName;
+        const runRegWinnerName = rawRegWinnerName && !isReserveClub(rawRegWinnerName) ? rawRegWinnerName : undefined;
         if (userTrophiesThisYear?.reg || confirmedRegCup || regCupEliminated) {
             const defaultRegCupName = 'Regional Cup';
-            const userWonReg = !regCupEliminated && Boolean((userTrophiesThisYear?.reg && !regCupEliminated) || (confirmedRegCup?.userWon && (confirmedRegCup.year === currentYear || !confirmedRegCup.year)));
+            const userWonReg = !isReserveClub(userClub.name) && !regCupEliminated && Boolean((userTrophiesThisYear?.reg && !regCupEliminated) || (confirmedRegCup?.userWon && (confirmedRegCup.year === currentYear || !confirmedRegCup.year)));
             const regPool = agedClubs.filter(c =>
                 c.tier >= 2 &&
                 !isReserveClub(c.name) &&
                 normalizeCountry(c.country || 'GER') === userNormCountry
             );
+            const regFallbackPool = agedClubs.filter(c => c.tier >= 2 && !isReserveClub(c.name));
             const regWinner = pickWinner(
-                regPool.length > 0 ? regPool : agedClubs.filter(c => c.tier >= 2),
+                regPool.length > 0 ? regPool : regFallbackPool,
                 userWonReg,
                 'dom',
-                regCupEliminated ? userClub.id : undefined,
+                regCupEliminated || isReserveClub(userClub.name) ? userClub.id : undefined,
                 runRegWinnerName,
-                confirmedRegCup?.winnerId
+                runRegWinnerName ? confirmedRegCup?.winnerId : undefined
             );
             if (regWinner.id !== userClub.id) {
                 const preSimOvr = worldClubsMap[regWinner.id]?.baseOvr ?? regWinner.baseOvr;

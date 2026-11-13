@@ -255,15 +255,17 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
       ? rawLatestHist
       : undefined;
   const currentTacticTenure = useMemo(() => {
-    let tenure = 1;
+    const activeTac = state?.tactic || tactic;
+    let consecutive = 0;
     for (let i = clubHist.length - 1; i >= 0; i--) {
-      if ((clubHist[i] as any).tactic === (state?.tactic || tactic)) {
-        tenure++;
+      if ((clubHist[i] as any).tactic === activeTac) {
+        consecutive++;
       } else {
         break;
       }
     }
-    return tenure;
+    const recentUsage = clubHist.slice(-4).filter((h: any) => h.tactic === activeTac).length;
+    return Math.max(consecutive + 1, recentUsage + 1);
   }, [clubHist, state?.tactic, tactic]);
   const hasTacticalMastermind = Boolean((state?.managerSkills || []).includes('tactical_mastermind'));
 
@@ -971,7 +973,7 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
   }, [targetEnd, totalDaysInPhase, tier, phase, cupJackpotMatchday, dilemmaMatchday, clubName, activeClubs]);
 
   const phaseLabel = phase === 'first_half'
-    ? t(lang, '1st Half Campaign · Autumn Fixtures', 'Hinrunde · Spieltage 1–17')
+    ? t(lang, '1st Half Campaign · Autumn Fixtures', `Hinrunde · Spieltage 1–${targetEnd}`)
     : phase === 'second_half'
     ? t(lang, '2nd Half Finale · Championship Deciders', 'Rückrunde & Entscheidungen')
     : t(lang, 'Season Campaign Progression', 'Saison-Simulation');

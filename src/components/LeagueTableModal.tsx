@@ -2,10 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 
 import { Club, GameState, Language, UniverseMovement } from '../types';
-import { getLeagueInfo, isReserveClub, getMaxTier, getCountryFlag, normalizeCountry } from '../data/gameConstants';
+import { getLeagueInfo, getDomesticCupInfo, getDomesticSupercupInfo, isReserveClub, getMaxTier, getCountryFlag, normalizeCountry } from '../data/gameConstants';
 import { generateLeagueTable, calculateLeagueStakes } from '../utils/leagueTableGenerator';
 import { ALL_CLUBS } from '../data/clubsData';
 import { isAnyModActive } from '../utils/modManager';
+import { getAlmanacEntries, getAlmanacAvailableYears, AlmanacCompetitionFilter } from '../data/almanacHistory';
 import { ClubLogo } from './ClubLogo';
 import { useModalDismiss } from '../utils/modalUtils';
 
@@ -28,9 +29,10 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
   onClose,
 }) => {
   useModalDismiss(onClose, !embedded);
-  const [activeTab, setActiveTab] = useState<'standings' | 'universe'>('standings');
-  const [universeFilter, setUniverseFilter] = useState<'headlines' | 'domestic' | 'cups' | 'career' | 'all'>('headlines');
-  const [universeRegion, setUniverseRegion] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'standings' | 'almanac'>('standings');
+  const [almanacComp, setAlmanacComp] = useState<AlmanacCompetitionFilter>('league');
+  const [almanacYear, setAlmanacYear] = useState<number | 'all'>('all');
+  const [almanacTier, setAlmanacTier] = useState<number>(1);
 
   const history = state.history || [];
 
@@ -65,11 +67,14 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
       }
       if (targetTier !== undefined) {
         setSelectedTier(targetTier);
+        setAlmanacTier(targetTier);
       } else if (tHist?.tier) {
         setSelectedTier(tHist.tier);
+        setAlmanacTier(tHist.tier);
       }
     } else if (targetTier !== undefined) {
       setSelectedTier(targetTier);
+      setAlmanacTier(targetTier);
     }
   }, [targetYear, targetTier]);
 
@@ -115,7 +120,11 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
     SLO: 'Slovenia',
     MKD: 'North Macedonia',
     ISL: 'Iceland',
-    ITA: 'Italy'
+    ITA: 'Italy',
+    ROU: 'Romania',
+    ENG: 'England',
+    USA: 'United States',
+    ECU: 'Ecuador'
   };
 
   const currentCountry = selectedCountry;
@@ -147,7 +156,15 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
 
       const qualifyingWinners = new Set<string>();
       Object.entries(cupFinalsCtx).forEach(([k, val]: [string, any]) => {
-        if (k !== 'reg_cup' && k !== 'reg' && k !== 'cwc' && val?.winnerName && (!val.year || val.year === selectedYear)) {
+        const isNonEuroQualKey =
+          k === 'reg_cup' ||
+          k === 'reg' ||
+          k === 'cwc' ||
+          k === 'dom_supercup' ||
+          k === 'supercup' ||
+          k === 'sc' ||
+          k === 'esc';
+        if (!isNonEuroQualKey && val?.winnerName && (!val.year || val.year === selectedYear)) {
           // nat_cup only qualifies a club in the user's domestic country; European cups qualify in any country if that club is in selectedCountry
           if (k === 'nat_cup' && !isDomesticCountry) return;
           qualifyingWinners.add(String(val.winnerName).trim().toLowerCase());
@@ -155,8 +172,16 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
       });
       seasonCupMovements.forEach((m: any) => {
         const title = String(m.cupTitle || '').toLowerCase();
-        const isRegOrWorld = title.includes('amateur') || title.includes('regional') || title.includes('super globe');
-        const isContinental = title.includes('champions league') || title.includes('european league') || title.includes('european cup') || title.includes('ehf');
+        const mId = String(m.id || '').toLowerCase();
+        const isSupercup =
+          mId.endsWith('-cup-sc') ||
+          mId.endsWith('-cup-esc') ||
+          title.includes('supercup') ||
+          title.includes('super cup') ||
+          title.includes('supercopa') ||
+          title.includes('trophée des champions');
+        const isRegOrWorld = isSupercup || title.includes('amateur') || title.includes('regional') || title.includes('super globe');
+        const isContinental = !isSupercup && (title.includes('champions league') || title.includes('european league') || title.includes('european cup') || title.includes('ehf'));
         const mCountry = normalizeCountry(m.country || 'GER');
         if (!isRegOrWorld && m.clubName && (isContinental || mCountry === normSelectedCountry)) {
           qualifyingWinners.add(String(m.clubName).trim().toLowerCase());
@@ -244,7 +269,6 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
   }, [tableData, effectiveTier, currentCountry, state.club.name]);
 
   const userCountry = normalizeCountry(state.club.country || 'GER');
-  const marqueeCountries = ['GER', 'FRA', 'ESP', 'DEN', 'HUN'];
 
   // Universe movements for the selected year
   const universeMovements: UniverseMovement[] = useMemo(() => {
@@ -282,105 +306,54 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
       ? { name: universeMovements.find(m => m.type === 'insolvency_relegation' && m.toTier === effectiveTier && normalizeCountry(m.country || 'GER') === normalizeCountry(selectedCountry))!.clubName }
       : null);
 
-  const isKeyChampion = (m: UniverseMovement) => {
-    if (m.type !== 'champion') return false;
-    const mCountry = normalizeCountry(m.country || 'GER');
-    // User's own club
-    if (m.clubName === state.club.name || m.clubId === String(state.club.id)) return true;
-    // User's division champion
-    const userTier = currentSelectedHist ? currentSelectedHist.tier : state.club.tier;
-    if (mCountry === userCountry && m.fromTier === userTier) return true;
-    // User's domestic Tier 1 champion
-    if (mCountry === userCountry && m.fromTier === 1) return true;
-    // Marquee top European leagues' Tier 1 champions
-    if (marqueeCountries.includes(mCountry) && m.fromTier === 1) return true;
-    return false;
-  };
+  const almanacMaxTiers = getMaxTier(selectedCountry);
+  const almanacTiersList = Array.from({ length: almanacMaxTiers }, (_, i) => i + 1);
+  const effectiveAlmanacTier: number = Math.min(almanacTier, almanacMaxTiers);
 
-  const isMajorRelegation = (m: UniverseMovement) => {
-    if (m.type !== 'relegation' && m.type !== 'insolvency_relegation') return false;
-    const mCountry = normalizeCountry(m.country || 'GER');
-    // User's club
-    if (m.clubName === state.club.name || m.clubId === String(state.club.id)) return true;
-    // User's domestic top division relegation drama
-    if (mCountry === userCountry && m.fromTier === 1) return true;
-    // Insolvency demotions (strictly domestic to maintain authentic league context)
-    if (m.type === 'insolvency_relegation' && mCountry === userCountry) return true;
-    return false;
-  };
+  const almanacAvailableYears = useMemo(() => {
+    return getAlmanacAvailableYears(state);
+  }, [state]);
 
-  const isKeyDramaMovement = (m: UniverseMovement) => {
-    // 1. Key international cup winners (CL, EL, ECL, Super Globe)
-    if (m.type === 'intl_cup') return true;
-    const mCountry = normalizeCountry(m.country || 'GER');
-    // 2. Insolvency & Takeover drama (strictly domestic context)
-    if (m.type === 'insolvency_relegation' || m.type === 'takeover') return mCountry === userCountry;
-    // 3. Cinderella Breakthroughs
-    if (m.isCinderella) return true;
-    // 4. Key Champions
-    if (isKeyChampion(m)) return true;
-    // 5. Major Relegation drama
-    if (isMajorRelegation(m)) return true;
-    // 6. User promotion
-    if ((m.clubName === state.club.name || m.clubId === String(state.club.id)) && m.type === 'promotion') return true;
-    return false;
-  };
+  useEffect(() => {
+    if (almanacYear !== 'all' && !almanacAvailableYears.includes(almanacYear)) {
+      setAlmanacYear('all');
+    }
+  }, [almanacYear, almanacAvailableYears]);
 
-  const availableUniverseRegions = useMemo(() => {
-    const regions = new Set<string>();
-    universeMovements.forEach((m) => {
-      if (m.country) regions.add(m.country.toUpperCase());
+  const almanacNationalCupName = useMemo(() => {
+    return getDomesticCupInfo(selectedCountry, 1).name;
+  }, [selectedCountry]);
+
+  const almanacSupercupName = useMemo(() => {
+    return getDomesticSupercupInfo(selectedCountry, isAnyModActive()).name || 'Supercup';
+  }, [selectedCountry]);
+
+  const almanacEntries = useMemo(() => {
+    return getAlmanacEntries({
+      state,
+      clubsDb,
+      country: selectedCountry,
+      tier: effectiveAlmanacTier,
+      year: almanacYear,
+      competition: almanacComp,
     });
-    return Array.from(regions).sort();
-  }, [universeMovements]);
+  }, [state, clubsDb, selectedCountry, effectiveAlmanacTier, almanacYear, almanacComp]);
 
-  const isKeyMovement = isKeyDramaMovement;
-
-  const filteredMovements = useMemo(() => {
-    let list = universeMovements;
-
-    if (universeRegion !== 'all') {
-      list = list.filter((m) => (m.country || '').toUpperCase() === universeRegion.toUpperCase());
+  const almanacChampionHeader = useMemo(() => {
+    if (almanacComp === 'league') {
+      return `${getLeagueInfo(effectiveAlmanacTier, selectedCountry).name.toUpperCase()} CHAMPION`;
     }
-
-    if (universeFilter === 'headlines') {
-      list = list.filter(isKeyDramaMovement);
-    } else if (universeFilter === 'domestic') {
-      list = list.filter((m) => m.type === 'champion' || m.type === 'promotion' || m.type === 'relegation' || m.type === 'insolvency_relegation' || m.type === 'takeover');
-    } else if (universeFilter === 'cups') {
-      list = list.filter((m) => m.type === 'intl_cup');
-    } else if (universeFilter === 'career') {
-      list = list.filter((m) =>
-        m.clubName === state.club.name ||
-        m.clubId === String(state.club.id) ||
-        normalizeCountry(m.country || 'GER') === userCountry
-      );
-    }
-
-    if (universeFilter === 'headlines') {
-      const typePriority: Record<string, number> = {
-        'insolvency_relegation': 1,
-        'takeover': 2,
-        'intl_cup': 2,
-        'champion': 3,
-        'relegation': 4,
-        'promotion': 5,
-      };
-      return [...list].sort((a, b) => {
-        const aIsUser = (a.clubName === state.club.name || a.clubId === String(state.club.id)) ? 0 : 1;
-        const bIsUser = (b.clubName === state.club.name || b.clubId === String(state.club.id)) ? 0 : 1;
-        if (aIsUser !== bIsUser) return aIsUser - bIsUser;
-        const pA = typePriority[a.type] || 10;
-        const pB = typePriority[b.type] || 10;
-        return pA - pB;
-      });
-    }
-
-    return list;
-  }, [universeMovements, universeRegion, universeFilter, userCountry, state.club.name, state.club.id]);
+    if (almanacComp === 'nat_cup') return `${almanacNationalCupName.toUpperCase()} CHAMPION`;
+    if (almanacComp === 'supercup') return `${almanacSupercupName.toUpperCase()} CHAMPION`;
+    if (almanacComp === 'reg_cup') return 'REGIONAL CUP CHAMPION';
+    if (almanacComp === 'cl') return 'CHAMPIONS CUP CHAMPION';
+    if (almanacComp === 'euro_cup') return 'EURO CUP CHAMPION';
+    if (almanacComp === 'cwc') return 'GLOBAL CLUB CUP CHAMPION';
+    return 'COMPETITION CHAMPION';
+  }, [almanacComp, effectiveAlmanacTier, selectedCountry, almanacNationalCupName, almanacSupercupName]);
 
   const content = (
-    <div className={embedded ? "w-full text-center flex flex-col h-full overflow-hidden pointer-events-auto" : `bg-[#14151e] w-full sm:max-w-3xl lg:max-w-4xl rounded-2xl p-3 sm:p-5 shadow-[0_25px_70px_rgba(0,0,0,0.9)] border border-white/[0.04] text-center pointer-events-auto relative cursor-default overflow-hidden ${activeTab === 'universe' ? 'h-[90vh]' : 'h-auto'} max-h-[92vh] flex flex-col`}>
+    <div className={embedded ? "w-full text-center flex flex-col h-full overflow-hidden pointer-events-auto p-2.5 sm:p-4" : `bg-[#14151e] w-full sm:max-w-3xl lg:max-w-4xl rounded-2xl p-3 sm:p-5 shadow-[0_25px_70px_rgba(0,0,0,0.9)] border border-white/[0.04] text-center pointer-events-auto relative cursor-default overflow-hidden ${activeTab === 'almanac' ? 'h-[90vh]' : 'h-auto'} max-h-[92vh] flex flex-col`}>
       {!embedded && <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/25 to-transparent pointer-events-none" />}
       {!embedded && (
         <button
@@ -396,12 +369,12 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5 shrink-0 pr-8 sm:pr-9">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`w-8 h-8 rounded-xl flex items-center justify-center border p-1.5 shrink-0 ${
-            activeTab === 'universe'
+            activeTab === 'almanac'
               ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
               : 'bg-sky-500/10 border-sky-500/20'
           }`}>
-            {activeTab === 'universe' ? (
-              <i className="fas fa-arrows-up-down text-sm text-amber-400" />
+            {activeTab === 'almanac' ? (
+              <i className="fas fa-book-bookmark text-sm text-amber-400" />
             ) : currentLeagueInfo?.logo ? (
               <img
                 src={currentLeagueInfo.logo}
@@ -416,13 +389,13 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
           </div>
           <div className="text-left min-w-0">
             <h3 className="text-sm sm:text-base font-semibold text-white tracking-tight leading-tight truncate">
-              {activeTab === 'universe'
-                ? `${yearTag} Universe Movements`
+              {activeTab === 'almanac'
+                ? 'Historical Almanac & Roll of Honour'
                 : `${yearTag} ${currentLeagueInfo.name}`}
             </h3>
             <p className="text-[10px] sm:text-[11px] font-mono text-zinc-400 truncate">
-              {activeTab === 'universe'
-                ? 'Continental Cups · Champions · Promotions · Relegations'
+              {activeTab === 'almanac'
+                ? `${getCountryFlag(currentCountry)} ${countryLabels[currentCountry] || currentCountry} · League Pyramid & Cup Archive (1950–Present)`
                 : `${getCountryFlag(currentCountry)} ${currentCountry} · ${leagueTag} · Season Standings`}
             </p>
           </div>
@@ -442,22 +415,20 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
             <span>Standings</span>
           </button>
           <button
-            onClick={() => setActiveTab('universe')}
+            onClick={() => setActiveTab('almanac')}
             className={`flex-1 sm:flex-initial justify-center px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'universe'
+              activeTab === 'almanac'
                 ? 'bg-amber-500/[0.05] text-amber-300 border border-amber-500/20 shadow-sm'
                 : 'text-zinc-400 hover:text-white border border-transparent'
             }`}
           >
-            <i className="fas fa-arrows-up-down text-[10px]" />
-            <span>Movements</span>
-            {universeMovements.length > 0 && (
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-medium tabular-nums ${
-                activeTab === 'universe' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-white/[0.06] text-zinc-400'
-              }`}>
-                {universeMovements.filter(isKeyMovement).length}
-              </span>
-            )}
+            <i className="fas fa-book-bookmark text-[10px]" />
+            <span>Almanac</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-medium tabular-nums ${
+              activeTab === 'almanac' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-white/[0.06] text-zinc-400'
+            }`}>
+              {almanacEntries.length}
+            </span>
           </button>
         </div>
       </div>
@@ -499,7 +470,11 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                 <select
                   aria-label="Select Division"
                   value={effectiveTier}
-                  onChange={(e) => setSelectedTier(Number(e.target.value))}
+                  onChange={(e) => {
+                    const nextTier = Number(e.target.value);
+                    setSelectedTier(nextTier);
+                    setAlmanacTier(nextTier);
+                  }}
                   className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2.5 pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-sky-400 transition cursor-pointer"
                 >
                   {availableTiers.map((t) => {
@@ -775,282 +750,261 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
         </div>
       )}
 
-      {activeTab === 'universe' && (
+      {activeTab === 'almanac' && (
         <div className="flex flex-col flex-1 min-h-0 text-left">
-          {/* Universe Movements Filter Bar: Core Toggle Buttons on Left, Dropdowns on Right */}
-          <div className="flex items-center justify-between gap-2.5 pb-2 border-b border-white/[0.04] mb-2.5 flex-wrap shrink-0">
-            {/* Left: Five Core Toggle Pills */}
-            <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              <button
-                onClick={() => setUniverseFilter('headlines')}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                  universeFilter === 'headlines'
-                    ? 'bg-amber-500/[0.05] text-amber-300 border border-amber-500/20 shadow-sm'
-                    : 'bg-white/[0.03] text-zinc-400 hover:text-amber-300 border border-white/[0.04]'
-                }`}
-              >
-                <span>⭐ Headlines</span>
-                <span className={`px-1.5 py-0.2 rounded text-[9px] font-medium tabular-nums ${
-                  universeFilter === 'headlines' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-white/[0.06] text-zinc-400'
-                }`}>
-                  {universeMovements.filter(isKeyDramaMovement).length}
-                </span>
-              </button>
+          {/* Almanac Filter Card */}
+          <div className="bg-[#10121a] border border-white/[0.06] rounded-2xl p-3.5 sm:p-4 mb-3 shrink-0 shadow-md">
+            {/* Row 1: Country, Tier, All Years Dropdowns */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3.5">
+              {/* Country Filter */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                  COUNTRY
+                </label>
+                <div className="relative">
+                  <select
+                    aria-label="Almanac Country"
+                    value={selectedCountry}
+                    onChange={(e) => {
+                      const nextCountry = e.target.value;
+                      setSelectedCountry(nextCountry);
+                      const maxT = getMaxTier(nextCountry);
+                      if (almanacTier > maxT) {
+                        setAlmanacTier(1);
+                      }
+                    }}
+                    className="w-full appearance-none bg-[#161822] hover:bg-[#1b1e2b] text-white text-xs sm:text-sm font-semibold py-2 pl-3 pr-8 rounded-xl border border-white/10 focus:outline-none focus:border-amber-400/60 transition cursor-pointer"
+                  >
+                    {availableCountries.map((c) => (
+                      <option key={`alm-c-${c}`} value={c} className="bg-[#161822] text-white">
+                        {getCountryFlag(c)} {countryLabels[c] || c}
+                      </option>
+                    ))}
+                  </select>
+                  <i className="fas fa-chevron-down text-[10px] text-zinc-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
 
-              <button
-                onClick={() => setUniverseFilter('domestic')}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                  universeFilter === 'domestic'
-                    ? 'bg-emerald-500/[0.05] text-emerald-300 border border-emerald-500/20 shadow-sm'
-                    : 'bg-white/[0.03] text-zinc-400 hover:text-emerald-300 border border-white/[0.04]'
-                }`}
-              >
-                <span>🏟️ Domestic</span>
-                <span className="text-[10px] opacity-75 tabular-nums">
-                  ({universeMovements.filter(m => m.type === 'champion' || m.type === 'promotion' || m.type === 'relegation' || m.type === 'insolvency_relegation' || m.type === 'takeover').length})
-                </span>
-              </button>
+              {/* Tier Filter */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                  TIER
+                </label>
+                <div className="relative">
+                  <select
+                    aria-label="Almanac Tier"
+                    value={effectiveAlmanacTier}
+                    onChange={(e) => {
+                      const nextTier = Number(e.target.value);
+                      setAlmanacTier(nextTier);
+                      setSelectedTier(nextTier);
+                      if (almanacComp !== 'league' && almanacComp !== 'all') {
+                        setAlmanacComp('league');
+                      }
+                    }}
+                    className="w-full appearance-none bg-[#161822] hover:bg-[#1b1e2b] text-white text-xs sm:text-sm font-semibold py-2 pl-3 pr-8 rounded-xl border border-white/10 focus:outline-none focus:border-amber-400/60 transition cursor-pointer"
+                  >
+                    {almanacTiersList.map((t) => {
+                      const info = getLeagueInfo(t, selectedCountry);
+                      return (
+                        <option key={`alm-t-${t}`} value={t} className="bg-[#161822] text-white">
+                          Tier {t} — {info.name}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <i className="fas fa-chevron-down text-[10px] text-zinc-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
 
-              <button
-                onClick={() => setUniverseFilter('cups')}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                  universeFilter === 'cups'
-                    ? 'bg-purple-500/[0.05] text-purple-300 border border-purple-500/20 shadow-sm'
-                    : 'bg-white/[0.03] text-zinc-400 hover:text-purple-300 border border-white/[0.04]'
-                }`}
-              >
-                <span>🏆 Cups</span>
-                <span className="text-[10px] opacity-75 tabular-nums">
-                  ({universeMovements.filter(m => m.type === 'intl_cup').length})
-                </span>
-              </button>
-
-              <button
-                onClick={() => setUniverseFilter('career')}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                  universeFilter === 'career'
-                    ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm'
-                    : 'bg-white/[0.03] text-zinc-400 hover:text-sky-300 border border-white/[0.04]'
-                }`}
-              >
-                <span>👤 Career</span>
-                <span className="text-[10px] opacity-75 tabular-nums">
-                  ({universeMovements.filter(m => m.clubName === state.club.name || m.clubId === String(state.club.id) || normalizeCountry(m.country || 'GER') === userCountry).length})
-                </span>
-              </button>
-
-              <button
-                onClick={() => setUniverseFilter('all')}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                  universeFilter === 'all'
-                    ? 'bg-white/[0.08] text-white border border-white/20 shadow-sm'
-                    : 'bg-white/[0.03] text-zinc-400 hover:text-white border border-white/[0.04]'
-                }`}
-              >
-                <span>All</span>
-                <span className="text-[10px] opacity-75 tabular-nums">
-                  ({universeMovements.length})
-                </span>
-              </button>
+              {/* Year Filter */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                  YEAR
+                </label>
+                <div className="relative">
+                  <select
+                    aria-label="Almanac Year"
+                    value={almanacYear}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAlmanacYear(val === 'all' ? 'all' : Number(val));
+                    }}
+                    className="w-full appearance-none bg-[#161822] hover:bg-[#1b1e2b] text-white text-xs sm:text-sm font-semibold py-2 pl-3 pr-8 rounded-xl border border-white/10 focus:outline-none focus:border-amber-400/60 transition cursor-pointer tabular-nums"
+                  >
+                    <option value="all" className="bg-[#161822] text-white">
+                      All Years
+                    </option>
+                    {almanacAvailableYears.map((yr) => (
+                      <option key={`alm-yr-${yr}`} value={yr} className="bg-[#161822] text-white">
+                        {yr}
+                      </option>
+                    ))}
+                  </select>
+                  <i className="fas fa-chevron-down text-[10px] text-zinc-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
             </div>
 
-            {/* Right: Year and Cup Region Dropdowns */}
-            <div className="flex items-center gap-1.5 ml-auto shrink-0">
-              {/* Region / Country Selector */}
-              <div className="relative inline-flex items-center">
-                <select
-                  aria-label="Filter Region"
-                  value={universeRegion}
-                  onChange={(e) => setUniverseRegion(e.target.value)}
-                  className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2.5 pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-amber-400 transition cursor-pointer"
-                >
-                  <option value="all" className="bg-[#161722] text-white">All Regions</option>
-                  {availableUniverseRegions.map((regionCode) => (
-                    <option key={`region-${regionCode}`} value={regionCode} className="bg-[#161722] text-white">
-                      {getCountryFlag(regionCode)} {regionCode}
-                    </option>
-                  ))}
-                </select>
-                <i className="fas fa-chevron-down text-[8px] text-zinc-400 absolute right-2 pointer-events-none" />
-              </div>
-
-              {/* Year Selector */}
-              <div className="relative inline-flex items-center">
-                <select
-                  aria-label="Filter Season Year"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2.5 pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-amber-400 transition cursor-pointer"
-                >
-                  {availableYears.map((yr) => {
-                    const isCurrentActive = yr === state.year && (!currentSelectedHist || currentSelectedHist.year !== yr);
-                    return (
-                      <option key={`univ-year-${yr}`} value={yr} className="bg-[#161722] text-white">
-                        Season {yr} {isCurrentActive ? '(Active)' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-                <i className="fas fa-chevron-down text-[8px] text-zinc-400 absolute right-2 pointer-events-none" />
-              </div>
+            {/* Row 2: Competition Sub-Filter Bar */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 mr-0.5">
+                COMPETITION:
+              </span>
+              {(
+                [
+                  { id: 'league', label: 'League Pyramid' },
+                  { id: 'nat_cup', label: almanacNationalCupName },
+                  {
+                    id: 'supercup',
+                    label: almanacSupercupName.toLowerCase().includes('super')
+                      ? almanacSupercupName
+                      : `${almanacSupercupName} (Supercup)`,
+                  },
+                  { id: 'reg_cup', label: 'Regional Cup' },
+                  { id: 'cl', label: 'Champions Cup' },
+                  { id: 'euro_cup', label: 'Euro Cup' },
+                  { id: 'cwc', label: 'Global Club Cup' },
+                  { id: 'all', label: 'All Competitions' },
+                ] as { id: AlmanacCompetitionFilter; label: string }[]
+              ).map((item) => {
+                const isActive = almanacComp === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setAlmanacComp(item.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] transition cursor-pointer shrink-0 ${
+                      isActive
+                        ? 'bg-amber-500 text-black font-bold border border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
+                        : 'bg-[#161822] hover:bg-white/[0.06] text-zinc-200 font-medium border border-white/[0.08]'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Movements List - Fully flexible, fills all available modal height */}
-          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-1.5 pr-1">
-            {filteredMovements.length === 0 ? (
-              <div className="p-8 text-center text-zinc-500 text-xs">
-                No universe movements found for this filter. Simulate a season to observe European champions, international cup winners, and relegation drama!
+          {/* Almanac Table Card */}
+          <div className="bg-[#10121a] rounded-2xl border border-white/[0.06] overflow-hidden shadow-lg flex-1 min-h-0 flex flex-col">
+            <div className="overflow-x-auto custom-scrollbar overscroll-contain flex-1 min-h-0 flex flex-col">
+              {/* Table Header */}
+              <div className="min-w-[340px] grid grid-cols-12 items-center py-3 px-4 bg-[#141620] border-b border-white/[0.06] text-[10px] font-mono font-semibold text-zinc-400 uppercase tracking-wider shrink-0">
+                <div className="col-span-2">YEAR</div>
+                <div className="col-span-5 truncate pr-2">{almanacChampionHeader}</div>
+                <div className="col-span-3 truncate pr-2">COMPETITION</div>
+                <div className="col-span-2 text-right">
+                  {almanacComp === 'league' ? 'POINTS' : almanacComp === 'all' ? 'PTS / TITLE' : 'TITLE'}
+                </div>
               </div>
-            ) : (
-              filteredMovements.map((m) => {
-                const isPromo = m.type === 'promotion';
-                const isInsolvency = m.type === 'insolvency_relegation';
-                const isTakeover = m.type === 'takeover';
-                const isChampion = m.type === 'champion';
-                const isIntlCup = m.type === 'intl_cup';
-                const isUserClub = m.clubName === state.club.name || m.clubId === String(state.club.id);
 
-                let effectiveFrom = m.fromTier;
-                let effectiveTo = m.toTier;
-                if (m.type === 'relegation' || m.type === 'insolvency_relegation') {
-                  if (effectiveTo <= effectiveFrom) {
-                    effectiveTo = effectiveFrom + 1;
-                  }
-                } else if (m.type === 'promotion') {
-                  if (effectiveTo >= effectiveFrom && effectiveFrom > 1) {
-                    effectiveTo = effectiveFrom - 1;
-                  }
-                }
-                const fromLeague = getLeagueInfo(effectiveFrom, m.country);
-                let toLeague = getLeagueInfo(effectiveTo, m.country);
-                if ((m.type === 'relegation' || m.type === 'insolvency_relegation') && toLeague.name === fromLeague.name) {
-                  toLeague = getLeagueInfo(effectiveFrom + 1, m.country);
-                } else if (m.type === 'promotion' && toLeague.name === fromLeague.name && effectiveFrom > 1) {
-                  toLeague = getLeagueInfo(effectiveFrom - 1, m.country);
-                }
+              {/* Table Body */}
+              <div className="min-w-[340px] overflow-y-auto custom-scrollbar flex-1 min-h-0 divide-y divide-white/[0.04] overscroll-contain">
+                {almanacEntries.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-500 text-xs">
+                    {almanacComp === 'cl' && typeof almanacYear === 'number' && almanacYear < 1957
+                      ? 'The Champions Cup was inaugurated in 1957. Select 1957 or later, or switch to All Years.'
+                      : almanacComp === 'euro_cup' && typeof almanacYear === 'number' && almanacYear < 1982
+                        ? 'The Euro Cup was inaugurated in 1982. Select 1982 or later, or switch to All Years.'
+                        : almanacComp === 'cwc' && typeof almanacYear === 'number' && almanacYear < 1997
+                          ? 'The Global Club Cup was inaugurated in 1997. Select 1997 or later, or switch to All Years.'
+                          : 'No historical records found for this filter yet. Complete the current season to record live history!'}
+                  </div>
+                ) : (
+                  almanacEntries.map((entry) => {
+                    const canInspectTable = entry.source === 'Live' && entry.competitionType === 'league';
+                    return (
+                    <div
+                      key={entry.id}
+                      onClick={
+                        canInspectTable
+                          ? () => {
+                              setSelectedCountry(entry.country);
+                              setSelectedTier(entry.tier);
+                              setAlmanacTier(entry.tier);
+                              setSelectedYear(entry.year);
+                              setActiveTab('standings');
+                            }
+                          : undefined
+                      }
+                      title={canInspectTable ? `Click to view full ${entry.year} ${entry.competitionName} standings` : undefined}
+                      className={`grid grid-cols-12 items-center py-3 px-4 transition-colors ${
+                        canInspectTable ? 'cursor-pointer' : ''
+                      } ${
+                        entry.isUserClub
+                          ? 'bg-sky-500/[0.08] hover:bg-sky-500/[0.12]'
+                          : 'hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      {/* Year */}
+                      <div className="col-span-2 font-mono font-bold text-sm sm:text-base text-amber-400 tabular-nums">
+                        {entry.year}
+                      </div>
 
-                return (
-                  <div
-                    key={m.id}
-                    className={`flex items-center justify-between p-2 sm:p-2.5 rounded-xl border transition gap-2 ${
-                      isUserClub
-                        ? 'bg-sky-500/[0.05] border-sky-500/20 shadow-sm'
-                        : isIntlCup
-                        ? 'bg-amber-500/[0.05] border-amber-500/20 shadow-sm'
-                        : isChampion
-                        ? 'bg-amber-500/[0.05] border-amber-500/20'
-                        : isTakeover
-                        ? 'bg-purple-500/[0.05] border-purple-500/20'
-                        : isPromo
-                        ? 'bg-emerald-500/[0.05] border-emerald-500/20'
-                        : isInsolvency
-                        ? 'bg-amber-500/[0.05] border-amber-500/20'
-                        : 'bg-rose-500/[0.05] border-rose-500/20'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ClubLogo
-                        name={m.clubName}
-                        color={m.clubColor}
-                        logo={m.clubLogo}
-                        className="w-6 h-6 object-contain shrink-0"
-                      />
-                      <div className="min-w-0 text-left">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`text-xs font-semibold truncate ${isUserClub ? 'text-sky-200' : 'text-white'}`}>
-                            {m.clubName}
-                          </span>
-                          {isUserClub && (
-                            <span className="px-1.5 py-0.2 rounded-md bg-sky-500/10 text-sky-300 border border-sky-500/20 text-[9px] font-semibold uppercase">
-                              YOUR CLUB
+                      {/* Champion Club & Coach */}
+                      <div className="col-span-5 flex items-center gap-3 min-w-0 pr-2">
+                        <ClubLogo
+                          name={entry.clubName}
+                          color={entry.clubColor}
+                          logo={entry.clubLogo}
+                          fallbackLogo={entry.clubFallbackLogo}
+                          alt=""
+                          className="w-8 h-8 sm:w-9 sm:h-9 object-contain shrink-0 select-none"
+                          fallbackClassName="w-8 h-8 sm:w-9 sm:h-9 text-[10px] shrink-0 select-none"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-white font-bold text-xs sm:text-sm truncate">
+                              {entry.clubName}
                             </span>
-                          )}
-                          <span className="text-[10px] text-zinc-500 font-mono">
-                            {getCountryFlag(m.country)} {m.country}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-zinc-400 flex items-center gap-1.5 mt-0.5">
-                          {isIntlCup ? (() => {
-                            const mId = String(m.id || '').toLowerCase();
-                            const mTitle = String(m.cupTitle || '').toLowerCase();
-                            const isCwcMov = mId.endsWith('-cup-cwc') || mTitle.includes('super globe');
-                            const isRegMov = mId.endsWith('-cup-reg') || mTitle.includes('regional') || mTitle.includes('amateur');
-                            const isEuroMov = mId.endsWith('-cup-cl') || mId.endsWith('-cup-el') || mId.endsWith('-cup-ecl') || mTitle.includes('champions league') || mTitle.includes('european league') || mTitle.includes('european cup') || mTitle.includes('americas') || mTitle.includes('north american');
-                            const matchedRun = (state.cupRunResults || []).find((cr: any) => {
-                              if (cr.year !== m.year || !cr.winnerName) return false;
-                              if (cr.winnerName.trim().toLowerCase() !== (m.clubName || '').trim().toLowerCase()) return false;
-                              if (isCwcMov) return cr.id === 'cwc';
-                              if (isRegMov) return cr.id === 'reg_cup';
-                              if (isEuroMov) return cr.id === 'euro_cup' || cr.id === 'cl' || cr.id === 'el' || cr.id === 'ecl';
-                              return cr.id === 'nat_cup';
-                            });
-                            const runnerUpLabel = matchedRun?.runnerUpName;
-                            return (
-                              <span className="font-semibold text-amber-300 flex items-center gap-1.5 flex-wrap">
-                                <i className="fas fa-trophy text-[11px] text-amber-400" />
-                                <span>Crowned {m.cupTitle} Winners!</span>
-                                {runnerUpLabel && (
-                                  <span className="text-zinc-400 font-normal text-[10px]">
-                                    (def. {runnerUpLabel} in Final)
-                                  </span>
-                                )}
+                            {entry.isUserClub && (
+                              <span className="px-1.5 py-0.2 rounded bg-sky-500/15 border border-sky-400/30 text-[9px] font-semibold uppercase text-sky-300 shrink-0">
+                                YOU
                               </span>
-                            );
-                          })() : isChampion ? (
-                            <span className="font-semibold text-amber-300 flex items-center gap-1">
-                              <i className="fas fa-trophy text-[10px] text-amber-400" />
-                              <span>{fromLeague.name} Champions</span>
-                            </span>
-                          ) : isTakeover ? (
-                            <span className="font-semibold text-purple-300 flex items-center gap-1">
-                              <i className="fas fa-sack-dollar text-[10px] text-purple-400" />
-                              <span>{fromLeague.name} · {m.cupTitle || 'Tycoon Takeover'}</span>
-                            </span>
-                          ) : (
-                            <>
-                              <span>{fromLeague.name}</span>
-                              <i className="fas fa-arrow-right text-[9px] text-zinc-500" />
-                              <span className={`font-medium ${isInsolvency ? 'text-amber-200' : 'text-zinc-200'}`}>{toLeague.name}</span>
-                            </>
-                          )}
-                        </div>
-                        {isInsolvency && (
-                          <div className="text-[10px] text-amber-400/80 font-medium flex items-center gap-1 mt-0.5">
-                            <i className="fas fa-triangle-exclamation text-[9px]" />
-                            <span>Licensing revocation · Administrative demotion</span>
+                            )}
                           </div>
+                          <div className="text-zinc-400 text-[11px] sm:text-xs truncate">
+                            Coach: <span className="text-zinc-300">{entry.coachName}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Competition & Tier/Source */}
+                      <div className="col-span-3 min-w-0 pr-2">
+                        <div className="text-amber-400 font-semibold text-xs sm:text-sm truncate">
+                          {entry.competitionName}
+                        </div>
+                        <div className="text-zinc-500 text-[11px] font-medium truncate">
+                          {entry.subtitle}
+                        </div>
+                      </div>
+
+                      {/* Points / Status */}
+                      <div className="col-span-2 text-right font-mono tabular-nums">
+                        {entry.points !== undefined ? (
+                          <div>
+                            <span className="text-emerald-400 font-bold text-sm sm:text-base">
+                              {entry.points}
+                            </span>{' '}
+                            <span className="text-zinc-400 text-[10px] sm:text-xs font-normal">
+                              PTS
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-emerald-400 font-bold text-xs sm:text-sm uppercase tracking-wider">
+                            <i className="fas fa-trophy text-amber-400 text-[10px]" />
+                            <span>{entry.statusLabel}</span>
+                          </span>
                         )}
                       </div>
                     </div>
-
-                    <div className="shrink-0 flex items-center gap-1.5 flex-wrap justify-end">
-                      {m.isCinderella && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-lg font-medium bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20 flex items-center gap-1 shrink-0">
-                          <span>✨</span>
-                          <span>Cinderella</span>
-                        </span>
-                      )}
-                      <span className={`text-[10px] px-2 py-0.5 rounded-lg font-semibold uppercase tracking-wider border shrink-0 max-w-[140px] sm:max-w-none truncate ${
-                        isIntlCup
-                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/20 shadow-sm'
-                          : isChampion
-                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                          : isTakeover
-                          ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
-                          : isPromo
-                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-                          : isInsolvency
-                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                          : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
-                      }`}>
-                        {isIntlCup ? `👑 ${m.cupTitle || 'Trophy'}` : isChampion ? '🏆 Champion' : isTakeover ? '💰 Takeover' : isPromo ? '⬆️ Promoted' : isInsolvency ? '⚠️ Demoted' : '⬇️ Relegated'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1078,7 +1032,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
       onClick={onClose}
       className="fixed inset-0 bg-black/80 flex items-center p-2 sm:p-4 justify-center z-[10000] backdrop-blur-2xl transition-all cursor-pointer"
     >
-      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-3xl lg:max-w-4xl flex justify-center ${activeTab === 'universe' ? 'h-full max-h-[92vh]' : 'h-auto max-h-[92vh]'}`}>
+      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-3xl lg:max-w-4xl flex justify-center ${activeTab === 'almanac' ? 'h-full max-h-[92vh]' : 'h-auto max-h-[92vh]'}`}>
         {content}
       </div>
     </motion.div>

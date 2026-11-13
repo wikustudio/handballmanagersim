@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @theme {
+  --breakpoint-xs: 24rem;
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
   --font-mono: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
 }

@@ -15,22 +15,22 @@ export const HandballSimLogo: React.FC<HandballSimLogoProps> = ({
 
   return (
     <div className={`inline-flex items-center gap-2.5 select-none ${showText ? '' : 'shrink-0'}`}>
-      <div 
-        className={`relative rounded-xl overflow-hidden shadow-sm flex items-center justify-center border border-white/[0.06] bg-[#14151e] shrink-0 ${className}`}
+      <div
+        className={`relative rounded-xl overflow-hidden shadow-md flex items-center justify-center border border-white/10 bg-[#0e0f14] shrink-0 ${className}`}
         style={sizeStyle}
       >
         <svg
           viewBox="0 0 400 400"
-          className="w-full h-full p-1"
+          className="w-full h-full"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <rect width="400" height="400" rx="32" fill="#14151e" />
+          <rect width="400" height="400" rx="24" fill="#0e0f14" />
           <g fill="#ffffff" fillRule="evenodd">
-            {/* Handball in player hand */}
+            {/* Ball in Hand */}
             <circle cx="123" cy="114" r="23.5" />
 
-            {/* Official jumping throwing handball player silhouette */}
+            {/* Jumping Handball Player Silhouette */}
             <path d="
               M 130 119
               C 134 128 142 142 153 151

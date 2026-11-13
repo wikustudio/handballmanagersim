@@ -7,6 +7,7 @@ import {
   getClubHomeArena,
   getLeagueInfo,
   getDomesticCupInfo,
+  getDomesticSupercupInfo,
   getCountryFlag,
   COUNTRIES,
   getLeagueMaxAttendance,
@@ -233,6 +234,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
     );
 
     let extraDfb = 0;
+    let extraSc = 0;
     let extraReg = 0;
     let extraCl = 0;
     let extraEl = 0;
@@ -245,6 +247,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
       el: new Set<number>(),
       ecl: new Set<number>(),
       dfb: new Set<number>(),
+      sc: new Set<number>(),
       reg: new Set<number>(),
     };
 
@@ -254,6 +257,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
       if (h.trophiesThisYear?.el) countedCupYears.el.add(h.year);
       if (h.trophiesThisYear?.ecl) countedCupYears.ecl.add(h.year);
       if (h.trophiesThisYear?.dfb) countedCupYears.dfb.add(h.year);
+      if (h.trophiesThisYear?.sc) countedCupYears.sc.add(h.year);
       if (h.trophiesThisYear?.reg) countedCupYears.reg.add(h.year);
     });
 
@@ -282,11 +286,39 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
       }
     });
 
+    const isSupercupMovement = (m: any): boolean => {
+      const mId = String(m?.id || '').toLowerCase();
+      const title = String(m?.cupTitle || '').toLowerCase();
+      return (
+        mId.endsWith('-cup-sc') ||
+        mId.includes('-cup-sc') ||
+        mId.endsWith('-cup-esc') ||
+        title.includes('supercup') ||
+        title.includes('super cup') ||
+        title.includes('supercopa') ||
+        title.includes('superpuchar') ||
+        title.includes('szuperkupa') ||
+        title.includes('supertaça') ||
+        title.includes('supertaca') ||
+        title.includes('superkup') ||
+        title.includes('superpokal') ||
+        title.includes('supercoppa') ||
+        title.includes('supercupa') ||
+        title.includes('supercupen') ||
+        title.includes('trophée des champions') ||
+        title.includes('trophee des champions') ||
+        title.includes('meistarakeppni')
+      );
+    };
+
     universeCups.forEach(m => {
       const title = (m.cupTitle || '').toLowerCase();
       const yr = m.year;
       if (!currentClubYears.has(yr)) return;
-      if (title.includes('super globe')) {
+      if (isSupercupMovement(m)) {
+        // Domestic Supercup is already tracked on h.trophiesThisYear.sc when won by the user
+        return;
+      } else if (title.includes('super globe')) {
         if (!countedCupYears.cwc.has(yr)) {
           countedCupYears.cwc.add(yr);
           extraCwc++;
@@ -343,9 +375,10 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
         return sum + val;
       }, 0),
       dfb: currentClubHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.dfb || 0), 0) + extraDfb,
+      sc: currentClubHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.sc || 0), 0) + extraSc + (state.pendingSupercupTrophies?.sc || 0),
       reg: currentClubHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.reg || 0), 0) + extraReg,
     };
-  }, [currentClubHistory, state.universeMovements, state.cupRunResults, state.history, club.name, club.id]);
+  }, [currentClubHistory, state.universeMovements, state.cupRunResults, state.history, state.pendingSupercupTrophies, club.name, club.id]);
 
   const totalTrophies = useMemo(() => {
     return (
@@ -356,6 +389,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
       clubTrophies.bl +
       clubTrophies.lower +
       clubTrophies.dfb +
+      clubTrophies.sc +
       clubTrophies.reg
     );
   }, [clubTrophies]);
@@ -380,9 +414,10 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
         return sum + val;
       }, 0),
       dfb: allHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.dfb || 0), 0),
+      sc: allHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.sc || 0), 0) + (state.pendingSupercupTrophies?.sc || 0),
       reg: allHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.reg || 0), 0),
     };
-  }, [allHistory]);
+  }, [allHistory, state.pendingSupercupTrophies]);
 
   const careerTotalTrophies = useMemo(() => {
     return (
@@ -393,6 +428,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
       careerTrophies.bl +
       careerTrophies.lower +
       careerTrophies.dfb +
+      careerTrophies.sc +
       careerTrophies.reg
     );
   }, [careerTrophies]);
@@ -496,9 +532,34 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
           details: `Division Champions (${h.pts} Pts, Promoted)`,
         });
       }
+      const isSupercupMov = (m: any): boolean => {
+        const mId = String(m?.id || '').toLowerCase();
+        const title = String(m?.cupTitle || '').toLowerCase();
+        return (
+          mId.endsWith('-cup-sc') ||
+          mId.includes('-cup-sc') ||
+          mId.endsWith('-cup-esc') ||
+          title.includes('supercup') ||
+          title.includes('super cup') ||
+          title.includes('supercopa') ||
+          title.includes('superpuchar') ||
+          title.includes('szuperkupa') ||
+          title.includes('supertaça') ||
+          title.includes('supertaca') ||
+          title.includes('superkup') ||
+          title.includes('superpokal') ||
+          title.includes('supercoppa') ||
+          title.includes('supercupa') ||
+          title.includes('supercupen') ||
+          title.includes('trophée des champions') ||
+          title.includes('trophee des champions') ||
+          title.includes('meistarakeppni')
+        );
+      };
       const isDomesticCupMovement = (m: any) => {
         if (!m || m.type !== 'intl_cup') return false;
         if (m.year !== undefined && m.year !== h.year) return false;
+        if (isSupercupMov(m)) return false;
         const title = (m.cupTitle || '').toLowerCase();
         if (title.includes('super globe') || title.includes('champions league') || title.includes('european league') || title.includes('european cup') || title.includes('amateur') || title.includes('regional')) {
           return false;
@@ -531,6 +592,17 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
           details: `${domCupName} Winner`,
         });
       }
+      if (t.sc) {
+        const scName = getDomesticSupercupInfo(histCountry).name || 'Supercup';
+        list.push({
+          year: h.year,
+          clubName: h.clubName,
+          competition: scName,
+          icon: '⚡',
+          badgeColor: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+          details: `${scName} Winner`,
+        });
+      }
       if (t.reg) {
         const matchedRegRun = (state.cupRunResults || []).find(r =>
           r.won && r.year === h.year && (r.id === 'reg_cup' || (r.nameEn || '').toLowerCase().includes('regional') || (r.nameEn || '').toLowerCase().includes('amateur'))
@@ -547,8 +619,20 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
       }
     });
 
+    if ((state.pendingSupercupTrophies?.sc || 0) > 0 && state.club) {
+      const scName = getDomesticSupercupInfo(state.club.country || countryCode).name || 'Supercup';
+      list.push({
+        year: state.year,
+        clubName: state.club.name,
+        competition: scName,
+        icon: '⚡',
+        badgeColor: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+        details: `${scName} Winner`,
+      });
+    }
+
     return list.sort((a, b) => b.year - a.year);
-  }, [trophyScope, currentClubHistory, allHistory, countryCode, state.universeMovements, state.cupRunResults, state.worldClubs]);
+  }, [trophyScope, currentClubHistory, allHistory, countryCode, state.universeMovements, state.cupRunResults, state.worldClubs, state.pendingSupercupTrophies, state.year, state.club]);
 
   // Aggregate league history stats based on active scope
   const historyStats = useMemo(() => {
@@ -1621,6 +1705,19 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                     <span className="text-lg font-semibold text-white tabular-nums">{activeTrophies.dfb}</span>
                     <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mt-0.5">
                       National Cup
+                    </span>
+                  </div>
+
+                  {/* Domestic Supercup */}
+                  <div className={`p-3.5 rounded-xl border flex flex-col items-center text-center transition ${
+                    activeTrophies.sc > 0
+                      ? 'bg-amber-500/[0.06] border-amber-500/20'
+                      : 'bg-[#14151e] border-white/[0.04] opacity-60'
+                  }`}>
+                    <span className="text-2xl mb-1">⚡</span>
+                    <span className="text-lg font-semibold text-white tabular-nums">{activeTrophies.sc}</span>
+                    <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mt-0.5">
+                      Supercup
                     </span>
                   </div>
 

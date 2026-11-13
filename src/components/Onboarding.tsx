@@ -263,6 +263,11 @@ export const Onboarding: React.FC<OnboardingProps> = ({
       setTimeout(() => nameInputRef.current?.focus(), 100);
       return;
     }
+    if (!startYear || startYear < 1950) {
+      setStartYear(1950);
+    } else if (startYear > 2030) {
+      setStartYear(2030);
+    }
     setNameError(false);
     setStep(3);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -337,16 +342,18 @@ export const Onboarding: React.FC<OnboardingProps> = ({
 
   const activeRoadmap = useMemo(() => {
     if (!selectedClub) return null;
-    return generateBoardRoadmap(selectedClub, startYear, []);
+    const safeStartYear = Math.max(1950, Math.min(2030, startYear || 2026));
+    return generateBoardRoadmap(selectedClub, safeStartYear, []);
   }, [selectedClub, startYear]);
 
   const handleFinalStartGame = () => {
     if (!selectedClub) return;
+    const safeStartYear = Math.max(1950, Math.min(2030, startYear || 2026));
     const clubCountry = selectedClub.country || (nationality === 'ALL' ? 'GER' : nationality);
     onStartGame({
       club: selectedClub,
       managerName: managerName.trim().toUpperCase(),
-      startYear,
+      startYear: safeStartYear,
       tactic,
       nationality: clubCountry,
       mode,
@@ -451,7 +458,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* STEP 1: CAREER MODE SELECTION (PREMIUM BROADCAST SETUP)                    */}
+      {/* STEP 1: CAREER MODE SELECTION                                              */}
       {/* ========================================================================= */}
       {step === 1 && (
         <motion.div
@@ -462,8 +469,8 @@ export const Onboarding: React.FC<OnboardingProps> = ({
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="relative w-full max-w-lg md:max-w-3xl mx-auto flex flex-col items-center pt-2 pb-6 font-sans text-neutral-200"
         >
-          {/* Subtle Ambient Radial Lighting */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[500px] h-[350px] bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.035),_transparent_70%)] rounded-full blur-2xl pointer-events-none -z-10" />
+          {/* Subtle Ambient Radial Glow */}
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 w-full max-w-[520px] h-[280px] bg-[radial-gradient(ellipse_at_center,_rgba(255,255,255,0.04),_transparent_70%)] rounded-full blur-2xl pointer-events-none -z-10" />
 
           {/* Top Update Pill: v 2.3 Multi-Year Sponsors, UI Overhaul & Logic Polish */}
           <button
@@ -472,9 +479,9 @@ export const Onboarding: React.FC<OnboardingProps> = ({
               setModModalTab('changelog');
               setShowModModal(true);
             }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 hover:border-white/20 text-xs text-zinc-300 transition mx-auto mb-4 cursor-pointer active:scale-95 shadow-sm"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.03] border border-white/[0.08] hover:border-white/[0.16] text-xs text-zinc-300 transition mx-auto mb-4 cursor-pointer active:scale-95"
           >
-            <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-zinc-200 border border-white/15 font-semibold text-[10px] tracking-tight">
+            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold text-[10px] tracking-tight">
               v 2.3
             </span>
             <span className="text-zinc-300 font-medium text-xs">
@@ -488,84 +495,72 @@ export const Onboarding: React.FC<OnboardingProps> = ({
             Handball Manager Sim
           </h1>
           <p className="text-zinc-400 text-xs sm:text-sm font-normal text-center max-w-sm sm:max-w-md mx-auto leading-relaxed mb-6 px-2">
-            Lead a club over 35 seasons. Hire coaches, scout talent, and build a dynasty.
+            Lead a club over 35 seasons. Master tactics, scout talent, and build a dynasty.
           </p>
 
-          {/* Mode Selection Cards (Monochrome / Black & White) */}
+          {/* Mode Selection Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-5 w-full max-w-sm md:max-w-2xl mx-auto mb-6">
             {/* Card 1: Pick Any Club */}
             <div
               onClick={() => setMode('standard')}
-              className={`rounded-2xl p-5 sm:p-6 relative transition-all duration-200 cursor-pointer flex flex-col items-center text-center justify-between bg-[#14151e] active:scale-[0.99] ${
+              className={`rounded-2xl p-5 sm:p-6 relative overflow-hidden transition-all duration-200 cursor-pointer flex flex-col items-center text-center justify-between active:scale-[0.99] ${
                 mode === 'standard'
-                  ? 'border border-white/30 bg-white/[0.04] shadow-[0_12px_32px_rgba(0,0,0,0.6)]'
-                  : 'border border-white/[0.05] hover:border-white/15'
+                  ? 'border border-white/25 bg-white/[0.04] shadow-[0_12px_32px_rgba(0,0,0,0.5)]'
+                  : 'border border-white/[0.06] bg-[#14151e] hover:border-white/[0.14]'
               }`}
             >
               {mode === 'standard' && (
-                <div className="absolute top-3.5 right-3.5 bg-white/10 text-white border border-white/20 text-[10px] font-medium tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1.5 shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                <div className="absolute top-3.5 right-3.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 text-[10px] font-semibold tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   <span>SELECTED</span>
                 </div>
               )}
               <div className="flex flex-col items-center">
-                <div
-                  className={`w-12 h-12 rounded-xl border flex items-center justify-center mb-3 shadow-sm transition-colors ${
-                    mode === 'standard'
-                      ? 'bg-white/10 border-white/20 text-white'
-                      : 'bg-white/[0.03] border-white/[0.06] text-zinc-400'
-                  }`}
-                >
-                  <i className="fas fa-bars-staggered text-base" />
+                <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/[0.08] text-zinc-200 flex items-center justify-center mb-3">
+                  <i className="fas fa-shield-halved text-sm" />
                 </div>
                 <h2 className="text-base sm:text-lg font-semibold text-white tracking-tight mb-1">
                   Pick Any Club
                 </h2>
                 <p className="text-xs text-zinc-400 font-normal leading-relaxed max-w-xs mb-3">
-                  Choose any of the {clubsDb.length.toLocaleString()}+ clubs worldwide.
+                  Take command of any of the {clubsDb.length.toLocaleString()}+ clubs immediately.
                 </p>
               </div>
               <div className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-400 font-medium pt-1">
                 <i className="fas fa-globe text-zinc-500 text-xs" />
-                <span className="tabular-nums">{clubsDb.length.toLocaleString()} clubs worldwide</span>
+                <span className="tabular-nums">{clubsDb.length.toLocaleString()} clubs across Europe &amp; World</span>
               </div>
             </div>
 
             {/* Card 2: Realistic Career */}
             <div
               onClick={() => setMode('realistic')}
-              className={`rounded-2xl p-5 sm:p-6 relative transition-all duration-200 cursor-pointer flex flex-col items-center text-center justify-between bg-[#14151e] active:scale-[0.99] ${
+              className={`rounded-2xl p-5 sm:p-6 relative overflow-hidden transition-all duration-200 cursor-pointer flex flex-col items-center text-center justify-between active:scale-[0.99] ${
                 mode === 'realistic'
-                  ? 'border border-white/30 bg-white/[0.04] shadow-[0_12px_32px_rgba(0,0,0,0.6)]'
-                  : 'border border-white/[0.05] hover:border-white/15'
+                  ? 'border border-white/25 bg-white/[0.04] shadow-[0_12px_32px_rgba(0,0,0,0.5)]'
+                  : 'border border-white/[0.06] bg-[#14151e] hover:border-white/[0.14]'
               }`}
             >
               {mode === 'realistic' && (
-                <div className="absolute top-3.5 right-3.5 bg-white/10 text-white border border-white/20 text-[10px] font-medium tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1.5 shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                <div className="absolute top-3.5 right-3.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 text-[10px] font-semibold tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   <span>SELECTED</span>
                 </div>
               )}
               <div className="flex flex-col items-center">
-                <div
-                  className={`w-12 h-12 rounded-xl border flex items-center justify-center mb-3 shadow-sm transition-colors ${
-                    mode === 'realistic'
-                      ? 'bg-white/10 border-white/20 text-white'
-                      : 'bg-white/[0.03] border-white/[0.06] text-zinc-400'
-                  }`}
-                >
-                  <i className="fas fa-bolt text-base" />
+                <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/[0.08] text-zinc-200 flex items-center justify-center mb-3">
+                  <i className="fas fa-bolt text-sm" />
                 </div>
                 <h2 className="text-base sm:text-lg font-semibold text-white tracking-tight mb-1">
                   Realistic Career
                 </h2>
                 <p className="text-xs text-zinc-400 font-normal leading-relaxed max-w-xs mb-3">
-                  Authentic job offers & board pressure.
+                  Start in lower divisions with authentic job offers &amp; board pressure.
                 </p>
               </div>
               <div className="flex items-center justify-center gap-1.5 text-[11px] text-zinc-400 font-medium pt-1">
                 <i className="fas fa-briefcase text-zinc-500 text-xs" />
-                <span>Grassroots offers</span>
+                <span>Lower-tier &amp; grassroots offers</span>
               </div>
             </div>
           </div>
@@ -575,17 +570,18 @@ export const Onboarding: React.FC<OnboardingProps> = ({
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="w-full max-w-[280px] py-3.5 px-8 rounded-full bg-white hover:bg-zinc-100 text-black font-semibold text-sm sm:text-base shadow-[0_8px_24px_rgba(255,255,255,0.18)] transition-all duration-200 active:scale-95 cursor-pointer flex items-center justify-center"
+              className="w-full max-w-[260px] py-3 px-8 rounded-full bg-white hover:bg-zinc-200 text-black font-semibold text-sm shadow-[0_4px_20px_rgba(255,255,255,0.12)] transition-all duration-200 active:scale-95 cursor-pointer flex items-center justify-center gap-2"
             >
-              Continue →
+              <span>Get Started</span>
+              <span>→</span>
             </button>
 
             <button
               type="button"
               onClick={onShowLeaderboard}
-              className="flex items-center justify-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition duration-150 cursor-pointer mt-3"
+              className="flex items-center justify-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-white transition duration-150 cursor-pointer mt-3.5"
             >
-              <i className="fas fa-trophy text-[#eab308] text-xs" />
+              <i className="fas fa-trophy text-amber-400 text-xs" />
               <span>View Global Leaderboard</span>
             </button>
           </div>
@@ -688,14 +684,30 @@ export const Onboarding: React.FC<OnboardingProps> = ({
                     <div className="flex items-center justify-between">
                       <input
                         type="number"
-                        min={1990}
+                        min={1950}
                         max={2030}
-                        value={startYear}
-                        onChange={(e) => setStartYear(parseInt(e.target.value) || 2026)}
+                        value={startYear || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setStartYear(0);
+                            return;
+                          }
+                          const raw = parseInt(val, 10);
+                          if (!isNaN(raw)) {
+                            setStartYear(raw);
+                          }
+                        }}
+                        onBlur={() => {
+                          setStartYear((prev) => Math.max(1950, Math.min(2030, prev || 2026)));
+                        }}
                         className="bg-transparent w-full text-white font-semibold text-base sm:text-lg outline-none tabular-nums"
                       />
                       <span className="text-xs text-zinc-500 font-medium shrink-0">
-                        Season {startYear}/{(startYear + 1).toString().slice(-2)}
+                        {(() => {
+                          const dispYear = Math.max(1950, Math.min(2030, startYear || 2026));
+                          return `Season ${dispYear}/${(dispYear + 1).toString().slice(-2)}`;
+                        })()}
                       </span>
                     </div>
                   </div>
@@ -850,13 +862,13 @@ export const Onboarding: React.FC<OnboardingProps> = ({
           <div className="text-center relative z-10 pb-6 border-b border-white/[0.04] mb-6">
             <div className="inline-flex items-center gap-1.5 bg-white/[0.03] border border-white/[0.06] text-purple-400 text-[10px] tracking-widest uppercase px-3 py-1 rounded-full mb-2">
               <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-              <span>Step 03 · Tactical Doctrine</span>
+              <span>Step 03 · Tactical Philosophy</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight uppercase text-white">
               Tactical Philosophy & Vision
             </h2>
             <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed font-normal max-w-lg mx-auto mt-1">
-              Choose the tactical identity you will instill in your squad. Affects scoring cadence, defensive grit, and match engine outcomes.
+              Select your tactical system and playing style.
             </p>
           </div>
 
@@ -875,17 +887,17 @@ export const Onboarding: React.FC<OnboardingProps> = ({
                 <div
                   key={`tactic-${tacKey}`}
                   onClick={() => setTactic(tacKey)}
-                  className={`p-4 sm:p-5 rounded-xl flex items-start gap-4 cursor-pointer transition-all duration-150 border text-left relative ${
+                  className={`p-4 sm:p-5 rounded-xl flex items-center gap-4 cursor-pointer transition-all duration-150 border text-left relative ${
                     isSelected
-                      ? 'border-purple-500/30 bg-purple-500/[0.04] shadow-[0_4px_20px_rgba(168,85,247,0.08)]'
-                      : 'border-white/[0.04] bg-[#10121a] hover:border-white/10 hover:bg-white/[0.02]'
+                      ? 'border-purple-500/35 bg-purple-500/[0.05] shadow-[0_4px_20px_rgba(168,85,247,0.08)]'
+                      : 'border-white/[0.05] bg-[#10121a] hover:border-white/10 hover:bg-white/[0.02]'
                   }`}
                 >
-                  {/* Tactic Icon */}
+                  {/* Tactic Icon Box */}
                   <div
-                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 ${
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${
                       isSelected
-                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-300 shadow-sm'
+                        ? 'bg-purple-500/15 border-purple-500/30 text-purple-300'
                         : 'bg-white/[0.03] border-white/[0.06] text-zinc-400'
                     }`}
                   >
@@ -927,7 +939,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
 
                   {/* Radio / Selection Indicator */}
                   <div
-                    className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 mt-1 transition-colors ${
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
                       isSelected
                         ? 'border-purple-400/50 bg-purple-500/20 text-purple-300 shadow-sm'
                         : 'border-white/20 bg-black/40'
@@ -1298,6 +1310,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
         const homeArena = getClubHomeArena(selectedClub);
         const stadiumCap = selectedClub.stadium || (leagueInfo ? leagueInfo.stadBase : 5000);
         const startingBudget = getStartingBudget(selectedClub.tier, clubCountry);
+        const safeStartYear = Math.max(1950, Math.min(2030, startYear || 2026));
 
         return (
           <motion.div
@@ -1330,13 +1343,13 @@ export const Onboarding: React.FC<OnboardingProps> = ({
                   />
                 </div>
 
-                <div className="flex-1 min-w-0">
+                <div className="w-full flex-1 min-w-0">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-400 flex items-center gap-1.5 mb-1">
                     <i className="fas fa-signature text-xs" />
                     <span>Official Board Appointment & Charter</span>
                   </div>
 
-                  <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight truncate">
+                  <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold text-white tracking-tight leading-snug break-words">
                     Welcome to {selectedClub.name}, Coach {managerName.trim().toUpperCase() || 'COACH'}
                   </h1>
 
@@ -1350,7 +1363,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
                     </span>
                     <span className="text-zinc-600">·</span>
                     <span>
-                      Era: <span className="text-zinc-300 font-medium tabular-nums">{startYear}</span>
+                      Era: <span className="text-zinc-300 font-medium tabular-nums">{safeStartYear}</span>
                     </span>
                   </div>
                 </div>
@@ -1360,7 +1373,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
               <div className="relative z-10 pt-5 text-xs sm:text-sm text-zinc-300/90 leading-relaxed space-y-2">
                 <p>
                   The Supervisory Board and Club Executive Committee have formally ratified your appointment as Head Coach ahead of the{' '}
-                  <span className="text-white font-medium tabular-nums">{startYear}</span> campaign. You have been granted complete executive stewardship over squad recruitment, tactical doctrine, and long-term infrastructure investment.
+                  <span className="text-white font-medium tabular-nums">{safeStartYear}</span> campaign. You have been granted complete executive stewardship over squad recruitment, tactical doctrine, and long-term infrastructure investment.
                 </p>
                 {activeRoadmap?.narrativeEn && (
                   <p className="text-zinc-400 italic text-xs border-l-2 border-amber-500/40 pl-3 py-1 mt-2">
@@ -1405,7 +1418,7 @@ export const Onboarding: React.FC<OnboardingProps> = ({
                 <div className="mt-2 flex items-baseline gap-1.5">
                   <span className="text-lg font-semibold text-white tabular-nums">{activeRoadmap?.horizonYears || 3}</span>
                   <span className="text-[10px] text-zinc-500 uppercase font-medium tabular-nums">
-                    Seasons ({startYear}–{startYear + (activeRoadmap?.horizonYears || 3)})
+                    Seasons ({safeStartYear}–{safeStartYear + (activeRoadmap?.horizonYears || 3)})
                   </span>
                 </div>
               </div>

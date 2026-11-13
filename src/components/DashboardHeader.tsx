@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getContinentalCupNames } from '../utils/regionHelpers';
 import { GameState, Language, UniverseMovement } from '../types';
 import {
-  COUNTRIES,
   getCountryFlag,
   getLeagueInfo,
   getDynamicLeagueAvgOvr,
   getOvrTierConfig,
   getDomesticCupInfo,
   getDomesticSupercupInfo,
-  getEuropeanSupercupInfo,
-  getMonogramHex,
   getClubHistoricContext,
   formatMoney,
   calculateClubFinancials,
@@ -18,8 +14,8 @@ import {
 } from '../data/gameConstants';
 import { CountUp } from './CountUp';
 import { ClubLogo } from './ClubLogo';
-import { t as tr } from '../data/translations';
 import { useGameStore } from '../store/useGameStore';
+import { openFeedbackModal } from '../utils/crashReporter';
 
 interface DashboardHeaderProps {
   state: GameState;
@@ -54,15 +50,17 @@ const CircularRing: React.FC<{
   size?: number;
   strokeWidth?: number;
   color?: string;
+  trackColor?: string;
   glowColor?: string;
   children?: React.ReactNode;
 }> = ({
   value,
   max = 100,
-  size = 110,
+  size = 96,
   strokeWidth = 8,
   color = '#10b981',
-  glowColor = 'rgba(16, 185, 129, 0.45)',
+  trackColor = 'rgba(255, 255, 255, 0.07)',
+  glowColor,
   children,
 }) => {
   const radius = (size - strokeWidth) / 2;
@@ -72,12 +70,18 @@ const CircularRing: React.FC<{
 
   return (
     <div className="relative flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rotate-[-90deg]">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="rotate-[-90deg]"
+        style={glowColor ? { filter: `drop-shadow(0 0 8px ${glowColor})` } : undefined}
+      >
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255, 255, 255, 0.08)"
+          stroke={trackColor}
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -92,7 +96,6 @@ const CircularRing: React.FC<{
           strokeLinecap="round"
           fill="none"
           style={{
-            filter: `drop-shadow(0 0 6px ${glowColor})`,
             transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s ease',
           }}
         />
@@ -107,10 +110,8 @@ const CircularRing: React.FC<{
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   state: propState,
   lang,
-  financials: propFinancials,
   onShowTable,
   onShowLedger,
-  onShowYouth,
   onOpenPhilosophyModal,
   onOpenSkillsModal,
   onOpenCustomization,
@@ -119,10 +120,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onShowImpact,
   onShowCareerHistory,
   onShowLeaderboard,
-  onShowNewBuild,
   onOpenMoraleModal,
   onOpenOvrModal,
-  onOpenShieldsModal,
   onCoachMarket,
   onOpenCoachDossier,
 }) => {
@@ -134,20 +133,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const historicContext = getClubHistoricContext(state.club.name, state.club.tier, false, state.club.country || 'GER', state.club);
 
   const safeBaseOvr = typeof state.club.baseOvr !== 'number' || Number.isNaN(state.club.baseOvr) ? 60 : state.club.baseOvr;
-  const currentSeason = state.year;
-  const changesThisSeason = (state.ovrHistory || [])
-    .filter(h => h.season === currentSeason)
-    .reduce((sum, h) => sum + h.change, 0);
-
-  const prevOvrRaw = state.lastOvr !== undefined ? state.lastOvr : state.history && state.history.length > 0 ? state.history[state.history.length - 1].ovr : safeBaseOvr;
-  const previousOvr = typeof prevOvrRaw !== 'number' || Number.isNaN(prevOvrRaw) ? safeBaseOvr : prevOvrRaw;
-  
-  // Honor changesThisSeason from ovrHistory if present, matching the OvrModal breakdown
-  const hasSeasonOvrLogs = (state.ovrHistory || []).some(h => h.season === currentSeason);
-  const ovrDiff = hasSeasonOvrLogs ? changesThisSeason : (safeBaseOvr - previousOvr);
-  const ovrColorClass = ovrDiff > 0 ? 'text-[#10b981]' : ovrDiff < 0 ? 'text-[#f43f5e]' : 'text-zinc-400';
-  const ovrIcon = ovrDiff > 0 ? 'fa-arrow-up' : ovrDiff < 0 ? 'fa-arrow-down' : 'fa-minus';
-
   const leagueAvgOvr = getDynamicLeagueAvgOvr(state);
   const impactVal = Math.min(100, Math.max(0, Math.round(Number(state.clubImpactScore !== undefined ? state.clubImpactScore : 50))));
   const impactScore = impactVal;
@@ -155,15 +140,32 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const bankruptcyRisk = (state.seasonsInDebt || 0) > 0 || (state.budget || 0) < 0;
   const isStructuredDebt = bankruptcyRisk && financials.net >= 0;
 
-  const coachDisplayName = state.managerName || state.currentCoach?.name || 'Head Coach';
-
+  const directorDisplayName = state.managerName || 'DIRECTOR';
+  const coachDisplayName =
+    state.currentCoach?.name ||
+    (state.headCoachArchetype && state.headCoachArchetype !== 'Standard'
+      ? `${state.managerName || 'Head Coach'} · ${state.headCoachArchetype}`
+      : state.managerName || 'Head Coach');
   const currentClubHistory = (state.history || []).filter(
     h => (h.clubName && state.club?.name && h.clubName.trim().toLowerCase() === state.club.name.trim().toLowerCase()) ||
          (state.club?.id !== undefined && h.clubId !== undefined && (String(h.clubId) === String(state.club.id) || Number(h.clubId) === Number(state.club.id))) ||
          (!h.clubName && (state.history || []).length === 1)
   );
 
-  // Gather all recorded universe movements across global state and individual season histories
+  const activeTacticKey = state.tactic || 'Total Handball';
+  let consecutiveTacticSeasons = 0;
+  for (let i = currentClubHistory.length - 1; i >= 0; i--) {
+    if ((currentClubHistory[i] as any).tactic === activeTacticKey) {
+      consecutiveTacticSeasons++;
+    } else {
+      break;
+    }
+  }
+  const recentTacticSeasons = currentClubHistory.slice(-4).filter((h: any) => h.tactic === activeTacticKey).length;
+  const computedTacticTenure = Math.max(consecutiveTacticSeasons + 1, recentTacticSeasons + 1);
+  const tacticTenure = (state as any).tacticTenure || computedTacticTenure;
+  const isTacticStale = Boolean(tacticTenure >= 3 || (state.staleTactic && state.staleTactic === activeTacticKey));
+
   const allRecordedMovements: UniverseMovement[] = [];
   const seenMovementIds = new Set<string>();
 
@@ -198,7 +200,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     return nameMatch || idMatch;
   };
 
-  // Check universe movements for any cup titles won by current club that might not be recorded in h.trophiesThisYear
   const universeCupsThisClub = allRecordedMovements.filter(
     m => isCurrentClubMovement(m) && m.type === 'intl_cup'
   );
@@ -210,7 +211,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   let extraEcl = 0;
   let extraCwc = 0;
   let extraSc = 0;
-  let extraEsc = 0;
 
   const countedCupYears = {
     cwc: new Set<number>(),
@@ -233,7 +233,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     if (h.trophiesThisYear?.reg) countedCupYears.reg.add(h.year);
   });
 
-  // Also synchronize directly won cup runs from store / props
   const allCupRuns = [...(state.cupRunResults || []), ...(propState?.cupRunResults || [])];
   allCupRuns.forEach(r => {
     if (r.won) {
@@ -350,20 +349,17 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const regCupTitle = 'Regional Cup';
 
   const earnedTrophyBadges = [
-    { key: 'cwc', label: 'Super Globe', count: clubTrophies.cwc },
-    { key: 'cl', label: 'Champions League', count: clubTrophies.cl },
-    { key: 'el', label: 'European League', count: clubTrophies.el },
-    { key: 'ecl', label: 'European Cup', count: clubTrophies.ecl },
-    { key: 'bl', label: 'League Champions', count: clubTrophies.bl },
-    { key: 'dfb', label: domCupTitle, count: clubTrophies.dfb },
-    { key: 'sc', label: domSupercupTitle, count: clubTrophies.sc },
-    { key: 'reg', label: regCupTitle, count: clubTrophies.reg },
-    { key: 'lower', label: 'Lower Div', count: clubTrophies.lower },
+    { key: 'cwc', label: 'Club World Cup', count: clubTrophies.cwc, icon: 'fa-globe', theme: 'amber' },
+    { key: 'cl', label: 'Euro Champions Cup', count: clubTrophies.cl, icon: 'fa-star', theme: 'amber' },
+    { key: 'el', label: 'Euro Cup', count: clubTrophies.el, icon: 'fa-trophy', theme: 'orange' },
+    { key: 'ecl', label: 'European Cup', count: clubTrophies.ecl, icon: 'fa-medal', theme: 'orange' },
+    { key: 'bl', label: leagueName, count: clubTrophies.bl, icon: 'fa-trophy', theme: 'amber' },
+    { key: 'dfb', label: domCupTitle, count: clubTrophies.dfb, icon: 'fa-award', theme: 'slate' },
+    { key: 'sc', label: domSupercupTitle, count: clubTrophies.sc, icon: 'fa-bolt', theme: 'amber' },
+    { key: 'reg', label: regCupTitle, count: clubTrophies.reg, icon: 'fa-shield-halved', theme: 'slate' },
+    { key: 'lower', label: 'Lower Div', count: clubTrophies.lower, icon: 'fa-medal', theme: 'slate' },
   ].filter(t => t.count > 0);
 
-  const topTrophy = earnedTrophyBadges[0] || null;
-
-  // Interactive OVR dynamic incoming/outgoing changes & radiant glow
   const [floatingDelta, setFloatingDelta] = useState<number | null>(null);
   const [isOvrPulsing, setIsOvrPulsing] = useState(false);
   const prevOvrRef = useRef(safeBaseOvr);
@@ -384,41 +380,54 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     }
   }, [safeBaseOvr]);
 
-  const clubColor = state.club?.color || '#3b82f6';
   const displayOvr = safeBaseOvr;
   const ovrTierConfig = getOvrTierConfig(safeBaseOvr, leagueAvgOvr);
-  const ovrDelta = safeBaseOvr - leagueAvgOvr;
-  const ovrRingColor = ovrTierConfig.hex;
-  const ovrRingGlow = ovrTierConfig.ringGlow;
-  const ovrCardBorder = isOvrPulsing
-    ? 'border-emerald-400/60 shadow-[0_0_24px_rgba(16,185,129,0.35)]'
-    : ovrTierConfig.cardBorder;
-  const ovrBadgeColor = ovrTierConfig.valueText;
-  const ovrDeltaText = ovrDelta > 0
-    ? `+${ovrDelta} vs Lg`
-    : ovrDelta === 0
-    ? '= Lg Benchmark'
-    : `${ovrDelta} vs Lg`;
 
-  // Reputation & Leaderboard metrics
-  const repVal = state.club.rep || 50;
+  // Match the bright emerald OVR ring from the reference design (rose when in relegation danger)
+  const ovrRingStroke = ovrTierConfig.tier === 'relegation' ? '#f43f5e' : '#10b981';
+  const ovrRingGlow = ovrTierConfig.tier === 'relegation' ? 'rgba(244, 63, 94, 0.3)' : 'rgba(16, 185, 129, 0.3)';
+
+  const repVal = Math.min(100, Math.max(1, Math.round(state.reputation ?? state.club.rep ?? 50)));
   const liveScore = calculateLiveScore(state);
 
+  const innerCardClass =
+    'bg-[#161922] border border-white/[0.06] hover:border-white/[0.12] rounded-2xl transition-all duration-200';
+
   return (
-    <div className="flex flex-col gap-3.5 sm:gap-4 mb-6 w-full">
+    <div className="flex flex-col gap-3.5 w-full">
       {/* ========================================================================= */}
-      {/* 1. STATUS & WARNING BANNER (Shown on real debt / insolvency warnings)      */}
+      {/* 0. TOP FEEDBACK STRIP                                                     */}
+      {/* ========================================================================= */}
+      <div className="w-full bg-[#11131a] border border-white/[0.06] rounded-xl px-3.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 text-xs text-zinc-400">
+        <div className="flex items-center gap-2 min-w-0">
+          <i className="fas fa-comment-dots text-sky-400 text-xs shrink-0" />
+          <span className="leading-relaxed">
+            Help shape this game — report{' '}
+            <button
+              type="button"
+              onClick={() => openFeedbackModal()}
+              className="text-sky-400 hover:text-sky-300 underline underline-offset-2 font-medium cursor-pointer transition-colors"
+            >
+              feedback, wishes &amp; crashes
+            </button>
+            . Feedback is implemented weekly.
+          </span>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 1. INSOLVENCY WARNING BANNER (Shown on real debt / insolvency warnings)   */}
       {/* ========================================================================= */}
       {bankruptcyRisk && (
-        <div className="w-full bg-[#10121a]/90 border border-white/[0.06] backdrop-blur-md rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-zinc-300">
-          <div className="flex items-start sm:items-center gap-3 min-w-0">
-            <span className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0 text-xs text-zinc-300 mt-0.5 sm:mt-0">
+        <div className="w-full bg-[#141720] border border-rose-500/30 rounded-2xl px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-zinc-300">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <span className="w-6 h-6 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0 text-xs text-rose-400 mt-0.5 sm:mt-0">
               <i className={`fas ${isStructuredDebt ? 'fa-shield-halved' : 'fa-triangle-exclamation'}`} />
             </span>
             <span className="font-normal leading-snug">
-              Insolvency Risk (Year {Math.min(3, state.seasonsInDebt || 1)}/3): -€{Math.abs((state.budget || 0) / 1000000).toFixed(2)}M deficit. 3 consecutive years triggers sack.
+              Insolvency Risk (Year {Math.min(3, state.seasonsInDebt || 1)}/3): -€{Math.abs((state.budget || 0) / 1000000).toFixed(2)}M deficit.
               {isStructuredDebt && (
-                <span className="ml-2 font-medium text-zinc-300 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded text-[10px]">
+                <span className="ml-2 font-mono text-zinc-300 bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 rounded text-[10px]">
                   Structured
                 </span>
               )}
@@ -426,375 +435,373 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </div>
           <button
             onClick={onShowLedger}
-            className="text-xs font-medium text-zinc-300 hover:text-white transition sm:ml-2 shrink-0 cursor-pointer underline underline-offset-4 self-end sm:self-auto"
+            className="text-xs font-medium text-zinc-200 hover:text-white transition sm:ml-2 shrink-0 cursor-pointer flex items-center gap-1 self-end sm:self-auto"
           >
-            Audit Treasury →
+            <span>Audit Treasury</span>
+            <i className="fas fa-arrow-right text-[10px]" />
           </button>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* 2. TOP BENTO ROW: CLUB IDENTITY (2-COL) + OVR RING + IMPACT               */}
+      {/* 2. OUTER EXECUTIVE CONTAINER (WRAPS ROW 1 + ROW 2 LIKE REFERENCE)         */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 w-full">
-        {/* CARD 1: CLUB IDENTITY & DOSSIER (SPANS 2 COLS ON ALL VIEWPORTS) */}
-        <div className="col-span-2 lg:col-span-2 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between transition-all duration-200">
-          <div className="relative z-10 flex flex-col">
-            {/* Top Row: League Navigation Pill Button & Board Expectation */}
-            <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap">
+      <div className="w-full bg-[#12141c] border border-white/[0.06] rounded-[28px] p-3.5 sm:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.55)] flex flex-col gap-3.5 sm:gap-4">
+        {/* TOP BENTO ROW: CLUB IDENTITY (6-COL) + OVR (3-COL) + IMPACT (3-COL) */}
+        <div className="grid grid-cols-2 lg:grid-cols-12 gap-3.5 sm:gap-4 w-full">
+          {/* CARD 1: CLUB IDENTITY */}
+          <div className={`col-span-2 lg:col-span-6 w-full ${innerCardClass} p-4 sm:p-5 flex flex-col justify-between`}>
+            <div className="flex flex-col gap-3">
+              {/* Top Pill: League Standings Trigger */}
+              <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={onShowTable}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-zinc-300 hover:text-white text-xs font-medium uppercase tracking-wider transition active:scale-95 cursor-pointer group"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 hover:text-sky-300 text-[10px] font-bold uppercase tracking-wider transition active:scale-95 cursor-pointer group"
                   title="View League Standings"
                 >
-                  <i className="fas fa-list-ol text-[11px] group-hover:scale-110 transition-transform" />
+                  <i className="fas fa-list-ul text-[9px]" />
                   <span>{leagueName}</span>
-                  <i className="fas fa-chevron-right text-[9px] opacity-70 group-hover:translate-x-0.5 transition-transform" />
+                  <i className="fas fa-chevron-right text-[8px] opacity-80 group-hover:translate-x-0.5 transition-transform" />
                 </button>
 
-                {/* Board Expectation with Player Taunt when Trophy Drought exceeds 4 seasons */}
-                {state.club.tier === 1 && (state.trophyDrought || 0) > 4 ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.03] border border-white/[0.06] text-zinc-300 text-[11px] font-medium">
+                {state.club.tier === 1 && (state.trophyDrought || 0) > 4 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/25 text-rose-300 text-[10px] font-semibold">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                    <span>{state.trophyDrought}-Year Trophy Drought: The fanbase is losing patience.</span>
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-zinc-400 font-normal px-2 py-0.5 rounded-full bg-white/[0.03] border border-white/[0.06] hidden sm:inline-flex items-center gap-1">
-                    <span className="text-zinc-500">Board:</span>
-                    <span>{state.boardExpectation || `Top ${state.boardTargetPos || 10} Finish`}</span>
+                    <span>{state.trophyDrought}yr Drought</span>
                   </span>
                 )}
               </div>
 
-              {/* Action Shield icon button on the right */}
-              <button
-                type="button"
-                onClick={onOpenCustomization}
-                className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
-                title="Customize club"
-                aria-label="Customize club"
-              >
-                <i className="fas fa-shield-halved text-xs" />
-              </button>
-            </div>
+              {/* Club Logo + Bold Large Name + Flag */}
+              <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 mt-0.5">
+                <div
+                  onClick={onOpenCustomization}
+                  className="relative cursor-pointer group shrink-0"
+                  title="Customize club"
+                >
+                  {state.club && (
+                    <ClubLogo
+                      club={state.club}
+                      clubId={state.club.id}
+                      name={state.club.name}
+                      color={state.club.color}
+                      color2={state.club.color2}
+                      logo={state.club.logo}
+                      fallbackLogo={state.club.fallbackLogo}
+                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-contain transition-transform duration-200 group-hover:scale-105"
+                    />
+                  )}
+                </div>
 
-            {/* Crest + Title */}
-            <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
-              <div
-                onClick={onOpenCustomization}
-                className="relative cursor-pointer group shrink-0"
-                title="Customize club"
-              >
-                {state.club && (
-                  <ClubLogo
-                    club={state.club}
-                    clubId={state.club.id}
-                    name={state.club.name}
-                    color={state.club.color}
-                    color2={state.club.color2}
-                    logo={state.club.logo}
-                    fallbackLogo={state.club.fallbackLogo}
-                    className="w-13 h-13 sm:w-15 sm:h-15 rounded-2xl border border-white/10 group-hover:border-white/30 transition-all duration-200"
-                  />
-                )}
-              </div>
-
-              <div className="flex flex-col min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <h1
                     onClick={onOpenClubProfile || onOpenCustomization}
-                    className="text-2xl sm:text-3xl font-semibold text-white tracking-tight leading-tight truncate cursor-pointer hover:text-zinc-300 transition duration-200"
+                    className="text-2xl sm:text-3xl md:text-[32px] font-bold text-white tracking-tight leading-normal py-0.5 truncate cursor-pointer hover:text-zinc-200 transition"
                     title="View Club Profile & History"
                   >
                     {state.club.name}
                   </h1>
-                  <span className="text-base shrink-0" title={state.club.country}>
+                  <span className="text-base sm:text-lg shrink-0" title={state.club.country}>
                     {countryFlag}
+                  </span>
+                </div>
+              </div>
+
+              {/* Historic Description + Right Shield Customize Button */}
+              <div className="flex items-center justify-between gap-3">
+                <p
+                  onClick={onOpenClubProfile}
+                  className="text-xs sm:text-[13px] text-zinc-400 font-normal leading-relaxed cursor-pointer hover:text-zinc-300 transition flex-1"
+                  title={historicContext}
+                >
+                  {historicContext || `Competing in the ${leagueName} (${state.year}/${String((state.year + 1) % 100).padStart(2, '0')} campaign).`}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={onOpenCustomization}
+                  className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] hover:border-white/[0.15] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer shrink-0"
+                  title="Customize club"
+                  aria-label="Customize club"
+                >
+                  <i className="fas fa-shield-halved text-xs" />
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Divider: Coloured Trophy Pills + Total Count */}
+            <div
+              onClick={onOpenClubProfile}
+              className="pt-3 mt-3.5 border-t border-white/[0.06] flex items-center justify-between gap-2 text-xs cursor-pointer group"
+              title="View Club Trophies & Silverware"
+            >
+              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                <i className="fas fa-trophy text-amber-400 text-xs shrink-0 mr-1" />
+                {earnedTrophyBadges.length > 0 ? (
+                  earnedTrophyBadges.slice(0, 6).map((t) => {
+                    const pillColors =
+                      t.theme === 'amber'
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                        : t.theme === 'orange'
+                        ? 'bg-orange-500/10 border-orange-500/30 text-orange-300'
+                        : 'bg-white/[0.05] border-white/[0.1] text-zinc-300';
+                    const countColors =
+                      t.theme === 'amber'
+                        ? 'bg-amber-950/80 text-amber-200'
+                        : t.theme === 'orange'
+                        ? 'bg-orange-950/80 text-orange-200'
+                        : 'bg-black/40 text-zinc-300';
+
+                    return (
+                      <span
+                        key={`header-trophy-${t.key}`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11px] font-medium truncate ${pillColors}`}
+                      >
+                        <i className={`fas ${t.icon} text-[9px] opacity-90`} />
+                        <span>{t.label}</span>
+                        <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold tabular-nums ${countColors}`}>
+                          {t.count}x
+                        </span>
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="text-[11px] text-zinc-500">No major honours recorded yet</span>
+                )}
+              </div>
+
+              <span className="text-xs font-mono font-bold text-amber-400 group-hover:text-amber-300 transition flex items-center gap-1 shrink-0 tabular-nums">
+                <span>{totalClubSilverware}</span>
+                <i className="fas fa-chevron-right text-[9px] opacity-80 group-hover:translate-x-0.5 transition-transform" />
+              </span>
+            </div>
+          </div>
+
+          {/* CARD 2: OVR GAUGE CARD */}
+          <div
+            onClick={() => {
+              if (onOpenOvrModal) onOpenOvrModal();
+            }}
+            className={`col-span-1 lg:col-span-3 w-full ${innerCardClass} ${isOvrPulsing ? 'border-emerald-400/50' : ''} p-4 sm:p-5 relative overflow-hidden flex flex-col items-center justify-center cursor-pointer group active:scale-[0.99]`}
+            title="Click to open squad rating breakdown"
+          >
+            {floatingDelta !== null && (
+              <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 z-20 tabular-nums">
+                {floatingDelta > 0 ? `+${floatingDelta}` : `${floatingDelta}`}
+              </span>
+            )}
+
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-3">
+              OVR
+            </span>
+
+            <CircularRing
+              value={displayOvr}
+              max={100}
+              size={98}
+              strokeWidth={8.5}
+              color={ovrRingStroke}
+              glowColor={ovrRingGlow}
+            >
+              <span className="text-2xl sm:text-3xl font-bold text-white tracking-tight leading-none tabular-nums">
+                <CountUp value={displayOvr} duration={850} />
+              </span>
+            </CircularRing>
+
+            {(state.youthDevQueue || 0) > 0 && (
+              <span
+                className="mt-2.5 text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full tabular-nums"
+                title={`+${state.youthDevQueue} OVR matures next season`}
+              >
+                +{state.youthDevQueue} Next Season
+              </span>
+            )}
+          </div>
+
+          {/* CARD 3: IMPACT GAUGE CARD */}
+          <div
+            onClick={onShowImpact || onOpenMoraleModal}
+            className={`col-span-1 lg:col-span-3 w-full ${innerCardClass} p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer group active:scale-[0.99]`}
+            title="Show club impact & governance details"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+                IMPACT
+              </span>
+            </div>
+
+            <div className="my-auto flex items-center justify-end pr-1 sm:pr-2">
+              <CircularRing
+                value={impactScore}
+                max={100}
+                size={56}
+                strokeWidth={5}
+                color="#0ea5e9"
+                glowColor="rgba(14, 165, 233, 0.3)"
+              >
+                <i className="fas fa-bolt text-sky-400 text-sm" />
+              </CircularRing>
+            </div>
+
+            <div className="flex items-baseline justify-between">
+              <span className="text-3xl sm:text-4xl font-bold text-white tracking-tight leading-none tabular-nums">
+                <CountUp value={impactScore} duration={850} />
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ===================================================================== */}
+        {/* SECOND ROW INSIDE OUTER CONTAINER: 4 EXECUTIVE CARDS                  */}
+        {/* ===================================================================== */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 w-full">
+          {/* SUB-CARD 1: SPORTING DIRECTOR */}
+          <div
+            onClick={() => {
+              if (onOpenProfile) onOpenProfile();
+              else if (onOpenSkillsModal) onOpenSkillsModal();
+            }}
+            className={`${innerCardClass} p-3.5 sm:p-5 flex flex-col justify-between min-h-[92px] sm:min-h-[108px] cursor-pointer group active:scale-[0.99]`}
+            title="Open Manager Profile & Career Overview"
+          >
+            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400 truncate">
+              SPORTING DIRECTOR
+            </span>
+
+            <div className="mt-2 sm:mt-4">
+              <span className="text-base sm:text-xl font-bold text-white uppercase tracking-tight leading-snug py-0.5 truncate block">
+                {directorDisplayName}
+              </span>
+            </div>
+          </div>
+
+          {/* SUB-CARD 2: COACH & TACTICS */}
+          <div
+            onClick={() => {
+              if (onCoachMarket) onCoachMarket();
+              else if (onOpenPhilosophyModal) onOpenPhilosophyModal();
+              else if (onOpenCoachDossier) onOpenCoachDossier();
+            }}
+            className={`${innerCardClass} p-3.5 sm:p-5 flex flex-col justify-between min-h-[92px] sm:min-h-[108px] cursor-pointer group active:scale-[0.99]`}
+            title="Open Coach Dossier & Tactical Philosophy"
+          >
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+              <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400 truncate">
+                <span className="sm:hidden">COACH</span>
+                <span className="hidden sm:inline">COACH &amp; TACTICS</span>
+              </span>
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onCoachMarket) onCoachMarket();
+                  else if (onOpenCoachDossier) onOpenCoachDossier();
+                }}
+                className="px-2 sm:px-2.5 py-0.5 rounded-full bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-400 text-[9px] sm:text-[10px] font-semibold inline-flex items-center gap-1 shrink-0 transition-colors"
+              >
+                <i className="fas fa-user-astronaut text-[8px] sm:text-[9px]" />
+                <span className="hidden xs:inline">Dossier</span>
+              </span>
+            </div>
+
+            <div className="mt-1.5 sm:mt-2 min-w-0">
+              <span className="text-sm sm:text-[17px] font-bold text-white tracking-tight leading-snug py-0.5 truncate block">
+                {coachDisplayName}
+              </span>
+              <div
+                onClick={(e) => {
+                  if (onOpenPhilosophyModal) {
+                    e.stopPropagation();
+                    onOpenPhilosophyModal();
+                  }
+                }}
+                className="flex items-center gap-1 sm:gap-1.5 mt-0.5 sm:mt-1 flex-wrap hover:text-sky-300 transition-colors"
+                title="Change Tactical System"
+              >
+                <i className="fas fa-compass text-sky-400 text-[10px] sm:text-[11px] shrink-0" />
+                <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400 group-hover:text-zinc-300 truncate">
+                  {state.tactic || 'Total Handball'}
+                </span>
+                {isTacticStale && (
+                  <span className="px-1.5 py-0.2 rounded bg-rose-500/15 border border-rose-500/30 text-rose-400 text-[8px] sm:text-[9px] font-mono font-bold uppercase tabular-nums">
+                    STALE (-{Math.min(4, tacticTenure)})
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* SUB-CARD 3: REPUTATION */}
+          <div
+            onClick={() => {
+              if (onOpenClubProfile) onOpenClubProfile();
+              else if (onShowCareerHistory) onShowCareerHistory();
+            }}
+            className={`${innerCardClass} p-3.5 sm:p-5 flex items-center justify-between gap-2 sm:gap-3 min-h-[92px] sm:min-h-[108px] cursor-pointer group active:scale-[0.99]`}
+            title="View club reputation details"
+          >
+            <div className="flex flex-col justify-between h-full min-w-0">
+              <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400 truncate">
+                REPUTATION
+              </span>
+
+              <div className="mt-1.5 sm:mt-2">
+                <div className="flex items-baseline gap-1 sm:gap-1.5">
+                  <span className="text-xl sm:text-3xl font-bold text-white tracking-tight leading-none tabular-nums">
+                    {repVal}
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-sky-400">
+                    REP
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 sm:gap-1.5 mt-1 text-[10px] sm:text-[11px] text-zinc-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+                  <span className="truncate">
+                    {repVal >= 85 ? 'Global Elite' : repVal >= 70 ? 'Continental Elite' : repVal >= 50 ? 'Established' : 'Emerging'}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Historic Context quote */}
-            {historicContext && (
-              <p
-                onClick={onOpenClubProfile}
-                className="text-xs sm:text-[13px] text-zinc-400 font-normal leading-relaxed line-clamp-2 max-w-xl mt-2.5 italic cursor-pointer hover:text-zinc-200 transition"
-                title="View full club heritage & dossier"
+            <div className="shrink-0">
+              <CircularRing
+                value={repVal}
+                max={100}
+                size={42}
+                strokeWidth={4}
+                color="#f59e0b"
+                glowColor="rgba(245, 158, 11, 0.25)"
               >
-                "{historicContext}"
-              </p>
-            )}
+                <i className="fas fa-medal text-amber-400 text-[11px]" />
+              </CircularRing>
+            </div>
           </div>
 
-          {/* Bottom Divider Row: Trophy Badge */}
+          {/* SUB-CARD 4: SCORE / LEADERBOARD */}
           <div
-            onClick={onOpenClubProfile}
-            className="relative z-10 pt-3 mt-3 border-t border-white/[0.05] flex items-center justify-between text-xs text-zinc-400 cursor-pointer group"
-            title="View Club Trophies & Silverware"
+            onClick={() => {
+              if (onShowLeaderboard) onShowLeaderboard();
+              else if (onShowCareerHistory) onShowCareerHistory();
+            }}
+            className={`${innerCardClass} p-3.5 sm:p-5 flex flex-col justify-between min-h-[92px] sm:min-h-[108px] cursor-pointer group active:scale-[0.99]`}
+            title="Open leaderboards & career standing"
           >
-            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <i className="fas fa-trophy text-zinc-400 text-xs shrink-0 mr-0.5" />
-              {earnedTrophyBadges.length > 0 ? (
-                earnedTrophyBadges.map((t) => (
-                  <span
-                    key={`header-trophy-${t.key}`}
-                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.03] border border-white/[0.06] text-zinc-300 text-[11px] font-medium truncate"
-                  >
-                    <span>{t.label}</span>
-                    <span className="text-zinc-400 font-mono text-[10px]">{t.count}x</span>
-                  </span>
-                ))
-              ) : (
-                <span className="text-[11px] text-zinc-500 italic">No silverware won yet</span>
-              )}
-            </div>
-
-            <span className="text-xs font-medium text-zinc-400 group-hover:text-zinc-200 transition flex items-center gap-1.5 shrink-0 ml-2">
-              <span className="tabular-nums">{totalClubSilverware}</span>
-              <i className="fas fa-chevron-right text-[10px] opacity-60 group-hover:translate-x-0.5 transition-transform" />
-            </span>
-          </div>
-        </div>
-
-        {/* CARD 2: OVR CIRCULAR RING & NUMBER (CLICK TO OPEN OVR MODAL) */}
-        <div
-          onClick={() => {
-            if (onOpenOvrModal) onOpenOvrModal();
-          }}
-          className="col-span-1 sm:col-span-1 lg:col-span-1 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-3.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
-          title="Click to open squad rating breakdown"
-        >
-          {/* Floating Delta Badge for incoming/outgoing rating updates */}
-          {floatingDelta !== null && (
-            <span className="absolute top-2.5 right-8 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.06] border border-white/[0.1] text-zinc-200 z-20">
-              {floatingDelta > 0 ? `+${floatingDelta} OVR` : `${floatingDelta} OVR`}
-            </span>
-          )}
-
-          {/* Top Label */}
-          <div className="relative z-10 flex items-center justify-between text-zinc-400">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                OVR
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+              <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-zinc-400 truncate">
+                <span className="sm:hidden">SCORE</span>
+                <span className="hidden sm:inline">SCORE / LEADERBOARD</span>
               </span>
-              {ovrTierConfig.tier === 'relegation' && (
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" title="Squad in severe relegation risk." />
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-medium font-mono uppercase bg-white/[0.03] border border-white/[0.06] text-zinc-300">
-                {lang === 'de' ? ovrTierConfig.statusLabelDe : ovrTierConfig.statusLabelEn}
-              </span>
-              <span className="text-zinc-500 group-hover:text-zinc-300 p-0.5 rounded transition text-xs">
-                <i className="fas fa-arrow-up-right-from-square text-[10px]" />
+              <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[9px] sm:text-[10px] font-bold tabular-nums shrink-0">
+                +{state.skillPoints || 0} MP
               </span>
             </div>
-          </div>
 
-          {/* Center: Glowing Circular Ring with Number Inside */}
-          <div className="relative z-10 my-auto py-2 flex items-center justify-center">
-            <CircularRing
-              value={displayOvr}
-              max={100}
-              size={110}
-              strokeWidth={7}
-              color={ovrRingColor}
-              glowColor="rgba(255,255,255,0.1)"
-            >
-              <span className="text-3xl sm:text-[34px] font-semibold text-white tracking-tight leading-none tabular-nums">
-                <CountUp value={displayOvr} duration={850} />
-              </span>
-              <span className="text-[9px] font-medium text-zinc-500 uppercase tracking-widest leading-none mt-1">
-                Squad
-              </span>
-            </CircularRing>
-          </div>
-
-          {/* Footer Subline: League Average Benchmark & Delta */}
-          <div className="relative z-10 pt-2.5 mt-2 border-t border-white/[0.06] flex items-center justify-between text-xs min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0 truncate">
-              <span className="text-[11px] font-normal text-zinc-500 truncate">
-                Avg: {leagueAvgOvr} OVR
-              </span>
-              {(state.youthDevQueue || 0) > 0 && (
-                <span className="text-[9px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1 py-0.5 rounded shrink-0" title={`+${state.youthDevQueue} OVR banked from youth call-ups, matures next season`}>
-                  ⏳ +{state.youthDevQueue}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] font-medium shrink-0 flex items-center gap-1 text-zinc-400">
-              <span>{ovrDeltaText}</span>
-            </span>
-          </div>
-        </div>
-
-        {/* CARD 3: IMPACT BENTO (TOP ROW NEXT TO OVR) */}
-        <div
-          onClick={onShowImpact || onOpenMoraleModal}
-          className="col-span-1 sm:col-span-1 lg:col-span-1 w-full bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-3.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
-          title="Show club impact & governance details"
-        >
-          {/* Top Label */}
-          <div className="relative z-10 flex items-center justify-between text-zinc-400">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-              IMPACT
-            </span>
-            <div className="flex items-center gap-1.5">
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-medium font-mono uppercase bg-white/[0.03] border border-white/[0.06] text-zinc-300">
-                {impactScore >= 80 ? (lang === 'de' ? 'Dominant' : 'Dominant') : impactScore >= 50 ? (lang === 'de' ? 'Stabil' : 'Stable') : (lang === 'de' ? 'Kritisch' : 'Volatile')}
-              </span>
-              <span className="text-zinc-500 group-hover:text-zinc-300 p-0.5 rounded transition text-xs">
-                <i className="fas fa-arrow-up-right-from-square text-[10px]" />
+            <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <i className="fas fa-trophy text-amber-400 text-sm sm:text-lg shrink-0" />
+              <span className="text-xl sm:text-3xl font-bold text-amber-400 tracking-tight leading-snug py-0.5 tabular-nums truncate">
+                {liveScore.toLocaleString()}
               </span>
             </div>
-          </div>
-
-          {/* Center: Glowing Circular Ring with Number Inside */}
-          <div className="relative z-10 my-auto py-2 flex items-center justify-center">
-            <CircularRing
-              value={impactScore}
-              max={100}
-              size={110}
-              strokeWidth={7}
-              color={impactScore >= 80 ? '#10b981' : impactScore >= 50 ? '#fbbf24' : '#f43f5e'}
-              glowColor="rgba(255,255,255,0.1)"
-            >
-              <span className="text-3xl sm:text-[34px] font-semibold text-white tracking-tight leading-none tabular-nums">
-                <CountUp value={impactScore} duration={850} />
-              </span>
-              <span className="text-[9px] font-medium text-zinc-500 uppercase tracking-widest leading-none mt-1">
-                Score
-              </span>
-            </CircularRing>
-          </div>
-
-          {/* Footer Subline: Governance & Benchmark */}
-          <div className="relative z-10 pt-2.5 mt-2 border-t border-white/[0.06] flex items-center justify-between text-xs min-w-0">
-            <span className="text-[11px] font-normal text-zinc-500 truncate">
-              {lang === 'de' ? 'Governance-Index' : 'Governance Index'}
-            </span>
-            <span className="text-[10px] font-medium shrink-0 flex items-center gap-1 text-zinc-400">
-              <span className={`w-1.5 h-1.5 rounded-full ${impactScore >= 80 ? 'bg-emerald-400' : impactScore >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`} />
-              <span>{impactScore >= 80 ? 'Optimal' : impactScore >= 50 ? 'Stable' : 'Deficit'}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. BOTTOM BENTO ROW: TREASURY, COACH, REPUTATION, LEADERBOARD             */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 w-full">
-        {/* CARD 1: TREASURY */}
-        <div
-          onClick={onShowLedger}
-          className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
-          title="Open club ledger"
-        >
-          {/* Header row: Treasury title */}
-          <div className="relative z-10 flex items-center justify-between text-zinc-400">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-              TREASURY
-            </span>
-          </div>
-
-          {/* Large Balance */}
-          <div className="relative z-10 my-auto py-2">
-            <span className="text-xl sm:text-2xl font-medium text-zinc-100 tracking-tight truncate tabular-nums block">
-              <CountUp value={state.budget} formatValue={formatMoney} duration={950} />
-            </span>
-          </div>
-
-          {/* Context subline: Net balance */}
-          <div className="relative z-10 pt-2.5 mt-2 border-t border-white/[0.04] flex items-center justify-between text-xs">
-            <span className="text-[11px] font-normal text-zinc-500">
-              Net:
-            </span>
-            <span className={`text-[11px] font-medium tabular-nums ${financials.net < 0 ? 'text-rose-400' : 'text-zinc-400'}`}>
-              {financials.net >= 0 ? '+' : ''}<CountUp value={financials.net} formatValue={formatMoney} duration={950} />
-            </span>
-          </div>
-        </div>
-
-        {/* CARD 2: COACH */}
-        <div
-          onClick={() => {
-            if (onCoachMarket) onCoachMarket();
-            else if (onOpenPhilosophyModal) onOpenPhilosophyModal();
-            else if (onOpenCoachDossier) onOpenCoachDossier();
-          }}
-          className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
-          title="Open Coach Overview & Tactical Philosophy"
-        >
-          {/* Top Row: Label */}
-          <div className="relative z-10 flex items-center justify-between text-zinc-400">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-              COACH
-            </span>
-          </div>
-
-          {/* Center: Head Coach Name */}
-          <div className="relative z-10 my-auto py-2 flex flex-col justify-center min-w-0">
-            <span className="text-xl sm:text-2xl font-medium text-zinc-100 tracking-tight truncate block">
-              {coachDisplayName}
-            </span>
-          </div>
-        </div>
-
-        {/* CARD 3: REPUTATION */}
-        <div
-          onClick={() => {
-            if (onOpenClubProfile) onOpenClubProfile();
-            else if (onShowCareerHistory) onShowCareerHistory();
-          }}
-          className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
-          title="View club reputation details"
-        >
-          {/* Top Row: Label */}
-          <div className="relative z-10 flex items-center justify-between text-zinc-400">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-              REPUTATION
-            </span>
-          </div>
-
-          {/* Center: REP number */}
-          <div className="relative z-10 my-auto py-2 flex items-baseline gap-1.5">
-            <span className="text-xl sm:text-2xl font-medium text-zinc-100 tracking-tight tabular-nums">
-              {repVal}
-            </span>
-            <span className="text-xs font-medium text-zinc-400 tracking-wider">
-              REP
-            </span>
-          </div>
-        </div>
-
-        {/* CARD 4: LEADERBOARD */}
-        <div
-          onClick={() => {
-            if (onShowLeaderboard) onShowLeaderboard();
-            else if (onShowCareerHistory) onShowCareerHistory();
-          }}
-          className="bg-[#10121a]/90 border border-white/[0.04] hover:border-white/[0.08] backdrop-blur-md rounded-2xl p-4.5 sm:p-5 relative overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 group active:scale-[0.99]"
-          title="Open leaderboards & career standing"
-        >
-          {/* Top Row: Label */}
-          <div className="relative z-10 flex items-center justify-between text-zinc-400">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-              LEADERBOARD
-            </span>
-          </div>
-
-          {/* Center: Total Points */}
-          <div className="relative z-10 my-auto py-2 flex items-baseline gap-1.5">
-            <span className="text-xl sm:text-2xl font-medium text-zinc-100 tracking-tight tabular-nums">
-              {liveScore.toLocaleString()}
-            </span>
-            <span className="text-[11px] font-medium text-zinc-400 tracking-wider">
-              PTS
-            </span>
           </div>
         </div>
       </div>

@@ -26,7 +26,7 @@ export const TransferSagaModal: React.FC<TransferSagaModalProps> = ({ saga, onSe
   return (
     <div 
       onClick={onClose}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto overscroll-contain animate-fadeIn cursor-pointer"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-2xl overflow-y-auto overscroll-contain animate-fadeIn cursor-pointer"
     >
       <div 
         onClick={(e) => e.stopPropagation()}

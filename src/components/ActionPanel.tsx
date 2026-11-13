@@ -16,6 +16,7 @@ interface ActionPanelProps {
   onShowLoan?: () => void;
   onShowMarketing?: () => void;
   onShowIPO?: () => void;
+  onShowSponsors?: () => void;
   state: GameState;
   lang: 'en' | 'de' | 'es';
   onSimulate: () => void;
@@ -55,12 +56,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   onShowLoan,
   onShowMarketing,
   onShowIPO,
+  onShowSponsors,
   onUpgradeAcademy, 
   onUpgradeMedical, 
   isFirstHalf = true, 
   onOpenInfo
 }) => {
-  const [activeAccordion, setActiveAccordion] = useState<string | null>('commercial');
+  const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [showMarketingModal, setShowMarketingModal] = useState(false);
   const [showIPOModal, setShowIPOModal] = useState(false);
@@ -134,17 +136,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   const performanceBonus = sponsorTerms.performanceBonus;
 
   return (
-    <div className="bg-[#10121a]/90 border border-white/[0.04] backdrop-blur-md rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 w-full [overflow-anchor:none]">
-      {/* Box Header matching user mockup */}
-      <div className="flex flex-col gap-1 pb-1">
+    <div className="bg-[#12141c] border border-white/[0.06] shadow-[0_16px_40px_rgba(0,0,0,0.45)] rounded-[24px] p-4 sm:p-5 flex flex-col gap-3 w-full [overflow-anchor:none]">
+      {/* Season Preparations Title & Description (Matches Reference) */}
+      <div className="flex flex-col gap-1.5 pb-1">
         <div className="flex items-center gap-2">
-          <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight">
+          <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
             {tr('Season Preparations', 'Saisonvorbereitung')}
           </h2>
           {onOpenInfo && (
             <button
               onClick={onOpenInfo}
-              className="w-5 h-5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center text-[10px] transition cursor-pointer"
+              className="w-5 h-5 rounded-full bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-400 hover:text-sky-300 flex items-center justify-center text-[10px] transition cursor-pointer"
               title={tr('Season Preparation Info', 'Infos zur Saisonvorbereitung')}
               aria-label="Season Preparation Info"
             >
@@ -152,11 +154,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
             </button>
           )}
         </div>
-        <p className="text-xs text-zinc-400 font-normal leading-relaxed">
-          {tr(
-            'Prepare your squad & commercial deals. Pitch sponsors for bonus revenue, expand facilities, and manage transfers.',
-            'Bereite deinen Kader & Sponsoring-Deals vor. Verhandle lukrative Sponsoren, baue Einrichtungen aus und manage Transfers.'
-          )}
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          Prepare your squad &amp; commercial deals. Pitch sponsors for bonus revenue, buy/sell players, or simulate when ready.
         </p>
       </div>
 
@@ -166,44 +165,30 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       <div
         ref={(el) => { accordionRefs.current['commercial'] = el; }}
         className={`rounded-2xl border transition-all duration-200 overflow-hidden scroll-mt-20 ${
-        activeAccordion === 'commercial' 
-          ? 'border-purple-500/30 bg-purple-500/[0.04]' 
-          : 'border-white/[0.05] bg-purple-500/[0.02] hover:border-purple-500/30 hover:bg-purple-500/[0.05]'
-      }`}>
-        <button 
+          activeAccordion === 'commercial'
+            ? 'border-white/[0.1] bg-[#161922]'
+            : 'border-white/[0.05] bg-[#161922]/90 hover:border-white/[0.1] hover:bg-[#191d27]'
+        }`}
+      >
+        <button
           type="button"
           onClick={() => handleToggleAccordion('commercial')}
-          className="w-full flex items-center justify-between p-3.5 sm:p-4 cursor-pointer text-left transition"
+          className="w-full flex items-center justify-between px-4 py-3.5 cursor-pointer text-left transition"
         >
-          <div className="flex items-center gap-2.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${activeAccordion === 'commercial' ? 'bg-purple-400' : 'bg-purple-400/60'}`} />
-            <i className="fas fa-handshake text-sm text-purple-400" />
-            <span className={`text-xs sm:text-[13px] font-semibold tracking-wider uppercase ${activeAccordion === 'commercial' ? 'text-white' : 'text-zinc-200'}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <i className="fas fa-handshake text-purple-400 text-sm shrink-0" />
+            <span className="text-xs sm:text-[13px] font-bold uppercase tracking-wider text-white">
               {tr('Commercial & Sponsorships', 'Sponsoring & Finanzen')}
             </span>
           </div>
-          <i className={`fas fa-chevron-${activeAccordion === 'commercial' ? 'up' : 'down'} text-xs ${activeAccordion === 'commercial' ? 'text-purple-400' : 'text-zinc-500'}`} />
+          <div className="flex items-center gap-2 shrink-0">
+            <i className={`fas fa-chevron-${activeAccordion === 'commercial' ? 'up' : 'down'} text-xs text-zinc-400`} />
+          </div>
         </button>
-        
-        {activeAccordion === 'commercial' && (
-          <div className="p-3.5 sm:p-4 border-t border-white/[0.06] flex flex-col gap-2.5 bg-black/20">
-            {/* Card 1: Commercial Limit */}
-            <div className="bg-[#181924] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[11px] font-medium text-zinc-400 tracking-wider uppercase">
-                  {tr('Commercial Limit', 'Sponsoring-Limit')}
-                </span>
-                <span className="text-white font-medium tabular-nums">{currentCommercial} / {limitCommercial}</span>
-              </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal mt-0.5">
-                {tr(
-                  'You can negotiate up to 3 commercial sponsorship deals per season. Pitching megadeals carries higher risk with anchor corporate sponsors.',
-                  'Du kannst bis zu 3 Sponsorenverträge pro Saison verhandeln. Megadeal-Pitches bergen ein höheres Risiko bei Hauptsponsoren.'
-                )}
-              </p>
-            </div>
 
-            {/* Card 2: Sponsorship Deals (Combined Standard, Megadeal & Performance) */}
+        {activeAccordion === 'commercial' && (
+          <div className="p-2.5 sm:p-3 border-t border-white/[0.05] flex flex-col gap-2 bg-[#101219]">
+            {/* Sponsorship Deals */}
             {(() => {
               const curDeals = stateStore.seasonSponsorDealsYear === stateStore.year ? stateStore.seasonSponsorDeals : undefined;
               const signedCount =
@@ -221,111 +206,118 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setSelectedSponsorDeal(0);
-                    setShowSponsorModal(true);
+                    if (onShowSponsors) {
+                      onShowSponsors();
+                    } else {
+                      setSelectedSponsorDeal(0);
+                      setShowSponsorModal(true);
+                    }
                   }}
-                  className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+                  className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-white tracking-tight">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-medium text-white tracking-tight">
                       {tr('Sponsorship Deals', 'Sponsorenverträge')}
                     </span>
+                    <span className="text-[11px] text-zinc-500 truncate">
+                      {tr('Standard, Megadeal & Performance (1–3 yrs)', 'Standard-, Megadeal- & Leistungsverträge')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
                     {signedCount > 0 ? (
-                      <span className="text-zinc-300 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1 tabular-nums">
-                        <span className="w-1 h-1 rounded-full bg-emerald-400" />
+                      <span className="text-zinc-300 font-mono text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1 tabular-nums">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                         {signedCount}/3 {tr('Active', 'Aktiv')}
                       </span>
                     ) : currentCommercial >= limitCommercial ? (
-                      <span className="text-zinc-400 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] tabular-nums">
+                      <span className="text-zinc-400 font-mono text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] tabular-nums">
                         {currentCommercial}/{limitCommercial} {tr('Pitched', 'Verhandelt')}
                       </span>
                     ) : (
-                      <span className="text-emerald-400 font-semibold tabular-nums text-xs sm:text-sm">
-                        {tr('Up to', 'Bis zu')} +{formatMoney(maxAvailablePayout)}
+                      <span className="text-emerald-400 font-mono font-medium tabular-nums text-xs">
+                        +{formatMoney(maxAvailablePayout)}
                       </span>
                     )}
+                    <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
                   </div>
-                  <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                    {tr(
-                      'Negotiate Standard, Megadeal, and Performance contracts over 1 to 3 years.',
-                      'Verhandle Standard-, Megadeal- und Leistungsverträge über 1 bis 3 Jahre Laufzeit.'
-                    )}
-                  </p>
                 </button>
               );
             })()}
 
-            {/* Card 5: Go Public (IPO) / Stock Market */}
+            {/* Go Public (IPO) / Stock Market */}
             {(() => {
               const isPublic = Boolean(stateStore?.club?.isPublic || state?.club?.isPublic || (stateStore as any)?.isPublic || (state as any)?.isPublic);
               return (
                 <button
                   type="button"
                   onClick={() => { if (onShowIPO) onShowIPO(); else setShowIPOModal(true); }}
-                  className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+                  className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-white tracking-tight">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-medium text-white tracking-tight">
                       {isPublic ? tr('Stock Market & Shares', 'Börsenmarkt') : tr('Go Public (IPO)', 'Börsengang (IPO)')}
                     </span>
-                    <span className="text-zinc-300 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
-                      <span className={`w-1 h-1 rounded-full ${isPublic ? 'bg-emerald-400' : 'bg-sky-400'}`} />
-                      {isPublic ? tr('Listed', 'Börsennotiert') : tr('Available', 'Verfügbar')}
+                    <span className="text-[11px] text-zinc-500 truncate">
+                      {isPublic
+                        ? tr('Share price, valuation & dividends', 'Aktienkurs & Dividenden')
+                        : tr('Issue equity for upfront capital', 'Aktienemission für Sofortkapital')}
                     </span>
                   </div>
-                  <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                    {isPublic
-                      ? tr('Track club share price, equity valuation & dividends.', 'Aktienkurs, Börsenwert und Dividenden verwalten.')
-                      : tr('Issue 1,000,000 shares to raise upfront capital. Beware shareholder dividend traps!', 'Emittiere 1.000.000 Aktien für großes Sofortkapital. Vorsicht vor Dividenden-Fallen!')}
-                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-zinc-300 font-mono text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isPublic ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
+                      {isPublic ? tr('Listed', 'Gelisted') : tr('Open', 'Offen')}
+                    </span>
+                    <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+                  </div>
                 </button>
               );
             })()}
 
-            {/* Card 6: Marketing & PR */}
+            {/* Marketing & PR */}
             <button
               type="button"
               onClick={() => { if (onShowMarketing) onShowMarketing(); else setShowMarketingModal(true); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+              className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">
                   {tr('Marketing & PR', 'Marketing & PR')}
                 </span>
-                <span className="text-zinc-300 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
-                  <span className={`w-1 h-1 rounded-full ${(stateStore.brandCampaignsThisSeason || 0) >= 1 ? 'bg-emerald-400' : 'bg-sky-400'}`} />
-                  {(stateStore.brandCampaignsThisSeason || 0) >= 1 ? tr('Active', 'Aktiv') : tr('Available', 'Verfügbar')}
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {tr('Expand supporter base & brand reach', 'Fanpotenzial & Reichweite steigern')}
                 </span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {tr(
-                  "Launch promotional drives to expand your club's addressable supporter base and national brand awareness.",
-                  'Starte Werbekampagnen, um das Fanpotenzial und die nationale Markenbekanntheit zu steigern.'
-                )}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-300 font-mono text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${(stateStore.brandCampaignsThisSeason || 0) >= 1 ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
+                  {(stateStore.brandCampaignsThisSeason || 0) >= 1 ? tr('Active', 'Aktiv') : tr('Open', 'Offen')}
+                </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
             </button>
 
-            {/* Card 7: Commercial Bank Loan */}
+            {/* Commercial Bank Loan */}
             <button
               type="button"
               onClick={() => { if (onShowLoan) onShowLoan(); else setShowLoanModal(true); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+              className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">
                   {tr('Commercial Bank Loan', 'Gewerblicher Bankkredit')}
                 </span>
-                <span className="text-zinc-300 font-medium text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
-                  <span className={`w-1 h-1 rounded-full ${state.activeLoan ? 'bg-emerald-400' : 'bg-sky-400'}`} />
-                  {state.activeLoan ? tr('Active', 'Aktiv') : tr('Available', 'Verfügbar')}
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {tr('10–25yr institutional credit facility', '10–25J institutioneller Kredit')}
                 </span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {tr(
-                  'Contract an institutional bank loan over 10, 15, or 25 years. Immediate liquidity to overcome debt crises and prevent 3-year insolvency.',
-                  'Institutioneller Bankkredit über 10, 15 oder 25 Jahre. Sofortige Liquidität zur Überwindung von Schuldenkrisen.'
-                )}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-300 font-mono text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${state.activeLoan ? 'bg-emerald-400' : 'bg-zinc-400'}`} />
+                  {state.activeLoan ? tr('Active', 'Aktiv') : tr('Open', 'Offen')}
+                </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
             </button>
           </div>
         )}
@@ -337,126 +329,124 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       <div
         ref={(el) => { accordionRefs.current['squad'] = el; }}
         className={`rounded-2xl border transition-all duration-200 overflow-hidden scroll-mt-20 ${
-        activeAccordion === 'squad' 
-          ? 'border-emerald-500/30 bg-emerald-500/[0.04]' 
-          : 'border-white/[0.05] bg-emerald-500/[0.02] hover:border-emerald-500/30 hover:bg-emerald-500/[0.05]'
-      }`}>
-        <button 
+          activeAccordion === 'squad'
+            ? 'border-white/[0.1] bg-[#161922]'
+            : 'border-white/[0.05] bg-[#161922]/90 hover:border-white/[0.1] hover:bg-[#191d27]'
+        }`}
+      >
+        <button
           type="button"
           onClick={() => handleToggleAccordion('squad')}
-          className="w-full flex items-center justify-between p-3.5 sm:p-4 cursor-pointer text-left transition"
+          className="w-full flex items-center justify-between px-4 py-3.5 cursor-pointer text-left transition"
         >
-          <div className="flex items-center gap-2.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${activeAccordion === 'squad' ? 'bg-emerald-400' : 'bg-emerald-400/60'}`} />
-            <i className="fas fa-users text-sm text-emerald-400" />
-            <span className={`text-xs sm:text-[13px] font-semibold tracking-wider uppercase ${activeAccordion === 'squad' ? 'text-white' : 'text-zinc-200'}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <i className="fas fa-users text-emerald-400 text-sm shrink-0" />
+            <span className="text-xs sm:text-[13px] font-bold uppercase tracking-wider text-white">
               {tr('Squad & Transfers', 'Kader & Transfers')}
             </span>
           </div>
-          <i className={`fas fa-chevron-${activeAccordion === 'squad' ? 'up' : 'down'} text-xs ${activeAccordion === 'squad' ? 'text-emerald-400' : 'text-zinc-500'}`} />
+          <div className="flex items-center gap-2 shrink-0">
+            <i className={`fas fa-chevron-${activeAccordion === 'squad' ? 'up' : 'down'} text-xs text-zinc-400`} />
+          </div>
         </button>
-        
+
         {activeAccordion === 'squad' && (
-          <div className="p-3.5 sm:p-4 border-t border-white/[0.06] flex flex-col gap-2.5 bg-black/20">
-            {/* Card 1: Roster Overview */}
-            <div className="bg-[#181924] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[11px] font-medium text-zinc-400 tracking-wider uppercase">
-                  {tr('Roster Limit', 'Kaderbegrenzung')}
+          <div className="p-2.5 sm:p-3 border-t border-white/[0.05] flex flex-col gap-2 bg-[#101219]">
+            {/* Compact Roster Activity Strip */}
+            <div className="bg-[#121520]/70 border border-white/[0.04] rounded-xl px-3.5 py-2 flex items-center justify-between gap-2 flex-wrap text-[11px] text-zinc-400">
+              <div className="flex items-center gap-2 flex-wrap tabular-nums font-mono">
+                <span className="text-zinc-200">+{stateStore.youthPipeline?.length || 0} Youth</span>
+                <span className="text-zinc-600">·</span>
+                <span>+{currentTransfers} In</span>
+                <span className="text-zinc-600">·</span>
+                <span>-{stateStore.squadSalesThisSeason || 0} Sold</span>
+                <span className="text-zinc-600">·</span>
+                <span>+{stateStore.loansThisSeason || 0} Loans</span>
+              </div>
+              {(stateStore.youthDevQueue || 0) > 0 && (
+                <span className="text-emerald-300 font-mono bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px] tabular-nums">
+                  +{stateStore.youthDevQueue} OVR Next Yr
                 </span>
-                <span className="text-white font-medium tabular-nums">{stateStore.club.squadSize || 16} / 22 {tr('Players', 'Spieler')}</span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap text-[11px] text-zinc-400 mt-0.5">
-                <span className="text-zinc-200 font-medium tabular-nums">+{stateStore.youthPipeline?.length || 0} Academy</span>
-                {(stateStore.youthDevQueue || 0) > 0 && (
-                  <>
-                    <span aria-hidden="true" className="text-zinc-600">·</span>
-                    <span className="text-zinc-300 font-medium bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1">
-                      <span className="w-1 h-1 rounded-full bg-emerald-400" />
-                      +{stateStore.youthDevQueue} OVR {tr('Matures Next Season', 'Reift nächste Saison')}
-                    </span>
-                  </>
-                )}
-                <span aria-hidden="true" className="text-zinc-600">·</span>
-                <span className="text-zinc-300 font-medium tabular-nums">+{currentTransfers} In</span>
-                <span aria-hidden="true" className="text-zinc-600">·</span>
-                <span className="text-zinc-300 font-medium tabular-nums">-{stateStore.squadSalesThisSeason || 0} Sold</span>
-                <span aria-hidden="true" className="text-zinc-600">·</span>
-                <span className="text-zinc-300 font-medium tabular-nums">+{stateStore.loansThisSeason || 0} Loans</span>
-              </div>
+              )}
             </div>
 
-            {/* Card 2: Transfer Market */}
+            {/* Transfer Market */}
             <button
               onClick={() => { if (onShowTransfers) onShowTransfers(); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+              className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">{tr('Transfer Market', 'Transfermarkt')}</span>
-                <span className="text-zinc-300 font-medium text-xs uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1">
-                  <span className="w-1 h-1 rounded-full bg-emerald-400" />
-                  {tr('Active', 'Aktiv')}
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Transfer Market', 'Transfermarkt')}</span>
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {tr('Signings, loans & player sales', 'Neuzugänge, Leihen & Verkäufe')}
                 </span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {tr('Sign starting caliber stars, squad depth or loan players.', 'Neuzugänge, Stars & Leihen verhandeln.')}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-300 font-mono text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  {tr('Open', 'Offen')}
+                </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
             </button>
 
-            {/* Card 3: Youth Academy */}
+            {/* Youth Academy */}
             {(() => {
               const hasGraduatesReady = Boolean(stateStore.youthPipeline?.some(p => p.timer <= 0 && !p.isLoanedOut));
+              const u19Ready = stateStore.youthChampionshipSimulatedYear !== stateStore.year && (stateStore.youthPipeline?.length || 0) >= 6;
               return (
                 <button
                   onClick={() => { if (onShowYouth) onShowYouth(); }}
-                  className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+                  className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-white tracking-tight">{tr('Youth Academy', 'Jugendakademie')}</span>
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      {hasGraduatesReady && (
-                        <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                          <span>🎓 {tr('Graduate Ready', 'Absolvent bereit')}</span>
-                        </span>
-                      )}
-                      {stateStore.youthChampionshipSimulatedYear !== stateStore.year && (stateStore.youthPipeline?.length || 0) >= 6 && (
-                        <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <i className="fas fa-trophy text-[9px] text-zinc-400" />
-                          <span>{tr('U19 Ready', 'U19 offen')}</span>
-                        </span>
-                      )}
-                      <span className="text-zinc-300 font-medium tabular-nums text-xs">
-                        ({(stateStore.youthPipeline?.filter(p => !p.isLoanedOut)?.length || 0)}/{getAcademySlotLimit(academyLevel)})
-                      </span>
-                    </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-medium text-white tracking-tight">{tr('Youth Academy', 'Jugendakademie')}</span>
+                    <span className="text-[11px] text-zinc-500 truncate">
+                      {tr('Scouting pipeline & U19 championship', 'Talent-Pipeline & U19-Meisterschaft')}
+                    </span>
                   </div>
-                  <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                    {tr('Scout next-gen talent & compete in the U19 championship.', 'Junge Toptalente scouten und U19-Meisterschaft spielen.')}
-                  </p>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {hasGraduatesReady && (
+                      <span className="text-[10px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                        Ready
+                      </span>
+                    )}
+                    {u19Ready && (
+                      <span className="text-[10px] font-mono text-zinc-300 bg-white/[0.04] border border-white/[0.07] px-1.5 py-0.5 rounded">
+                        U19
+                      </span>
+                    )}
+                    <span className="text-zinc-400 font-mono tabular-nums text-[11px]">
+                      {(stateStore.youthPipeline?.filter(p => !p.isLoanedOut)?.length || 0)}/{getAcademySlotLimit(academyLevel)}
+                    </span>
+                    <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+                  </div>
                 </button>
               );
             })()}
 
-            {/* Card 4: Team Retreat */}
+            {/* Team Retreat */}
             <button
               onClick={() => { if (onTeamBonding) onTeamBonding(); }}
               disabled={(stateStore.teamBondingThisSeason || 0) >= 1}
-              className={`bg-[#181924] border border-white/[0.05] rounded-2xl p-4 flex flex-col gap-1 text-left transition ${
+              className={`bg-[#121520] border border-white/[0.05] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition group ${
                 (stateStore.teamBondingThisSeason || 0) >= 1
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:bg-white/[0.04] hover:border-white/[0.1] cursor-pointer active:scale-[0.99]'
+                  ? 'opacity-45 cursor-not-allowed'
+                  : 'hover:bg-white/[0.04] hover:border-white/[0.12] cursor-pointer active:scale-[0.99]'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">{tr('Team Retreat', 'Team-Trainingslager')}</span>
-                <span className="text-zinc-400 text-xs font-medium">
-                  {(stateStore.teamBondingThisSeason || 0) >= 1 ? tr('1/1 Used', '1/1 Genutzt') : tr('Available', 'Verfügbar')}
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Team Retreat', 'Team-Trainingslager')}</span>
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {tr('Boost squad morale & locker room harmony', 'Kabinenstimmung & Moral stärken')}
                 </span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {tr('Restore locker room harmony & boost morale.', 'Kabinenstimmung und Zusammenhalt stärken.')}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-400 font-mono text-[10px] uppercase">
+                  {(stateStore.teamBondingThisSeason || 0) >= 1 ? tr('1/1 Used', '1/1 Genutzt') : tr('Open', 'Offen')}
+                </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
             </button>
           </div>
         )}
@@ -468,45 +458,39 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       <div
         ref={(el) => { accordionRefs.current['infra'] = el; }}
         className={`rounded-2xl border transition-all duration-200 overflow-hidden scroll-mt-20 ${
-        activeAccordion === 'infra' 
-          ? 'border-sky-500/30 bg-sky-500/[0.04]' 
-          : 'border-white/[0.05] bg-sky-500/[0.02] hover:border-sky-500/30 hover:bg-sky-500/[0.05]'
-      }`}>
-        <button 
+          activeAccordion === 'infra'
+            ? 'border-white/[0.1] bg-[#161922]'
+            : 'border-white/[0.05] bg-[#161922]/90 hover:border-white/[0.1] hover:bg-[#191d27]'
+        }`}
+      >
+        <button
           type="button"
           onClick={() => handleToggleAccordion('infra')}
-          className="w-full flex items-center justify-between p-3.5 sm:p-4 cursor-pointer text-left transition"
+          className="w-full flex items-center justify-between px-4 py-3.5 cursor-pointer text-left transition"
         >
-          <div className="flex items-center gap-2.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${activeAccordion === 'infra' ? 'bg-sky-400' : 'bg-sky-400/60'}`} />
-            <i className="fas fa-building text-sm text-sky-400" />
-            <span className={`text-xs sm:text-[13px] font-semibold tracking-wider uppercase ${activeAccordion === 'infra' ? 'text-white' : 'text-zinc-200'}`}>
-              {tr('Infrastructure & Facilities', 'Infrastruktur & Arena')}
+          <div className="flex items-center gap-3 min-w-0">
+            <i className="fas fa-building text-sky-400 text-sm shrink-0" />
+            <span className="text-xs sm:text-[13px] font-bold uppercase tracking-wider text-white">
+              {tr('Arena & Infrastructure', 'Infrastruktur & Arena')}
             </span>
           </div>
-          <i className={`fas fa-chevron-${activeAccordion === 'infra' ? 'up' : 'down'} text-xs ${activeAccordion === 'infra' ? 'text-sky-400' : 'text-zinc-500'}`} />
+          <div className="flex items-center gap-2 shrink-0">
+            <i className={`fas fa-chevron-${activeAccordion === 'infra' ? 'up' : 'down'} text-xs text-zinc-400`} />
+          </div>
         </button>
-        
+
         {activeAccordion === 'infra' && (
-          <div className="p-3.5 sm:p-4 border-t border-white/[0.06] flex flex-col gap-2.5 bg-black/20">
-            {/* Card 1: Construction Limit Overview (matches Commercial Limit & Roster Limit) */}
-            <div className="bg-[#181924] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[11px] font-medium text-zinc-400 tracking-wider uppercase">
-                  {tr('Construction Limit', 'Baukontingent')}
-                </span>
-                <span className="text-white font-medium tabular-nums">{currentInfra} / {maxInfra} {tr('Cranes', 'Baukräne')}</span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap text-[11px] text-zinc-400 mt-0.5">
-                <span className="text-zinc-200 font-medium tabular-nums">{formatNum(stateStore.club.stadium || 2000)} {tr('Seats', 'Plätze')}</span>
-                <span aria-hidden="true" className="text-zinc-600">·</span>
-                <span className="text-zinc-300 font-medium tabular-nums">{tr('Academy', 'Akademie')} Lvl {academyLevel}</span>
-                <span aria-hidden="true" className="text-zinc-600">·</span>
-                <span className="text-zinc-300 font-medium tabular-nums">{tr('Medical', 'Medizin')} Lvl {medicalLevel}</span>
-              </div>
+          <div className="p-2.5 sm:p-3 border-t border-white/[0.05] flex flex-col gap-2 bg-[#101219]">
+            {/* Compact Facility Status Strip */}
+            <div className="bg-[#121520]/70 border border-white/[0.04] rounded-xl px-3.5 py-2 flex items-center justify-between gap-2 flex-wrap text-[11px] font-mono text-zinc-400 tabular-nums">
+              <span>{formatNum(stateStore.club.stadium || 2000)} {tr('Seats', 'Plätze')}</span>
+              <span className="text-zinc-600">·</span>
+              <span>{tr('Academy', 'Akademie')} Lvl {academyLevel}</span>
+              <span className="text-zinc-600">·</span>
+              <span>{tr('Medical', 'Medizin')} Lvl {medicalLevel}</span>
             </div>
 
-            {/* Card 2: Arena Expansion */}
+            {/* Arena Expansion */}
             {(() => {
               const pinnacleCap = getPinnacleArenaCapacity(stateStore.club.country);
               const isMaxArena = (stateStore.club.stadium || 0) >= pinnacleCap;
@@ -514,24 +498,27 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
                 <button
                   onClick={() => { if (!isMaxArena && onShowStadium) onShowStadium(true); }}
                   disabled={isMaxArena || currentInfra >= maxInfra || (stateStore.stadiumExpandedThisSeason || 0) >= 1}
-                  className="bg-[#181924] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#181924] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+                  className="bg-[#121520] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#121520] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-white tracking-tight">{tr('Arena Expansion', 'Arena-Ausbau')}</span>
-                    <span className={`font-medium tabular-nums text-xs ${isMaxArena ? 'text-zinc-400' : 'text-zinc-200'}`}>
-                      {isMaxArena ? `MAX (${formatNum(pinnacleCap)})` : `+500 ${tr('Seats', 'Plätze')}`}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-medium text-white tracking-tight">{tr('Arena Expansion', 'Arena-Ausbau')}</span>
+                    <span className="text-[11px] text-zinc-500 truncate">
+                      {isMaxArena
+                        ? tr(`Max capacity (${formatNum(pinnacleCap)}) reached`, `Max. Kapazität (${formatNum(pinnacleCap)})`)
+                        : tr('Expand seating tiers & matchday revenue', 'Plätze & Ticketeinnahmen steigern')}
                     </span>
                   </div>
-                  <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                    {isMaxArena 
-                      ? tr(`Maximum pinnacle capacity (${formatNum(pinnacleCap)} seats) reached. No further expansions permitted.`, `Maximale Arena-Kapazität (${formatNum(pinnacleCap)}) erreicht. Kein weiterer Ausbau möglich.`)
-                      : tr('Add seating tiers to scale matchday gate receipts.', 'Zuschauerkapazität und Ticketeinnahmen steigern.')}
-                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-zinc-300 font-mono tabular-nums text-[11px]">
+                      {isMaxArena ? 'MAX' : `+500 ${tr('Seats', 'Plätze')}`}
+                    </span>
+                    <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+                  </div>
                 </button>
               );
             })()}
 
-            {/* Card 3: Arena Project */}
+            {/* Arena Project */}
             {(() => {
               const pinnacleCap = getPinnacleArenaCapacity(stateStore.club.country);
               const isMaxArena = (stateStore.club.stadium || 0) >= pinnacleCap;
@@ -539,75 +526,84 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
                 <button
                   onClick={() => { if (!isMaxArena && onShowNewBuild) onShowNewBuild(); }}
                   disabled={isMaxArena || currentInfra >= maxInfra || (stateStore.stadiumExpandedThisSeason || 0) >= 1}
-                  className="bg-[#181924] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#181924] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+                  className="bg-[#121520] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#121520] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-white tracking-tight">{tr('Arena Project', 'Arena-Projekt')}</span>
-                    <span className="text-zinc-300 font-medium text-xs">
-                      {isMaxArena ? tr('PINNACLE ACTIVE', 'GROSSARENA AKTIV') : tr('Complex', 'Großbau')}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[13px] font-medium text-white tracking-tight">{tr('Arena Project', 'Arena-Projekt')}</span>
+                    <span className="text-[11px] text-zinc-500 truncate">
+                      {isMaxArena
+                        ? tr('Pinnacle complex active', 'Großarena aktiv')
+                        : tr(`New complex up to ${formatNum(pinnacleCap)} seats`, `Neubau bis ${formatNum(pinnacleCap)} Plätze`)}
                     </span>
                   </div>
-                  <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                    {isMaxArena
-                      ? tr(`Pinnacle Arena active (${formatNum(pinnacleCap)} seats). Venue commissioning closed.`, `Pinnacle-Arena aktiv (${formatNum(pinnacleCap)} Plätze). Keine weiteren Projekte möglich.`)
-                      : tr(`Inaugurate a world-class handball entertainment complex (up to ${formatNum(pinnacleCap)} seats).`, `Bau einer modernen Multifunktionsarena (bis zu ${formatNum(pinnacleCap)} Plätze).`)}
-                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-zinc-300 font-mono text-[10px] uppercase bg-white/[0.03] px-2 py-0.5 rounded border border-white/[0.06]">
+                      {isMaxArena ? 'Active' : 'Complex'}
+                    </span>
+                    <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+                  </div>
                 </button>
               );
             })()}
 
-            {/* Card 4: Upgrade Academy */}
+            {/* Upgrade Academy */}
             <button
               onClick={() => { if (onUpgradeAcademy) onUpgradeAcademy(); }}
               disabled={!canUpgradeAcademy}
-              className="bg-[#181924] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#181924] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+              className="bg-[#121520] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#121520] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">{tr('Upgrade Academy', 'Jugendakademie ausbauen')}</span>
-                <span className="text-zinc-300 font-medium tabular-nums text-xs">
-                  Lvl {academyLevel}{academyLevel < 5 ? ` → ${academyLevel + 1}` : ' (MAX)'}
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Upgrade Academy', 'Jugendakademie ausbauen')}</span>
+                <span className="text-[11px] text-zinc-500 truncate tabular-nums">
+                  {academyLevel < 5
+                    ? `${formatMoney(academyUpgradeCost)} · ${
+                        academyLevel + 1 === 2
+                          ? '2 scouts/yr'
+                          : academyLevel + 1 === 3
+                          ? 'Anti-Poaching Shield'
+                          : academyLevel + 1 === 4
+                          ? 'Foreign Imports'
+                          : 'Dynasty Immunity'
+                      }`
+                    : 'Max Level · Global Dynasty'}
                 </span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {academyLevel < 5 
-                  ? `Cost: ${formatMoney(academyUpgradeCost)} · ${
-                      academyLevel + 1 === 2
-                        ? 'Unlocks 2 scouts/yr'
-                        : academyLevel + 1 === 3
-                        ? 'Unlocks Anti-Poaching Shield'
-                        : academyLevel + 1 === 4
-                        ? 'Unlocks Foreign Imports 🌍'
-                        : 'Unlocks Global Dynasty Immunity'
-                    }`
-                  : 'Max Level Reached · Global Dynasty Active'}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-300 font-mono tabular-nums text-[11px]">
+                  Lvl {academyLevel}{academyLevel < 5 ? `→${academyLevel + 1}` : ''}
+                </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
             </button>
 
-            {/* Card 5: Upgrade Medical */}
+            {/* Upgrade Medical */}
             <button
               onClick={() => { if (onUpgradeMedical) onUpgradeMedical(); }}
               disabled={!canUpgradeMedical}
-              className="bg-[#181924] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#181924] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+              className="bg-[#121520] hover:bg-white/[0.04] disabled:opacity-40 disabled:hover:bg-[#121520] disabled:cursor-not-allowed border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">{tr('Upgrade Medical', 'Medizinabteilung ausbauen')}</span>
-                <span className="text-zinc-300 font-medium tabular-nums text-xs">
-                  Lvl {medicalLevel}{medicalLevel < 5 ? ` → ${medicalLevel + 1}` : ' (MAX)'}
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Upgrade Medical', 'Medizinabteilung ausbauen')}</span>
+                <span className="text-[11px] text-zinc-500 truncate tabular-nums">
+                  {medicalLevel < 5
+                    ? `${formatMoney(medicalUpgradeCost)} · ${
+                        medicalLevel + 1 === 2
+                          ? 'Free Rehab'
+                          : medicalLevel + 1 === 3
+                          ? 'Decay Immunity'
+                          : medicalLevel + 1 === 4
+                          ? 'Vet Retention'
+                          : '+1.0 Match OVR'
+                      }`
+                    : 'Max Level · Peak Performance'}
                 </span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {medicalLevel < 5
-                  ? `Cost: ${formatMoney(medicalUpgradeCost)} · ${
-                      medicalLevel + 1 === 2
-                        ? 'Unlocks Free In-House Rehab'
-                        : medicalLevel + 1 === 3
-                        ? 'Unlocks Decay Immunity & 100% Rehab'
-                        : medicalLevel + 1 === 4
-                        ? 'Max 1 Retirement/yr & 50% Vet Retention'
-                        : 'Unlocks +1.0 Match OVR & Dynasty Shield'
-                    }`
-                  : 'Max Level Reached · Peak Performance Institute'}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-300 font-mono tabular-nums text-[11px]">
+                  Lvl {medicalLevel}{medicalLevel < 5 ? `→${medicalLevel + 1}` : ''}
+                </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
             </button>
           </div>
         )}
@@ -619,124 +615,132 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       <div
         ref={(el) => { accordionRefs.current['manager'] = el; }}
         className={`rounded-2xl border transition-all duration-200 overflow-hidden scroll-mt-20 ${
-        activeAccordion === 'manager' 
-          ? 'border-amber-500/30 bg-amber-500/[0.04]' 
-          : 'border-white/[0.05] bg-amber-500/[0.02] hover:border-amber-500/30 hover:bg-amber-500/[0.05]'
-      }`}>
-        <button 
+          activeAccordion === 'manager'
+            ? 'border-white/[0.1] bg-[#161922]'
+            : 'border-white/[0.05] bg-[#161922]/90 hover:border-white/[0.1] hover:bg-[#191d27]'
+        }`}
+      >
+        <button
           type="button"
           onClick={() => handleToggleAccordion('manager')}
-          className="w-full flex items-center justify-between p-3.5 sm:p-4 cursor-pointer text-left transition"
+          className="w-full flex items-center justify-between px-4 py-3.5 cursor-pointer text-left transition"
         >
-          <div className="flex items-center gap-2.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${activeAccordion === 'manager' ? 'bg-amber-400' : 'bg-amber-400/60'}`} />
-            <i className="fas fa-user-tie text-sm text-amber-400" />
-            <span className={`text-xs sm:text-[13px] font-semibold tracking-wider uppercase ${activeAccordion === 'manager' ? 'text-white' : 'text-zinc-200'}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <i className="fas fa-user-tie text-amber-400 text-sm shrink-0" />
+            <span className="text-xs sm:text-[13px] font-bold uppercase tracking-wider text-white">
               {tr('Board & Manager', 'Vorstand & Trainer')}
             </span>
           </div>
-          <i className={`fas fa-chevron-${activeAccordion === 'manager' ? 'up' : 'down'} text-xs ${activeAccordion === 'manager' ? 'text-amber-400' : 'text-zinc-500'}`} />
+          <div className="flex items-center gap-2 shrink-0">
+            <i className={`fas fa-chevron-${activeAccordion === 'manager' ? 'up' : 'down'} text-xs text-zinc-400`} />
+          </div>
         </button>
-        
+
         {activeAccordion === 'manager' && (
-          <div className="p-3.5 sm:p-4 border-t border-white/[0.06] flex flex-col gap-2.5 bg-black/20">
-            {/* Card 1: Club Impact */}
+          <div className="p-2.5 sm:p-3 border-t border-white/[0.05] flex flex-col gap-2 bg-[#101219]">
+            {/* Club Impact */}
             <button
-              onClick={() => { if(onShowImpact) onShowImpact(); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+              onClick={() => { if (onShowImpact) onShowImpact(); }}
+              className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">{tr('Club Impact', 'Vereinseinfluss')}</span>
-                <span className="text-zinc-200 font-medium tabular-nums text-xs">{state.clubImpactScore ?? 50}/100</span>
-              </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {tr('Review board trust, fan happiness, and stadium status.', 'Vorstandsvertrauen, Fanstimmung und Infrastruktur analysieren.')}
-              </p>
-            </button>
-
-            {/* Card 1b: Club Roadmap */}
-            <button
-              onClick={() => { if(onOpenRoadmap) onOpenRoadmap(); else if(onShowImpact) onShowImpact(); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight flex items-center gap-1.5">
-                  <i className="fas fa-map-location-dot text-zinc-400 text-xs" />
-                  <span>{tr('Club Roadmap', 'Vereins-Roadmap')}</span>
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-white/[0.03] text-zinc-300 border border-white/[0.06]">
-                  {state.boardRoadmap ? `${state.boardRoadmap.horizonYears} ${tr('Years', 'Jahre')}` : tr('Roadmap', 'Roadmap')}
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Club Impact', 'Vereinseinfluss')}</span>
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {tr('Board trust, fan sentiment & governance', 'Vorstandsvertrauen & Fanstimmung')}
                 </span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {state.club.tier === 1 && (state.trophyDrought || 0) > 4 ? (
-                  <span className="text-rose-400 font-medium flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                    <span>{state.trophyDrought}-Year Trophy Drought: The fanbase is losing patience.</span>
-                  </span>
-                ) : (
-                  tr('Multi-year strategic milestones, context goals & MP rewards.', 'Mehrjährige Ziele, Meilensteine und MP-Prämien einsehen.')
-                )}
-              </p>
-            </button>
-
-            {/* Card 2: Tactical Philosophy & Rebuild Directives */}
-            <button
-              onClick={() => { if(onOpenPhilosophy) onOpenPhilosophy(); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">{tr('Tactics & Rebuild Directives', 'Taktik & Vereins-Rebuild')}</span>
-                <span className="text-zinc-300 font-medium text-xs">{state.tactic}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-300 font-mono tabular-nums text-[11px]">{state.clubImpactScore ?? 50}/100</span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {tr('System philosophy, generational squad cycles & austerity rebalancing.', 'Taktisches Konzept, Generationswechsel & Rebuild-Säulen.')}
-              </p>
             </button>
 
-            {/* Card 3: Job Market */}
+            {/* Club Roadmap */}
             <button
-              onClick={() => { if(onOpenJobMarket) onOpenJobMarket(); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+              onClick={() => { if (onOpenRoadmap) onOpenRoadmap(); else if (onShowImpact) onShowImpact(); }}
+              className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight">{tr('Job Market', 'Trainermarkt')}</span>
-                <span className="text-zinc-300 font-medium text-xs uppercase bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                  <span className="w-1 h-1 rounded-full bg-emerald-400" />
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Club Roadmap', 'Vereins-Roadmap')}</span>
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {state.club.tier === 1 && (state.trophyDrought || 0) > 4
+                    ? `${state.trophyDrought}-Year Trophy Drought`
+                    : tr('Multi-year milestones & MP rewards', 'Mehrjährige Ziele & MP-Prämien')}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-white/[0.03] text-zinc-300 border border-white/[0.06]">
+                  {state.boardRoadmap ? `${state.boardRoadmap.horizonYears}Y` : 'View'}
+                </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
+            </button>
+
+            {/* Tactics & Rebuild Directives */}
+            <button
+              onClick={() => { if (onOpenPhilosophy) onOpenPhilosophy(); }}
+              className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
+            >
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Tactics & Rebuild Directives', 'Taktik & Vereins-Rebuild')}</span>
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {tr('System philosophy & squad cycle', 'Taktisches System & Kaderzyklus')}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-300 text-[11px] font-medium">{state.tactic}</span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
+            </button>
+
+            {/* Job Market */}
+            <button
+              onClick={() => { if (onOpenJobMarket) onOpenJobMarket(); }}
+              className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
+            >
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Job Market', 'Trainermarkt')}</span>
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {tr('Club vacancies & career moves', 'Offene Trainerstellen')}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-300 font-mono text-[10px] uppercase bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   {tr('Open', 'Offen')}
                 </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {tr('Review club vacancies & take over a new project.', 'Offene Stellen sichten und Verein wechseln.')}
-              </p>
             </button>
 
-            {/* Card 4: Manager Points */}
+            {/* Manager Points */}
             <button
-              onClick={() => { if(onOpenSkills) onOpenSkills(); }}
-              className="bg-[#181924] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.1] rounded-2xl p-4 flex flex-col gap-1 text-left transition cursor-pointer active:scale-[0.99]"
+              onClick={() => { if (onOpenSkills) onOpenSkills(); }}
+              className="bg-[#121520] hover:bg-white/[0.04] border border-white/[0.05] hover:border-white/[0.12] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer active:scale-[0.99] group"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-white tracking-tight flex items-center gap-1.5">
-                  <i className="fas fa-bolt text-zinc-400 text-xs" />
-                  <span>{tr('Manager Points', 'Manager-Punkte')}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[13px] font-medium text-white tracking-tight">{tr('Manager Points', 'Manager-Punkte')}</span>
+                <span className="text-[11px] text-zinc-500 truncate">
+                  {tr('Unlock tactical & scouting perks', 'Fähigkeiten & Perks freischalten')}
                 </span>
-                <span className="text-zinc-200 font-medium tabular-nums text-xs bg-white/[0.03] border border-white/[0.06] px-2.5 py-0.5 rounded-full">{state.skillPoints || 0} MP</span>
               </div>
-              <p className="text-[12px] text-zinc-400 leading-snug font-normal">
-                {tr('Unlock tactical mastermind, scout networks, and perks.', 'Taktikgenie, Netzwerk und Fähigkeiten freischalten.')}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-zinc-200 font-mono tabular-nums text-[11px] bg-white/[0.04] border border-white/[0.07] px-2 py-0.5 rounded">
+                  {state.skillPoints || 0} MP
+                </span>
+                <i className="fas fa-chevron-right text-[10px] text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+              </div>
             </button>
 
-            {/* Card 5: Retire immediately */}
+            {/* Retire immediately */}
             <button
-              onClick={() => { if(onRetire) onRetire(); }}
-              className="bg-white/[0.02] hover:bg-white/[0.04] p-3 rounded-xl border border-white/[0.05] hover:border-white/[0.1] text-left transition cursor-pointer flex justify-between items-center mt-1 active:scale-[0.99]"
+              onClick={() => { if (onRetire) onRetire(); }}
+              className="bg-white/[0.015] hover:bg-rose-500/[0.08] px-3.5 py-2.5 rounded-xl border border-white/[0.04] hover:border-rose-500/20 text-left transition cursor-pointer flex justify-between items-center mt-0.5 active:scale-[0.99] group"
             >
-              <span className="text-xs font-medium text-zinc-400 hover:text-rose-400">
-                {tr('Retire from Management Immediately', 'Sofortiger Rücktritt')}
+              <span className="text-xs font-medium text-zinc-400 group-hover:text-rose-300 transition-colors">
+                {tr('Retire from Management', 'Karriere beenden')}
               </span>
-              <i className="fas fa-power-off text-zinc-500 text-xs" />
+              <i className="fas fa-power-off text-zinc-600 group-hover:text-rose-400 text-xs transition-colors" />
             </button>
           </div>
         )}
@@ -773,7 +777,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       )}
 
       {/* Sponsorship Details & Brand Portfolio Modal */}
-      {showSponsorModal && (
+      {!onShowSponsors && showSponsorModal && (
         <SponsorModal
           isOpen={showSponsorModal}
           initialDealIndex={selectedSponsorDeal}

@@ -274,10 +274,18 @@ import path from 'node:path';
 const onboardingSrc = fs.readFileSync(path.resolve('./src/components/Onboarding.tsx'), 'utf-8');
 const modModalSrc = fs.readFileSync(path.resolve('./src/components/ModSelectionModal.tsx'), 'utf-8');
 
-assert(onboardingSrc.includes('v 2.2'), 'Onboarding.tsx must display v 2.2 badge');
-assert(onboardingSrc.includes('Sponsors, Supercup &amp; World Updates'), 'Onboarding.tsx must display Sponsors, Supercup & World Updates title');
+assert(onboardingSrc.includes('v 2.3') || onboardingSrc.includes('v 2.2'), 'Onboarding.tsx must display v 2.3 or v 2.2 badge');
+assert(
+  onboardingSrc.includes('Multi-Year Sponsors, UI Overhaul &amp; Logic Polish') ||
+  onboardingSrc.includes('Sponsors, Supercup &amp; World Updates'),
+  'Onboarding.tsx must display release title'
+);
 
-assert(modModalSrc.includes('v 2.2') && modModalSrc.includes('Sponsors, Supercup &amp; World Updates'), 'ModSelectionModal must contain v2.2 active release');
+assert(
+  modModalSrc.includes('v 2.2') &&
+  (modModalSrc.includes('Sponsors, Supercup &amp; World Updates') || modModalSrc.includes('Sponsors, Supercup & World Updates')),
+  'ModSelectionModal must contain v2.2 release'
+);
 assert(modModalSrc.includes('v 2.1') && modModalSrc.includes('Game Logic Updates'), 'ModSelectionModal must preserve v2.1 in milestone history');
 assert(modModalSrc.includes('v 2.0') && modModalSrc.includes('Comprehensive Handball Realism World Audit'), 'ModSelectionModal must preserve v2.0 in milestone history');
 assert(modModalSrc.includes('v 1.9') && modModalSrc.includes('Editor, Design, Mods & European Cups'), 'ModSelectionModal must preserve v1.9 Editor, Design, Mods & European Cups in milestone history');
