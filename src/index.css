@@ -1,8 +1,10 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --breakpoint-xs: 24rem;
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
-  --font-mono: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @layer utilities {
@@ -21,7 +23,15 @@
     background: rgba(255, 255, 255, 0.20);
   }
 
-  /* Apple Subtle Elevated Gradients & Surfaces */
+  /* Apple Courtside Light Elevated Card Surface */
+  .courtside-card {
+    background: #FFFFFF;
+    border-radius: 24px;
+    border: 1px solid rgba(15, 23, 42, 0.055);
+    box-shadow: 0 8px 26px -6px rgba(15, 23, 42, 0.055);
+  }
+
+  /* Apple Subtle Elevated Gradients & Surfaces (Onboarding & Dark Views) */
   .apple-card {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.015) 100%), #121319;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -37,7 +47,6 @@
     border: 1px solid rgba(255, 255, 255, 0.06);
     box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
   }
-
 }
 
 body {
@@ -52,6 +61,407 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+html.courtside-theme,
+html.courtside-theme body {
+  background-color: #ECEAE4;
+  background-image: none;
+  color: #14161D;
+  letter-spacing: 0;
+}
+
+html.courtside-theme .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.14);
+}
+html.courtside-theme .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.24);
+}
+
+/* ============================================================================
+ * APPLE COURTSIDE UNIFIED LIGHT MODAL DESIGN SYSTEM (All 71 Existing Modals)
+ * Uses unlayered CSS cascade rules (above Tailwind's @layer utilities) with
+ * explicit CTA & ClubLogo contrast protection and zero brittle !important hacks.
+ * ============================================================================ */
+
+/* 1. Frosted Warm-Stone Modal Backdrop Scrim */
+html.courtside-theme .fixed.inset-0[class*="backdrop-blur"] {
+  background-color: rgba(20, 22, 29, 0.36);
+}
+
+/* 2. Primary Modal Dialog Shells */
+html.courtside-theme .fixed.inset-0 .apple-card,
+html.courtside-theme .fixed.inset-0 .apple-card-elevated,
+html.courtside-theme .fixed.inset-0 .apple-card-subtle {
+  background: #FFFFFF;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 24px 64px -12px rgba(15, 23, 42, 0.18);
+  color: #14161D;
+}
+
+html.courtside-theme .fixed.inset-0 :is(
+  [class*="bg-[#07080d]"],
+  [class*="bg-[#0d0d0e]"],
+  [class*="bg-[#14151e]"],
+  [class*="bg-[#12141c]"],
+  [class*="bg-[#10121a]"],
+  [class*="bg-[#0e1017]"],
+  [class*="bg-[#0e1018]"],
+  [class*="bg-[#0e0f16]"],
+  [class*="bg-[#0e0f17]"],
+  [class*="bg-[#12131a]"],
+  [class*="bg-[#12131c]"],
+  [class*="bg-[#12131e]"],
+  [class*="bg-[#121522]"],
+  [class*="bg-[#131622]"],
+  [class*="bg-[#141518]"],
+  [class*="bg-[#14151b]"],
+  [class*="bg-[#141620]"],
+  [class*="bg-[#1c1c1e]"],
+  [class*="from-[#141824]"],
+  [class*="from-[#181613]"],
+  [class*="from-[#181926]"],
+  [class*="from-[#1a1400]"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  background-color: #FFFFFF;
+  background-image: none;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 24px 64px -12px rgba(15, 23, 42, 0.18);
+  color: #14161D;
+}
+
+/* 3. Nested Inner Wells, Sub-Cards, Inputs & Sticky Bars Inside Modals */
+html.courtside-theme .fixed.inset-0 :is(
+  [class*="bg-[#181924]"],
+  [class*="bg-[#181926]"],
+  [class*="bg-[#161722]"],
+  [class*="bg-[#161822]"],
+  [class*="bg-[#161922]"],
+  [class*="bg-[#1b1e2b]"],
+  [class*="bg-[#1b202d]"],
+  [class*="bg-[#0c0d12]"],
+  [class*="bg-[#0c0e14]"],
+  [class*="bg-[#0a0a0c]"],
+  [class*="bg-[#2c2c2e]"],
+  [class*="bg-[#3a3a3c]"],
+  [class*="bg-[#3c3c3e]"],
+  .bg-zinc-950,
+  .bg-zinc-900,
+  .bg-zinc-800,
+  .bg-zinc-800\/80,
+  .bg-slate-950,
+  .bg-slate-900,
+  .bg-slate-800,
+  .bg-neutral-900,
+  .bg-neutral-950,
+  [class*="bg-black/2"],
+  [class*="bg-black/3"],
+  [class*="bg-black/4"],
+  [class*="bg-black/5"],
+  [class*="bg-black/6"],
+  [class*="bg-white/[0.01"],
+  [class*="bg-white/[0.02"],
+  [class*="bg-white/[0.03"],
+  [class*="bg-white/[0.04"],
+  [class*="bg-white/[0.05"],
+  [class*="bg-white/[0.06"],
+  [class*="bg-white/[0.07"],
+  [class*="bg-white/[0.08"],
+  [class*="bg-white/[0.1"],
+  .bg-white\/5,
+  .bg-white\/10,
+  .bg-white\/15
+):not(.fixed):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  background-color: #F5F4F0;
+  background-image: none;
+  border-color: rgba(15, 23, 42, 0.065);
+  box-shadow: none;
+  color: #14161D;
+}
+
+/* Soft tinted status wells (replace dark-mode *-950/30..60 with warm light tints) */
+html.courtside-theme .fixed.inset-0 [class*="bg-emerald-950"] {
+  background-color: #ECFDF5;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+html.courtside-theme .fixed.inset-0 :is([class*="bg-rose-950"], [class*="bg-red-950"]) {
+  background-color: #FFF1F2;
+  border-color: rgba(244, 63, 94, 0.25);
+}
+html.courtside-theme .fixed.inset-0 [class*="bg-amber-950"] {
+  background-color: #FFFBEB;
+  border-color: rgba(245, 158, 11, 0.28);
+}
+html.courtside-theme .fixed.inset-0 :is([class*="bg-sky-950"], [class*="bg-cyan-950"]) {
+  background-color: #F0F9FF;
+  border-color: rgba(14, 165, 233, 0.24);
+}
+html.courtside-theme .fixed.inset-0 [class*="bg-purple-950"] {
+  background-color: #FAF5FF;
+  border-color: rgba(168, 85, 247, 0.24);
+}
+
+/* 4. Hairline Borders & Dividers Inside Modals */
+html.courtside-theme .fixed.inset-0 :is(
+  [class*="border-white/"],
+  .border-zinc-800,
+  .border-zinc-700,
+  .border-neutral-800
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  border-color: rgba(15, 23, 42, 0.075);
+}
+
+html.courtside-theme .fixed.inset-0 [class*="divide-white/"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(15, 23, 42, 0.065);
+}
+
+/* 5. Typography Contrast Pairing Inside Light Modals */
+html.courtside-theme .fixed.inset-0 :is(
+  .text-white,
+  [class*="text-white/"],
+  .text-zinc-100,
+  .text-zinc-200,
+  [class*="text-zinc-200/"],
+  .text-neutral-100,
+  .text-neutral-200,
+  [class*="text-neutral-200/"],
+  .text-slate-100,
+  .text-slate-200,
+  .text-gray-100,
+  .text-gray-200
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #14161D;
+}
+
+html.courtside-theme .fixed.inset-0 :is(
+  .text-zinc-300,
+  [class*="text-zinc-300/"],
+  .text-zinc-400,
+  [class*="text-zinc-400/"],
+  .text-neutral-300,
+  [class*="text-neutral-300/"],
+  .text-neutral-400,
+  [class*="text-neutral-400/"],
+  .text-slate-300,
+  [class*="text-slate-300/"],
+  .text-slate-400,
+  [class*="text-slate-400/"],
+  .text-gray-300,
+  .text-gray-400
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #374151;
+}
+
+html.courtside-theme .fixed.inset-0 :is(
+  .text-zinc-500,
+  [class*="text-zinc-500/"],
+  .text-zinc-600,
+  .text-zinc-700,
+  .text-neutral-500,
+  .text-neutral-600,
+  .text-slate-500,
+  [class*="text-slate-500/"],
+  .text-slate-600,
+  .text-gray-500,
+  .text-gray-600
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #4B5160;
+}
+
+/* Deepen pastel dark-mode status text to WCAG-AA on crisp white / #F5F4F0 surfaces */
+html.courtside-theme .fixed.inset-0 :is(
+  .text-emerald-100, .text-emerald-200, .text-emerald-300, .text-emerald-400,
+  [class*="text-emerald-100/"], [class*="text-emerald-200/"], [class*="text-emerald-300/"], [class*="text-emerald-400/"],
+  .text-teal-200, .text-teal-300, .text-teal-400, [class*="text-teal-300/"], [class*="text-teal-400/"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #15803D;
+}
+html.courtside-theme .fixed.inset-0 :is(
+  .text-amber-100, .text-amber-200, .text-amber-300, .text-amber-400,
+  .text-yellow-100, .text-yellow-200, .text-yellow-300, .text-yellow-400,
+  [class*="text-amber-100/"], [class*="text-amber-200/"], [class*="text-amber-300/"], [class*="text-amber-400/"],
+  [class*="text-yellow-200/"], [class*="text-yellow-300/"], [class*="text-yellow-400/"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #B45309;
+}
+html.courtside-theme .fixed.inset-0 :is(
+  .text-rose-100, .text-rose-200, .text-rose-300, .text-rose-400,
+  .text-red-100, .text-red-200, .text-red-300, .text-red-400,
+  [class*="text-rose-100/"], [class*="text-rose-200/"], [class*="text-rose-300/"], [class*="text-rose-400/"],
+  [class*="text-red-200/"], [class*="text-red-300/"], [class*="text-red-400/"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #BE123C;
+}
+html.courtside-theme .fixed.inset-0 :is(
+  .text-sky-100, .text-sky-200, .text-sky-300, .text-sky-400,
+  .text-blue-100, .text-blue-200, .text-blue-300, .text-blue-400,
+  .text-cyan-100, .text-cyan-200, .text-cyan-300, .text-cyan-400,
+  [class*="text-sky-200/"], [class*="text-sky-300/"], [class*="text-sky-400/"],
+  [class*="text-blue-200/"], [class*="text-blue-300/"], [class*="text-blue-400/"],
+  [class*="text-cyan-200/"], [class*="text-cyan-300/"], [class*="text-cyan-400/"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #0369A1;
+}
+html.courtside-theme .fixed.inset-0 :is(
+  .text-purple-100, .text-purple-200, .text-purple-300, .text-purple-400,
+  .text-indigo-100, .text-indigo-200, .text-indigo-300, .text-indigo-400,
+  .text-violet-100, .text-violet-200, .text-violet-300, .text-violet-400,
+  .text-fuchsia-200, .text-fuchsia-300, .text-fuchsia-400,
+  [class*="text-indigo-200/"], [class*="text-indigo-300/"], [class*="text-indigo-400/"],
+  [class*="text-purple-200/"], [class*="text-purple-300/"], [class*="text-purple-400/"],
+  [class*="text-violet-200/"], [class*="text-violet-300/"], [class*="text-violet-400/"],
+  [class*="text-fuchsia-300/"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #6D28D9;
+}
+html.courtside-theme .fixed.inset-0 :is(
+  .text-orange-100, .text-orange-200, .text-orange-300, .text-orange-400,
+  [class*="text-orange-200/"], [class*="text-orange-300/"], [class*="text-orange-400/"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #C2410C;
+}
+
+/* Ensure pale gold/white bg-clip-text headlines remain readable on white modal cards */
+html.courtside-theme .fixed.inset-0 .bg-clip-text.text-transparent:is([class*="from-amber-1"], [class*="from-amber-2"], [class*="from-white"]) {
+  background-image: none;
+  color: #B45309;
+}
+
+/* 6. Primary White CTA Buttons Inside Modals -> Signature Apple Charcoal (#18191F) */
+html.courtside-theme .fixed.inset-0 :is(
+  button.bg-white,
+  button.bg-zinc-100,
+  button.bg-zinc-200,
+  a.bg-white
+):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  background-color: #18191F;
+  color: #FFFFFF;
+  border-color: #18191F;
+}
+html.courtside-theme .fixed.inset-0 :is(
+  button.bg-white:hover,
+  button.bg-zinc-100:hover,
+  button.bg-zinc-200:hover,
+  a.bg-white:hover
+):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  background-color: #2A2D37;
+}
+html.courtside-theme .fixed.inset-0 :is(
+  button.bg-white,
+  button.bg-zinc-100,
+  button.bg-zinc-200,
+  a.bg-white
+):not([data-broadcast-logo]):not([data-broadcast-logo] *) * {
+  color: #FFFFFF;
+}
+
+/* 7. Preserve Crisp White Text on Solid Colored & Gradient CTA Buttons / Badges */
+html.courtside-theme .fixed.inset-0 :is(
+  .bg-black,
+  .bg-\[\#18191F\],
+  .bg-\[\#DF642A\],
+  .bg-slate-800,
+  .bg-zinc-900,
+  .bg-emerald-500,
+  .bg-emerald-600,
+  .bg-emerald-700,
+  .bg-teal-500,
+  .bg-teal-600,
+  .bg-cyan-600,
+  .bg-rose-500,
+  .bg-rose-600,
+  .bg-red-500,
+  .bg-red-600,
+  .bg-sky-500,
+  .bg-sky-600,
+  .bg-blue-500,
+  .bg-blue-600,
+  .bg-indigo-500,
+  .bg-indigo-600,
+  .bg-purple-500,
+  .bg-purple-600,
+  .bg-violet-500,
+  .bg-violet-600,
+  .bg-orange-500,
+  .bg-orange-600,
+  .bg-amber-600,
+  [class*="from-emerald-5"],
+  [class*="from-emerald-6"],
+  [class*="from-rose-5"],
+  [class*="from-rose-6"],
+  [class*="from-red-5"],
+  [class*="from-red-6"],
+  [class*="from-sky-5"],
+  [class*="from-sky-6"],
+  [class*="from-blue-5"],
+  [class*="from-blue-6"],
+  [class*="from-indigo-5"],
+  [class*="from-indigo-6"],
+  [class*="from-purple-5"],
+  [class*="from-purple-6"],
+  [class*="from-orange-5"],
+  [class*="from-orange-6"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *):not([class*="from-emerald-500/"]):not([class*="from-rose-500/"]):not([class*="from-sky-500/"]):not([class*="from-blue-500/"]):not([class*="from-indigo-500/"]):not([class*="from-purple-500/"]):not([class*="from-orange-500/"]),
+html.courtside-theme .fixed.inset-0 :is(
+  .bg-black,
+  .bg-\[\#18191F\],
+  .bg-\[\#DF642A\],
+  .bg-slate-800,
+  .bg-zinc-900,
+  .bg-emerald-500,
+  .bg-emerald-600,
+  .bg-emerald-700,
+  .bg-teal-500,
+  .bg-teal-600,
+  .bg-cyan-600,
+  .bg-rose-500,
+  .bg-rose-600,
+  .bg-red-500,
+  .bg-red-600,
+  .bg-sky-500,
+  .bg-sky-600,
+  .bg-blue-500,
+  .bg-blue-600,
+  .bg-indigo-500,
+  .bg-indigo-600,
+  .bg-purple-500,
+  .bg-purple-600,
+  .bg-violet-500,
+  .bg-violet-600,
+  .bg-orange-500,
+  .bg-orange-600,
+  .bg-amber-600,
+  [class*="from-emerald-5"],
+  [class*="from-emerald-6"],
+  [class*="from-rose-5"],
+  [class*="from-rose-6"],
+  [class*="from-red-5"],
+  [class*="from-red-6"],
+  [class*="from-sky-5"],
+  [class*="from-sky-6"],
+  [class*="from-blue-5"],
+  [class*="from-blue-6"],
+  [class*="from-indigo-5"],
+  [class*="from-indigo-6"],
+  [class*="from-purple-5"],
+  [class*="from-purple-6"],
+  [class*="from-orange-5"],
+  [class*="from-orange-6"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *):not([class*="from-emerald-500/"]):not([class*="from-rose-500/"]):not([class*="from-sky-500/"]):not([class*="from-blue-500/"]):not([class*="from-indigo-500/"]):not([class*="from-purple-500/"]):not([class*="from-orange-500/"]) :is(.text-white, .text-white\/90, .text-zinc-100, .text-emerald-50, .text-rose-50, .text-sky-50, i, span):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *) {
+  color: #FFFFFF;
+}
+
+/* Preserve dark ink on bright yellow/amber/emerald-400 gold CTA buttons */
+html.courtside-theme .fixed.inset-0 :is(
+  .bg-amber-400,
+  .bg-amber-500,
+  .bg-emerald-400,
+  [class*="from-amber-4"],
+  [class*="from-amber-5"],
+  [class*="from-yellow-4"]
+):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *):not([class*="from-amber-500/"]):not([class*="from-amber-400/"]):is(.text-zinc-950, .text-slate-950, .text-black) {
+  color: #09090B;
+}
+
 @layer utilities {
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
@@ -71,15 +481,14 @@ body {
   animation: shimmer 2s infinite;
 }
 
-
 /* 1. Root Rem-Based Proportional Scaling (screens under 640px) */
 @media (max-width: 640px) {
   html {
-    font-size: 85%;
+    font-size: 94%;
   }
 }
 
-/* 3. Stable Viewport Height - use 100svh/100vh so mobile browser address bar collapse does not trigger full page reflow and repaint during scrolling */
+/* 3. Stable Viewport Height */
 @supports (height: 100svh) {
   .min-h-screen { min-height: 100svh; }
   .h-screen { height: 100svh; }
@@ -128,4 +537,3 @@ html, body {
   backface-visibility: hidden;
   perspective: 1000px;
 }
-

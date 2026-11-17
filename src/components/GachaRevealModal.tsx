@@ -427,7 +427,7 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({ revealData, 
                       <i className="fas fa-spinner fa-spin text-[11px] text-amber-400" />
                       <span>{tr('DECRYPTING SQUAD RATING...', 'BEWERTUNG WIRD BERECHNET...')}</span>
                     </div>
-                    <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">
+                    <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-mono">
                       {tr('Official Scouting Release', 'Offizielle Scouting-Freigabe')}
                     </span>
                   </div>
@@ -516,7 +516,7 @@ export const GachaRevealModal: React.FC<GachaRevealModalProps> = ({ revealData, 
                           <span className="text-[10px] font-extrabold text-zinc-400 font-mono tracking-wider">
                             {attr.label}
                           </span>
-                          <span className="text-[9px] text-zinc-400 font-medium truncate max-w-[85px]">
+                          <span className="text-[10px] text-zinc-400 font-medium truncate max-w-[85px]">
                             {attr.desc}
                           </span>
                         </div>

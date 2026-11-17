@@ -43,6 +43,8 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
   const [realDataActive, setRealDataActiveState] = useState<boolean>(isRealDataModActive());
   const [customClubs, setCustomClubsState] = useState<Club[] | null>(getCustomDb());
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isV24Expanded, setIsV24Expanded] = useState<boolean>(false);
+  const [isV23Expanded, setIsV23Expanded] = useState<boolean>(false);
   const [isV22Expanded, setIsV22Expanded] = useState<boolean>(false);
   const [isV21Expanded, setIsV21Expanded] = useState<boolean>(false);
   const [isV20Expanded, setIsV20Expanded] = useState<boolean>(false);
@@ -250,7 +252,7 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
                 }`}
               >
                 <i className="fas fa-sparkles text-[10px]" />
-                <span>v2.3 Changelog</span>
+                <span>v3.0 Changelog</span>
               </button>
               <button
                 type="button"
@@ -288,19 +290,19 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
             {/* TAB 1: CHANGELOG & VERSION HISTORY */}
             {activeTab === 'changelog' && (
               <div className="space-y-4">
-                {/* ACTIVE RELEASE CARD: v2.3 Multi-Year Sponsors, UI Overhaul & Logic Polish */}
+                {/* ACTIVE RELEASE CARD: v3.0 Courtside Edition */}
                 <div className="relative overflow-hidden rounded-2xl p-5 border border-emerald-500/20 bg-[#10121a]">
                   {/* Release Header */}
                   <div className="flex items-center justify-between gap-3 border-b border-white/[0.04] pb-3 mb-3.5">
                     <div className="flex items-center gap-2.5">
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold text-xs tracking-tight shadow-sm">
-                        v 2.3
+                        v 3.0
                       </span>
                       <h3 className="text-base sm:text-lg font-semibold text-white uppercase tracking-tight">
-                        Multi-Year Sponsors, UI Overhaul &amp; Logic Polish
+                        Courtside Edition · 3D Arenas, Gym &amp; Boardroom
                       </h3>
                     </div>
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                       ACTIVE RELEASE
                     </span>
@@ -308,51 +310,203 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
 
                   {/* Eyebrow */}
                   <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-300/90 mb-3">
-                    UNIFIED SPONSORSHIP HUB, 1–3 YEAR CONTRACTS, BROADCAST UI &amp; ENGINE INTEGRITY
+                    AUTHENTIC REAL-LIFE ATTENDANCE, MULTI-SCENE 3D ARENAS, HQ L1–L5 &amp; COURTSIDE UX
                   </div>
 
                   {/* Bullet Highlights Grid */}
                   <div className="space-y-2.5 text-xs text-zinc-300">
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-file-contract text-emerald-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-users text-emerald-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">Unified Sponsorship Deals Hub &amp; 1–3 Year Contract Negotiation</strong>
+                        <strong className="text-white block font-semibold">Real-Life Calibrated European Attendance Engine</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Standard, Megadeal, and Performance sponsorships are consolidated into a single commercial negotiation hub. Negotiate 1-year, 2-year (+5%/yr bonus), or 3-year (+10%/yr bonus) commitments with automated recurring season payouts and full Ledger tracking.
+                          Audited 2024/25 official turnstile numbers across all 13 handball nations—fixing false Day-1 sellouts so clubs open at realistic home gates while still surging with trophies and expansions.
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-shield-halved text-amber-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-cube text-amber-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">Streamlined Board Confidence &amp; Club Impact HUD</strong>
+                        <strong className="text-white block font-semibold">Multi-Scene 3D Match Play, Perimeter Sponsors &amp; Luxury 14k+ Bowls</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Redesigned Board Confidence modal featuring an instant sacking threshold meter (&lt;15%), active board target vs. live standing comparison, immunity shield badges, and a clear 3-pillar breakdown (Results, Finances, Youth &amp; Facilities).
+                          Watch live build-up passing, fast-break transitions, and goal celebrations in 3D with clean perimeter sponsor LEDs, dynamic sideline-to-corner crowd fill, and Level 1–5 HQ architectural scaling.
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-layer-group text-sky-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-briefcase text-sky-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">Unified Broadcast Design System Across All Modals</strong>
+                        <strong className="text-white block font-semibold">3D Executive Boardroom, Training Gym &amp; Focused Modals</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Consistent dark broadcast surfaces (#14151e / #10121a), crisp hairline dividers, and tabular telemetry across Sponsorships, Youth Academy, Team Retreat, Transfer Market, Facilities, Financial Ledger, and Stadium modals.
+                          Interactive 3D conference table with Manager Overview, Club Impact, Media Impact, Board Roadmap, Job Market, and Manager Skills—paired with simplified Winter Break reviews and high-contrast typography.
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
-                      <i className="fas fa-gears text-purple-400 mt-0.5 shrink-0" />
+                      <i className="fas fa-mobile-screen-button text-purple-400 mt-0.5 shrink-0" />
                       <div>
-                        <strong className="text-white block font-semibold">Solvency, Playoff Promotion &amp; Academy Protection Refinements</strong>
+                        <strong className="text-white block font-semibold">Unified Courtside Onboarding, Clean Layout &amp; Mobile Polish</strong>
                         <span className="text-zinc-400 text-[11px] leading-relaxed">
-                          Automatic debt &amp; insolvency alert clearance when capital injections restore positive balance, division-matched sponsor pool refreshes after playoff promotions/relegations, and protected academy prospect priority during Generational Rebuilds.
+                          Consistent Courtside design from career setup through 35 seasons, mobile-first layout alignment, verified persistence/analytics sync, and zero-loop toast stability.
                         </span>
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* PREVIOUS MILESTONE ARCHIVE CARD: v2.4 (Collapsible Accordion Row) */}
+                <div className="relative overflow-hidden rounded-2xl border border-white/[0.04] bg-[#10121a] transition-colors duration-200 hover:border-emerald-500/20">
+                  <button
+                    type="button"
+                    onClick={() => setIsV24Expanded((prev) => !prev)}
+                    className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left transition hover:bg-emerald-500/[0.03] cursor-pointer focus:outline-none"
+                    aria-expanded={isV24Expanded}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="px-2 py-0.5 rounded-full bg-black/40 text-zinc-400 border border-white/[0.04] font-semibold text-xs tracking-tight shadow-sm shrink-0">
+                        v 2.4
+                      </span>
+                      <h3 className="text-sm sm:text-base font-semibold text-zinc-200 uppercase tracking-tight truncate">
+                        {'Courtside Foundation · 3D Arenas & Training Complex'}
+                      </h3>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 hidden xs:inline-block">
+                        MILESTONE ARCHIVE
+                      </span>
+                      <div className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-zinc-400">
+                        <i
+                          className={`fas fa-chevron-down text-[10px] transition-transform duration-200 ${
+                            isV24Expanded ? 'rotate-180 text-white' : ''
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isV24Expanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        className="overflow-hidden border-t border-white/[0.04] bg-black/20"
+                      >
+                        <div className="p-4 sm:p-5 space-y-2.5 text-xs text-zinc-300">
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-cube text-emerald-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Initial 3D Courtside Arena &amp; 4 Court Presets</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                40×20m 3D indoor courtside arena scaling up to 30,000 seats with Terracotta, Club Heritage, Championship Taraflex, and Nordic Birch floor options.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-dumbbell text-amber-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">3D Squad Training Gym &amp; Commercial HQ View</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Synchronized indoor warm-up arena for the Squad tab and live 3D club headquarters exterior on Commercial with IPO stock ticker.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-bell text-sky-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Notification Bell History &amp; U19 Tournament Access</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Persistent header notification center, Arena Overview &amp; Expansion inspector modal, and integrated U19 National Youth Cup controls.
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* PREVIOUS MILESTONE ARCHIVE CARD: v2.3 (Collapsible Accordion Row) */}
+                <div className="relative overflow-hidden rounded-2xl border border-white/[0.04] bg-[#10121a] transition-colors duration-200 hover:border-emerald-500/20">
+                  <button
+                    type="button"
+                    onClick={() => setIsV23Expanded((prev) => !prev)}
+                    className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left transition hover:bg-emerald-500/[0.03] cursor-pointer focus:outline-none"
+                    aria-expanded={isV23Expanded}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="px-2 py-0.5 rounded-full bg-black/40 text-zinc-400 border border-white/[0.04] font-semibold text-xs tracking-tight shadow-sm shrink-0">
+                        v 2.3
+                      </span>
+                      <h3 className="text-sm sm:text-base font-semibold text-zinc-200 uppercase tracking-tight truncate">
+                        {'Multi-Year Sponsors, UI Overhaul & Logic Polish'}
+                      </h3>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 hidden xs:inline-block">
+                        MILESTONE ARCHIVE
+                      </span>
+                      <div className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-zinc-400">
+                        <i
+                          className={`fas fa-chevron-down text-[10px] transition-transform duration-200 ${
+                            isV23Expanded ? 'rotate-180 text-white' : ''
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isV23Expanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        className="overflow-hidden border-t border-white/[0.04] bg-black/20"
+                      >
+                        <div className="p-4 sm:p-5 space-y-2.5 text-xs text-zinc-300">
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-file-contract text-emerald-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Unified Sponsorship Deals Hub &amp; 1–3 Year Contract Negotiation</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Standard, Megadeal, and Performance sponsorships consolidated into one commercial hub with 1–3 year terms (+5%/+10%/yr bonuses) and automated recurring Ledger payouts.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-shield-halved text-amber-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Streamlined Board Confidence &amp; Club Impact HUD</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Instant sacking threshold meter (&lt;15%), active board target vs. live standing comparison, immunity shield badges, and clear 3-pillar breakdown.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-2.5 bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                            <i className="fas fa-gears text-purple-400 mt-0.5 shrink-0" />
+                            <div>
+                              <strong className="text-white block font-semibold">Solvency, Playoff Promotion &amp; Academy Protection Refinements</strong>
+                              <span className="text-zinc-400 text-[11px] leading-relaxed">
+                                Automatic debt alert clearance after capital injections, division-matched sponsor pool refreshes after promotions/relegations, and protected academy priority during Rebuilds.
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* PREVIOUS MILESTONE ARCHIVE CARD: v2.2 (Collapsible Accordion Row) */}
@@ -788,7 +942,7 @@ export const ModSelectionModal: React.FC<ModSelectionModalProps> = ({
                   <span className="text-amber-200/90 font-semibold">{REALDATA_MOD_FILE}</span>
                 </div>
                 <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
-                  <i className="fas fa-check-double text-amber-400/60 text-[9px]" />
+                  <i className="fas fa-check-double text-amber-400/70 text-[10px]" />
                   <span>TARGET DIRECTORY</span>
                 </div>
               </div>

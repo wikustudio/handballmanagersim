@@ -1,5 +1,6 @@
 import { useGameStore } from '../store/useGameStore';
 import { isRealDataModActive, getCustomDb } from './modManager';
+import { isTransientDomMutationError, isExternalExtensionOnlyError } from './crashResilience';
 
 export type FeedbackType = 'crash' | 'bug' | 'feature';
 
@@ -52,6 +53,7 @@ const SENT_CRASH_HASHES_KEY = 'handball_sent_crash_hashes';
 const MAX_RECENT_ERRORS = 10;
 
 const recentErrorsBuffer: CapturedCrashEntry[] = [];
+const sentCrashFingerprints = new Set<string>();
 let initialized = false;
 
 function safeSessionGet(key: string): string | null {
@@ -216,25 +218,27 @@ export async function submitFeedbackReport(
 
   // 1. Submit to existing Supabase project (handball_feedback table)
   let supabaseAccepted = false;
-  const supabasePromise = (async () => {
-    try {
-      const sbRes = await fetch(`${SUPABASE_URL}/rest/v1/handball_feedback`, {
-        method: 'POST',
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
-        },
-        body: JSON.stringify(supabaseRow),
-      });
-      if (sbRes.ok) {
-        supabaseAccepted = true;
-      }
-    } catch {
-      // Ignore if offline
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const sbRes = await fetch(`${SUPABASE_URL}/rest/v1/handball_feedback`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(supabaseRow),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (sbRes.ok) {
+      supabaseAccepted = true;
     }
-  })();
+  } catch {
+    // Ignore if offline or blocked by strict browser shield; backend fallback will handle
+  }
 
   // 2. Submit to native Netlify Forms (triggers Netlify Email Notifications if enabled in Netlify Dashboard)
   let netlifyFormsAccepted = false;
@@ -272,7 +276,7 @@ export async function submitFeedbackReport(
     }
   })();
 
-  // 3. Submit to backend / Netlify Serverless Function for email relay
+  // 3. Submit to backend / Netlify Serverless Function for email relay & server-side Supabase backup
   let backendAccepted = false;
   let lastError = 'Network error while submitting feedback report.';
   const backendPromise = (async () => {
@@ -289,7 +293,7 @@ export async function submitFeedbackReport(
             ...payload,
             reportId: clientReportId,
             submittedAt,
-            skipSupabaseInsert: true,
+            skipSupabaseInsert: supabaseAccepted,
           }),
         });
 
@@ -318,7 +322,7 @@ export async function submitFeedbackReport(
     }
   })();
 
-  await Promise.allSettled([supabasePromise, netlifyFormsPromise, backendPromise]);
+  await Promise.allSettled([netlifyFormsPromise, backendPromise]);
 
   if (supabaseAccepted || backendAccepted || netlifyFormsAccepted) {
     return {
@@ -338,7 +342,19 @@ export async function autoSubmitCrashReport(
   componentStack?: string
 ): Promise<{ ok: boolean; reportId?: string; crashEntry: CapturedCrashEntry }> {
   const crashEntry = recordCrashReport(error, componentStack, 'ErrorBoundary');
+
+  // Skip remote dispatch for transient browser-extension / Google Translate DOM reconciliation hiccups
+  if (isTransientDomMutationError(error) || isExternalExtensionOnlyError(error)) {
+    return { ok: true, reportId: crashEntry.id, crashEntry };
+  }
+
   const fingerprint = `${crashEntry.message}::${(crashEntry.stack || '').slice(0, 180)}`;
+
+  // Synchronous in-memory lock prevents StrictMode / concurrent fiber bursts from firing duplicate reports
+  if (sentCrashFingerprints.has(fingerprint)) {
+    return { ok: true, reportId: crashEntry.id, crashEntry };
+  }
+  sentCrashFingerprints.add(fingerprint);
 
   try {
     const rawHashes = safeSessionGet(SENT_CRASH_HASHES_KEY);
@@ -381,12 +397,22 @@ export function initCrashReporter(): void {
     if (target && (target.tagName === 'IMG' || target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
       return;
     }
+    const file = event.filename || '';
+    if (file.includes('chrome-extension://') || file.includes('moz-extension://')) {
+      return;
+    }
     const err = event.error || event.message || 'Unhandled window error';
+    if (isTransientDomMutationError(err) || isExternalExtensionOnlyError(err)) {
+      return;
+    }
     recordCrashReport(err, undefined, 'window.onerror');
   });
 
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason || 'Unhandled Promise Rejection';
+    if (isTransientDomMutationError(reason) || isExternalExtensionOnlyError(reason)) {
+      return;
+    }
     recordCrashReport(reason, undefined, 'unhandledrejection');
   });
 }

@@ -28,7 +28,6 @@ import {
 import { ALL_CLUBS } from '../data/clubsData';
 import { getActiveClubs, isAnyModActive } from '../utils/modManager';
 import { ClubLogo } from './ClubLogo';
-import { t as tr } from '../data/translations';
 import { calculateLiveScore, saveHighscore } from '../utils/leaderboard';
 import { useModalDismiss } from '../utils/modalUtils';
 
@@ -495,13 +494,13 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
           callback: (value: any) => {
             return `Tier ${value}`;
           },
-          color: '#8e8e93',
+          color: '#a1a1aa',
           font: { weight: 'bold' as const, size: 10 },
         },
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
       },
       x: {
-        ticks: { color: '#8e8e93', font: { size: 10 } },
+        ticks: { color: '#a1a1aa', font: { size: 10 } },
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
       },
     },
@@ -607,7 +606,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
               <div className="bg-[#10121a] border border-white/[0.04] rounded-xl px-2.5 py-2 flex flex-col items-center text-center">
-                <span className="text-[9px] font-medium text-zinc-400 uppercase tracking-wider">
+                <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
                   Final OVR
                 </span>
                 <span className={`text-sm font-semibold tabular-nums ${getOvrColor(state.club.baseOvr, getLeagueInfo(state.club.tier, state.club.country).avgOvr)}`}>
@@ -615,7 +614,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                 </span>
               </div>
               <div className="bg-[#10121a] border border-white/[0.04] rounded-xl px-2.5 py-2 flex flex-col items-center text-center">
-                <span className="text-[9px] font-medium text-sky-400 uppercase tracking-wider">
+                <span className="text-[10px] font-medium text-sky-400 uppercase tracking-wider">
                   Coach Rep
                 </span>
                 <span className="text-sm font-semibold text-sky-300 tabular-nums">
@@ -623,7 +622,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                 </span>
               </div>
               <div className="bg-[#10121a] border border-white/[0.04] rounded-xl px-2.5 py-2 flex flex-col items-center text-center">
-                <span className="text-[9px] font-medium text-purple-400 uppercase tracking-wider">
+                <span className="text-[10px] font-medium text-purple-400 uppercase tracking-wider">
                   Club Rep
                 </span>
                 <span className="text-sm font-semibold text-purple-300 tabular-nums">
@@ -631,7 +630,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                 </span>
               </div>
               <div className="bg-[#10121a] border border-white/[0.04] rounded-xl px-2.5 py-2 flex flex-col items-center text-center">
-                <span className="text-[9px] font-medium text-emerald-400 uppercase tracking-wider">
+                <span className="text-[10px] font-medium text-emerald-400 uppercase tracking-wider">
                   Score
                 </span>
                 <span className="text-sm font-semibold text-emerald-300 tabular-nums">
@@ -644,19 +643,19 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
           {/* Streamlined Stat Badges & Cabinet */}
           <div className="flex flex-row justify-between w-full gap-2 z-10 my-2">
             <div className="flex-1 bg-[#10121a] rounded-xl p-2.5 border border-white/[0.04] text-center flex flex-col items-center justify-center">
-              <div className="text-[8px] sm:text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
+              <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
                 {t('Seasons', 'Saisons')}
               </div>
               <div className="text-sm sm:text-base font-semibold text-white tabular-nums">{history.length}</div>
             </div>
             <div className="flex-1 bg-[#10121a] rounded-xl p-2.5 border border-white/[0.04] text-center flex flex-col items-center justify-center">
-              <div className="text-[8px] sm:text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
+              <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
                 Win %
               </div>
               <div className="text-sm sm:text-base font-semibold text-emerald-400 tabular-nums">{winPct}%</div>
             </div>
             <div className="flex-1 bg-[#10121a] rounded-xl p-2.5 border border-white/[0.04] text-center flex flex-col items-center justify-center">
-              <div className="text-[8px] sm:text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
+              <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
                 {t('Wins', 'Siege')}
               </div>
               <div className="text-sm sm:text-base font-semibold text-white tabular-nums">{state.totals?.wins || 0}</div>
@@ -666,7 +665,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
           </div>
           
           <div className="bg-[#10121a] rounded-xl p-3 border border-white/[0.04] flex flex-col gap-2 my-2 w-full">
-             <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-widest text-center flex items-center justify-center gap-1.5">
+             <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-widest text-center flex items-center justify-center gap-1.5">
                <i className="fas fa-trophy text-amber-400"></i> {t('Total Trophy Cabinet', 'Gesamter Trophaeenschrank')} (<span className="tabular-nums">{totalTrophies}</span>)
              </div>
              {totalTrophies === 0 ? (
@@ -678,7 +677,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                      <div className="w-9 h-9 rounded-full bg-slate-200 border border-slate-400 flex items-center justify-center shadow-[0_0_10px_rgba(203,213,225,0.5)] z-10 overflow-hidden" title={clTitle}>
                        <i className="fas fa-trophy text-slate-800 text-[18px] drop-shadow-md relative z-10"></i>
                      </div>
-                     {totalTrophyCounts.cl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.cl}</span>}
+                     {totalTrophyCounts.cl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.cl}</span>}
                    </div>
                  )}
                  {totalTrophyCounts.el > 0 && (
@@ -686,7 +685,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                      <div className="w-9 h-9 rounded-full bg-amber-600 border border-amber-500 flex items-center justify-center shadow-[0_0_10px_rgba(217,119,6,0.5)] z-10 overflow-hidden" title={elTitle}>
                        <i className="fas fa-trophy text-amber-100 text-[18px] drop-shadow-md relative z-10"></i>
                      </div>
-                     {totalTrophyCounts.el > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.el}</span>}
+                     {totalTrophyCounts.el > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.el}</span>}
                    </div>
                  )}
                  {totalTrophyCounts.ecl > 0 && (
@@ -694,7 +693,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                      <div className="w-9 h-9 rounded-full bg-emerald-600 border border-emerald-500 flex items-center justify-center shadow-[0_0_10px_rgba(5,150,105,0.5)] z-10 overflow-hidden" title={eclTitle}>
                        <i className="fas fa-trophy text-emerald-100 text-[18px] drop-shadow-md relative z-10"></i>
                      </div>
-                     {totalTrophyCounts.ecl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.ecl}</span>}
+                     {totalTrophyCounts.ecl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.ecl}</span>}
                    </div>
                  )}
                  {totalTrophyCounts.cwc > 0 && (
@@ -702,7 +701,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                      <div className="w-9 h-9 rounded-full bg-blue-900 border border-yellow-500/50 flex items-center justify-center z-10 overflow-hidden" title="Global Club Cup">
                        <i className="fas fa-globe text-yellow-400 text-[18px] drop-shadow-md relative z-10"></i>
                      </div>
-                     {totalTrophyCounts.cwc > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.cwc}</span>}
+                     {totalTrophyCounts.cwc > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.cwc}</span>}
                    </div>
                  )}
                  {totalTrophyCounts.bl > 0 && (
@@ -710,7 +709,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 border border-amber-300 flex items-center justify-center shadow-[0_0_10px_rgba(245,158,11,0.5)] z-10 overflow-hidden" title={t('League Titles', 'Liga-Titel')}>
                        <i className="fas fa-medal text-white drop-shadow-md text-[18px] relative z-10"></i>
                      </div>
-                     {totalTrophyCounts.bl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.bl}</span>}
+                     {totalTrophyCounts.bl > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.bl}</span>}
                    </div>
                  )}
                  {totalTrophyCounts.dfb > 0 && (
@@ -718,7 +717,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 border border-slate-200 flex items-center justify-center shadow-[0_0_10px_rgba(203,213,225,0.5)] z-10 overflow-hidden" title={t('Domestic Cups', 'Nationale Pokale')}>
                        <i className="fas fa-trophy text-slate-700 drop-shadow-md text-[18px] relative z-10"></i>
                      </div>
-                     {totalTrophyCounts.dfb > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.dfb}</span>}
+                     {totalTrophyCounts.dfb > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.dfb}</span>}
                    </div>
                  )}
                  {totalTrophyCounts.lower > 0 && (
@@ -726,7 +725,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                      <div className="w-8 h-8 rounded-full bg-slate-600 border border-slate-500 flex items-center justify-center z-10" title="Lower League Title">
                        <i className="fas fa-medal text-slate-300 text-xs"></i>
                      </div>
-                     {totalTrophyCounts.lower > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.lower}</span>}
+                     {totalTrophyCounts.lower > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.lower}</span>}
                    </div>
                  )}
                  {totalTrophyCounts.reg > 0 && (
@@ -734,7 +733,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                      <div className="w-8 h-8 rounded-full bg-amber-800 border border-amber-700 flex items-center justify-center z-10" title={getDomesticCupInfo(state?.club?.country || 'GER', 4).name || 'Regional Cup'}>
                        <i className="fas fa-shield-halved text-amber-200 text-xs"></i>
                      </div>
-                     {totalTrophyCounts.reg > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.reg}</span>}
+                     {totalTrophyCounts.reg > 1 && <span className="absolute -top-2 -right-2 bg-[#2c2c2e] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white/20 z-20">x{totalTrophyCounts.reg}</span>}
                    </div>
                  )}
                </div>
@@ -745,7 +744,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
           {/* AI Pundit Summary */}
           <div className="w-full bg-[#10121a] rounded-xl p-3 sm:p-4 my-2 border border-purple-500/20 relative overflow-hidden group">
              <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 opacity-60"></div>
-             <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+             <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                <i className="fas fa-robot text-purple-400"></i> {t('AI Career Analysis', 'KI-Karriere-Analyse')}
              </div>
              <div className="text-sm text-zinc-200 leading-relaxed font-normal">
@@ -769,7 +768,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
 
           {/* Footer watermark */}
           <div className="w-full text-center mt-3 z-10 opacity-60">
-            <div className="text-[9px] font-medium text-white/80 tracking-widest uppercase">
+            <div className="text-[10px] font-medium text-white/80 tracking-widest uppercase">
               Handball Coach Legend • Career Legacy
             </div>
           </div>
@@ -903,7 +902,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                     {/* TOP LABEL */}
                     {isTop && (
                       <div className="absolute bottom-full mb-6 flex flex-col items-center">
-                        <div className={`text-[10px] whitespace-nowrap font-medium transition-colors text-center ${hasPassed ? 'text-white' : 'text-[#8e8e93]'}`}>
+                        <div className={`text-[10px] whitespace-nowrap font-medium transition-colors text-center ${hasPassed ? 'text-white' : 'text-zinc-400'}`}>
                           {mgr.name.split(' ').map((n, i) => <div key={`name-${i}`}>{n}</div>)}
                         </div>
                         <div className={`mt-2 w-0.5 h-4 ${hasPassed ? 'bg-amber-400' : 'bg-white/20'}`}></div>
@@ -918,7 +917,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                     {!isTop && (
                       <div className="absolute top-full mt-6 flex flex-col items-center">
                         <div className={`mb-2 w-0.5 h-4 ${hasPassed ? 'bg-amber-400' : 'bg-white/20'}`}></div>
-                        <div className={`text-[10px] whitespace-nowrap font-medium transition-colors text-center ${hasPassed ? 'text-white' : 'text-[#8e8e93]'}`}>
+                        <div className={`text-[10px] whitespace-nowrap font-medium transition-colors text-center ${hasPassed ? 'text-white' : 'text-zinc-400'}`}>
                           {mgr.name.split(' ').map((n, i) => <div key={`name-${i}`}>{n}</div>)}
                         </div>
                       </div>
@@ -977,7 +976,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
              })}
           </div>
 
-          <div className="text-center text-[10px] text-[#8e8e93] font-medium uppercase tracking-widest mt-4">
+          <div className="text-center text-[10px] text-zinc-400 font-medium uppercase tracking-widest mt-4">
             {t('Career Score Timeline', 'Karriere-Score Zeitstrahl')}
           </div>
         </div>
@@ -1043,19 +1042,19 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
 
                   <div className="grid grid-cols-3 gap-2 bg-[#10121a] p-3 rounded-xl border border-white/[0.04] mb-4 text-center">
                     <div>
-                      <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
+                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
                         {t('Wins', 'Siege')}
                       </div>
                       <div className="text-sm font-semibold text-emerald-400 tabular-nums">{c.wins}</div>
                     </div>
                     <div>
-                      <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
+                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
                         {t('Matches', 'Spiele')}
                       </div>
                       <div className="text-sm font-semibold text-white tabular-nums">{c.matches}</div>
                     </div>
                     <div>
-                      <div className="text-[9px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
+                      <div className="text-[10px] text-zinc-400 font-medium uppercase tracking-wider mb-0.5">
                         Win %
                       </div>
                       <div className="text-sm font-semibold text-sky-400 tabular-nums">
@@ -1080,7 +1079,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                             <i className="fas fa-trophy text-4xl text-slate-300 drop-shadow-[0_0_15px_rgba(203,213,225,0.5)]"></i>
                             <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.cl}</span>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubClTitle}</div>
+                          <div className="text-[10px] text-zinc-400 text-center mt-1 font-medium max-w-[80px] truncate">{clubClTitle}</div>
                         </div>
                       )}
                       {c.trophyCounts.el > 0 && (
@@ -1089,7 +1088,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                             <i className="fas fa-trophy text-4xl text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]"></i>
                             <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.el}</span>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubElTitle}</div>
+                          <div className="text-[10px] text-zinc-400 text-center mt-1 font-medium max-w-[80px] truncate">{clubElTitle}</div>
                         </div>
                       )}
                       {c.trophyCounts.ecl > 0 && (
@@ -1098,7 +1097,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                             <i className="fas fa-trophy text-4xl text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]"></i>
                             <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.ecl}</span>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubEclTitle}</div>
+                          <div className="text-[10px] text-zinc-400 text-center mt-1 font-medium max-w-[80px] truncate">{clubEclTitle}</div>
                         </div>
                       )}
                       {c.trophyCounts.cwc > 0 && (
@@ -1107,7 +1106,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                             <i className="fas fa-globe text-4xl text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)]"></i>
                             <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.cwc}</span>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">Global Club Cup</div>
+                          <div className="text-[10px] text-zinc-400 text-center mt-1 font-medium max-w-[80px] truncate">Global Club Cup</div>
                         </div>
                       )}
                       {c.trophyCounts.bl > 0 && (
@@ -1116,7 +1115,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                             {getTrophyImage('bl', clubCountry) ? <img src={getTrophyImage('bl', clubCountry)} alt="League" className="w-full h-full object-contain" style={{ filter: getTrophyFilter('bl') }} onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <i className="fas fa-medal text-4xl text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]"></i>}
                             <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.bl}</span>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubLeagueTitle}</div>
+                          <div className="text-[10px] text-zinc-400 text-center mt-1 font-medium max-w-[80px] truncate">{clubLeagueTitle}</div>
                         </div>
                       )}
                       {c.trophyCounts.dfb > 0 && (
@@ -1125,7 +1124,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                             <i className="fas fa-trophy text-4xl text-slate-400 drop-shadow-[0_0_15px_rgba(148,163,184,0.5)]"></i>
                             <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.dfb}</span>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{clubCupTitle}</div>
+                          <div className="text-[10px] text-zinc-400 text-center mt-1 font-medium max-w-[80px] truncate">{clubCupTitle}</div>
                         </div>
                       )}
                       {c.trophyCounts.lower > 0 && (
@@ -1134,7 +1133,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                             {getTrophyImage('generic', clubCountry) ? <img src={getTrophyImage('generic', clubCountry)} alt="Lower League" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <i className="fas fa-medal text-4xl text-zinc-400 drop-shadow-[0_0_15px_rgba(161,161,170,0.5)]"></i>}
                             <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.lower}</span>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{t("Lower League", "Untere Liga")}</div>
+                          <div className="text-[10px] text-zinc-400 text-center mt-1 font-medium max-w-[80px] truncate">{t("Lower League", "Untere Liga")}</div>
                         </div>
                       )}
                       {c.trophyCounts.reg > 0 && (
@@ -1143,7 +1142,7 @@ export const CareerSummary: React.FC<CareerSummaryProps> = ({
                             {getTrophyImage('generic', clubCountry) ? <img src={getTrophyImage('generic', clubCountry)} alt="Regional Cup" className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <i className="fas fa-medal text-4xl text-zinc-400 drop-shadow-[0_0_15px_rgba(161,161,170,0.5)]"></i>}
                             <span className="absolute -bottom-1 -right-1 bg-amber-500 text-black text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full shadow-md border border-[#0a0a0b] z-20 tabular-nums">x{c.trophyCounts.reg}</span>
                           </div>
-                          <div className="text-[9px] text-[#8e8e93] text-center mt-1 font-medium max-w-[80px] truncate">{getDomesticCupInfo(state?.club?.country || 'GER', 4).name || 'Regional Cup'}</div>
+                          <div className="text-[10px] text-zinc-400 text-center mt-1 font-medium max-w-[80px] truncate">{getDomesticCupInfo(state?.club?.country || 'GER', 4).name || 'Regional Cup'}</div>
                         </div>
                       )}
                     </div>

@@ -810,11 +810,14 @@ export interface BroadcastContext {
 }
 
 export function getBroadcastingPackage(
-  countryCode: string = 'GER',
+  countryCode: unknown = 'GER',
   isEuropean: boolean = false,
   context?: BroadcastContext
 ): BroadcastingPackage {
-  const cleanCode = countryCode.trim().toUpperCase();
+  const cleanCode =
+    typeof countryCode === 'string' && countryCode.trim().length > 0
+      ? countryCode.trim().toUpperCase()
+      : 'GER';
   const isModActive = context?.isModActive !== undefined 
     ? context.isModActive 
     : isAnyModActive();

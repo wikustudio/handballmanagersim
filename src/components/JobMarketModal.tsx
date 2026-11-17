@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import { Club, GameState, Language } from '../types';
 import { ClubLogo } from './ClubLogo';
 import { getLeagueInfo, getOvrColor, formatMoney, getStartingBudget, getCountryFlag, normalizeCountry } from '../data/gameConstants';
-import { t as tr } from '../data/translations';
 import { mergeClubWithWorldState } from '../utils/modManager';
 import { useModalDismiss } from '../utils/modalUtils';
 
@@ -178,7 +177,7 @@ export const JobMarketModal: React.FC<JobMarketModalProps> = ({
                     <span className="text-xs sm:text-sm font-bold text-amber-200">
                       {lang === 'de' ? 'Alternative: Altstar verpflichten (All-In Aufstiegs-Wette)' : 'Alternative: Sign Veteran Ringer (High-Risk Promotion Gamble)'}
                     </span>
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase">
                       T{state.club.tier}
                     </span>
                   </div>
@@ -284,23 +283,23 @@ const OfferCard: React.FC<{ club: Club; lang: Language; onAccept: () => void; t:
       {/* Top Banner Tag */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
         {isFallenGiant ? (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
             <span>FALLEN GIANT REBUILD</span>
           </span>
         ) : isRescueProject ? (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/20 flex items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/20 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
             <span>LOWER-TIER RESCUE</span>
           </span>
         ) : club.tier === 1 ? (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider bg-sky-500/10 text-sky-300 border border-sky-500/20 flex items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider bg-sky-500/10 text-sky-300 border border-sky-500/20 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
             <span>TOP-FLIGHT ELITE</span>
           </span>
         ) : (
-          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider bg-white/[0.03] text-zinc-400 border border-white/[0.04]">
-            Tier {club.tier} Project
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider bg-white/[0.03] text-zinc-400 border border-white/[0.04]">
+            Division Project
           </span>
         )}
 
@@ -345,13 +344,13 @@ const OfferCard: React.FC<{ club: Club; lang: Language; onAccept: () => void; t:
       
       <div className="grid grid-cols-2 gap-2 mt-auto pt-3 border-t border-white/[0.04] w-full">
         <div className="flex flex-col">
-          <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-medium">{t('Squad OVR', 'Kader GES')}</span>
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">{t('Squad OVR', 'Kader GES')}</span>
           <span className={`text-xs font-semibold tabular-nums ${getOvrColor(club.baseOvr, getLeagueInfo(club.tier, club.country).avgOvr)}`}>
             {club.baseOvr} OVR
           </span>
         </div>
         <div className="flex flex-col text-right">
-          <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-medium">{t('Starting Budget', 'Startbudget')}</span>
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium">{t('Starting Budget', 'Startbudget')}</span>
           <span className="text-xs font-semibold text-emerald-400 tabular-nums">
             {formatMoney(getStartingBudget(club.tier, club.country || 'GER'))}
           </span>

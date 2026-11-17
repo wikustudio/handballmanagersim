@@ -4,8 +4,6 @@ import { GameState, Language } from '../types';
 import { getLeagueInfo, getDynamicLeagueAvgOvr, getOvrTierConfig } from '../data/gameConstants';
 import { useModalDismiss } from '../utils/modalUtils';
 
-import { getActiveClubs } from '../utils/modManager';
-
 interface OvrModalProps {
   state: GameState;
   lang: Language;

@@ -1,9 +1,12 @@
+import { installDomMutationResilience } from './utils/crashResilience';
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import { HelmetProvider } from 'react-helmet-async';
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+
+installDomMutationResilience();
 
 // Polyfill requestIdleCallback / cancelIdleCallback for Safari & iOS WebKit
 if (typeof window !== 'undefined') {

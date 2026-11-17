@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { GameState, Language } from '../types';
 import { ClubLogo } from './ClubLogo';
-import { t as tr } from '../data/translations';
 import { useModalDismiss } from '../utils/modalUtils';
 
 interface ClubCustomizationModalProps {

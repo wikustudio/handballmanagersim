@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { useGameStore } from '../store/useGameStore';
 import { ClubLogo } from './ClubLogo';
 import { TrophyGraphic } from './TrophyGraphic';
@@ -218,6 +218,8 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
       if (club.stadiumName) return club.stadiumName;
 
       const KNOWN_ARENAS: Record<string, string> = {
+        'SC Magdeburg Youngsters': 'Wolfgang-Lakenmacher-Halle, Magdeburg',
+        'SC Magdeburg II': 'Wolfgang-Lakenmacher-Halle, Magdeburg',
         'SC Magdeburg': 'GETEC Arena, Magdeburg',
         'Füchse Berlin': 'Max-Schmeling-Halle, Berlin',
         'THW Kiel': 'Wunderino Arena, Kiel',
@@ -1150,7 +1152,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
 
           {/* Right: Broadcaster Logo */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className="hidden md:inline text-[10px] font-mono text-zinc-500 uppercase tracking-wider truncate max-w-[180px]">
+            <span className="hidden md:inline text-[10px] font-mono text-zinc-500 uppercase tracking-wider truncate max-w-[260px] lg:max-w-none">
               {broadcastPackage.networkTag}
             </span>
             <BroadcastLogo packageOrKey={broadcastPackage} size="sm" isModActive={isModActive} />
@@ -1250,7 +1252,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
 
               {/* Right Head Coach Plaque */}
               <div className="w-full sm:w-auto shrink-0 bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 sm:px-4 sm:py-2.5 flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-1">
-                <span className="text-[9px] uppercase tracking-widest text-zinc-400 font-extrabold font-mono">
+                <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-extrabold font-mono">
                   HEAD COACH
                 </span>
                 <span className="text-xs sm:text-sm font-bold text-white tracking-tight truncate">
@@ -1351,7 +1353,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                       }}
                       className="sm:hidden px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 font-sans font-bold text-[10px] flex items-center gap-1 active:scale-95 cursor-pointer"
                     >
-                      <i className="fas fa-bolt text-[9px]" />
+                      <i className="fas fa-bolt text-[10px]" />
                       <span>Tactics</span>
                     </button>
                     <span className="font-mono text-zinc-400 text-[10px]">
@@ -1543,7 +1545,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                           </span>
                           <div className="w-20 sm:w-24 flex justify-end">
                             {team.stake && (
-                              <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md border font-bold tracking-tight shrink-0 ${
+                              <span className={`text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md border font-bold tracking-tight shrink-0 ${
                                 isDrop ? 'bg-rose-500/15 border-rose-500/30 text-rose-300' :
                                 isPlayoff ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' :
                                 isSafe ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' :
@@ -1932,9 +1934,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
             {/* Title */}
             <h2
               className={`text-3xl sm:text-4xl font-black uppercase tracking-tight mb-2 ${
-                result
-                  ? 'bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 bg-clip-text text-transparent'
-                  : 'text-red-400'
+                result ? 'text-white' : 'text-red-400'
               }`}
             >
               {getResultTitle()}
@@ -1988,7 +1988,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                     <i className="fas fa-list-check text-amber-400 text-xs" />
                     <span>Match Highlights Timeline</span>
                   </div>
-                  <span className="text-[9px] text-zinc-400 font-mono uppercase tracking-wider">
+                  <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-wider">
                     {isIhfMatch ? 'IHF SUPER GLOBE' : isCupMatch ? (matchData.cupName || 'CUP CLASH') : 'DECISIVE MATCH'}
                   </span>
                 </div>
@@ -1997,7 +1997,7 @@ export const KeyMatchModal: React.FC<KeyMatchModalProps> = ({
                     <div key={idx} className="flex items-start gap-2.5 text-xs py-1 border-b border-white/[0.03] last:border-0">
                       <span className="font-mono text-[10px] font-extrabold text-amber-400/90 w-7 shrink-0 pt-0.5">{ev.minute}'</span>
                       <div className="w-5 h-5 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
-                        <i className={`${ev.icon} text-[9px] ${ev.isTurningPoint ? 'text-amber-400' : 'text-zinc-400'}`} />
+                        <i className={`${ev.icon} text-[10px] ${ev.isTurningPoint ? 'text-amber-400' : 'text-zinc-400'}`} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <span className={`text-[11px] sm:text-xs leading-relaxed block ${ev.isTurningPoint ? 'text-amber-100 font-semibold' : 'text-zinc-300'}`}>

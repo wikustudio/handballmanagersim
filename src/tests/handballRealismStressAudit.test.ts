@@ -264,36 +264,153 @@ console.log(`  Successfully simulated 12 macro seasons with ${totalInsolvencies}
 console.log('✓ Test 5 Passed: Multi-year pyramid sizes and OVR bounds remained perfectly stable over 12 seasons.\n');
 
 // ----------------------------------------------------------------------------
-// TEST 6: v2.2 Release Badge & Version History Integrity
+// TEST 6: v3.0 Release Badge & Version History Integrity
 // ----------------------------------------------------------------------------
-console.log('Running Test 6: v2.2 Release Badge & v2.1/v2.0/v1.9 History...');
+console.log('Running Test 6: v3.0 Release Badge & v2.4-v1.9 Milestone History...');
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  REAL_LIFE_START_ATTENDANCES,
+  getRealLifeStartingAttendance,
+  isReserveClubName,
+  getClubStartingAttendance,
+  getCalibratedStartingFanbase,
+} from '../data/realLifeAttendance';
+import { useGameStore } from '../store/useGameStore';
 
 const onboardingSrc = fs.readFileSync(path.resolve('./src/components/Onboarding.tsx'), 'utf-8');
 const modModalSrc = fs.readFileSync(path.resolve('./src/components/ModSelectionModal.tsx'), 'utf-8');
+const aboutSrc = fs.readFileSync(path.resolve('./src/components/AboutPage.tsx'), 'utf-8');
 
-assert(onboardingSrc.includes('v 2.3') || onboardingSrc.includes('v 2.2'), 'Onboarding.tsx must display v 2.3 or v 2.2 badge');
+assert(onboardingSrc.includes('v 3.0'), 'Onboarding.tsx must display v 3.0 badge');
+assert(onboardingSrc.includes('Courtside Edition'), 'Onboarding.tsx must display Courtside Edition release title');
+assert(aboutSrc.includes('v 3.0 Courtside Edition') && aboutSrc.includes('Version 3.0'), 'AboutPage.tsx must display v3.0');
+
 assert(
-  onboardingSrc.includes('Multi-Year Sponsors, UI Overhaul &amp; Logic Polish') ||
-  onboardingSrc.includes('Sponsors, Supercup &amp; World Updates'),
-  'Onboarding.tsx must display release title'
+  modModalSrc.includes('v 3.0') &&
+  modModalSrc.includes('v3.0 Changelog') &&
+  modModalSrc.includes('Courtside Edition'),
+  'ModSelectionModal must contain v3.0 Courtside Edition active release'
 );
-
+assert(
+  modModalSrc.includes('v 2.4') &&
+  modModalSrc.includes('isV24Expanded') &&
+  modModalSrc.includes('Courtside Foundation'),
+  'ModSelectionModal must preserve v2.4 in collapsible milestone history'
+);
+assert(
+  modModalSrc.includes('v 2.3') &&
+  (modModalSrc.includes('Multi-Year Sponsors, UI Overhaul &amp; Logic Polish') || modModalSrc.includes('Multi-Year Sponsors, UI Overhaul & Logic Polish')),
+  'ModSelectionModal must preserve v2.3 in milestone history'
+);
 assert(
   modModalSrc.includes('v 2.2') &&
   (modModalSrc.includes('Sponsors, Supercup &amp; World Updates') || modModalSrc.includes('Sponsors, Supercup & World Updates')),
-  'ModSelectionModal must contain v2.2 release'
+  'ModSelectionModal must preserve v2.2 in milestone history'
 );
 assert(modModalSrc.includes('v 2.1') && modModalSrc.includes('Game Logic Updates'), 'ModSelectionModal must preserve v2.1 in milestone history');
 assert(modModalSrc.includes('v 2.0') && modModalSrc.includes('Comprehensive Handball Realism World Audit'), 'ModSelectionModal must preserve v2.0 in milestone history');
 assert(modModalSrc.includes('v 1.9') && modModalSrc.includes('Editor, Design, Mods & European Cups'), 'ModSelectionModal must preserve v1.9 Editor, Design, Mods & European Cups in milestone history');
-assert(modModalSrc.includes('isV21Expanded') && modModalSrc.includes('setIsV21Expanded'), 'ModSelectionModal must support collapsible accordion for v2.1 milestone archive');
+assert(modModalSrc.includes('isV23Expanded') && modModalSrc.includes('isV21Expanded') && modModalSrc.includes('setIsV21Expanded'), 'ModSelectionModal must support collapsible accordions for milestone archives');
 
-console.log('✓ Test 6 Passed: v2.2 active release badge and v2.1/v2.0/v1.9 milestone history verified.\n');
+console.log('✓ Test 6 Passed: v3.0 active release badge and v2.4-v1.9 milestone history verified.\n');
+
+// ----------------------------------------------------------------------------
+// TEST 7: Real-Life European Attendance Calibration Across All Tiers (T1–T6 & Reserves)
+// ----------------------------------------------------------------------------
+console.log('Running Test 7: Multi-Tier Real-Life Attendance Accuracy Across European Pyramids...');
+
+// 7a. Every Tier-1 and Tier-2 non-reserve club in activeClubs must have an explicit documented attendance <= stadium
+const tier1And2Clubs = activeClubs.filter(
+  c => (c.tier === 1 || c.tier === 2) && !isReserveClubName(c.name)
+);
+tier1And2Clubs.forEach(c => {
+  const realAtt = getRealLifeStartingAttendance(c.name, c.id);
+  assert(
+    realAtt !== null && realAtt > 0,
+    `Tier ${c.tier} club ${c.country}:${c.name} must have explicit REAL_LIFE_START_ATTENDANCES entry`
+  );
+  assert(
+    realAtt <= c.stadium,
+    `${c.name} documented real attendance (${realAtt}) must not exceed stadium capacity (${c.stadium})`
+  );
+});
+
+// 7b. Every Reserve / II / U21 / Atlètic / FA club across ALL tiers must strictly respect <= 300 cap
+const reserveClubs = activeClubs.filter(c => isReserveClubName(c.name));
+assert(reserveClubs.length > 0, 'Dataset must contain reserve teams');
+reserveClubs.forEach(rc => {
+  const startAtt = getClubStartingAttendance(rc);
+  assert(startAtt <= 300, `Reserve club ${rc.name} startAtt (${startAtt}) exceeded 300 cap`);
+  const fin = calculateClubFinancials({
+    club: { ...rc, fanBase: getCalibratedStartingFanbase(rc), fanCalibrated: true },
+    year: 2026,
+    history: [],
+  } as any);
+  assert(fin.expectedAtt <= 300, `Reserve club ${rc.name} expectedAtt (${fin.expectedAtt}) exceeded 300 cap`);
+});
+
+// 7c. Multi-tier monotonic scaling: In every pyramid with multiple tiers, Avg(Tier N) > Avg(Tier N+1)
+const pyramidCountries = Array.from(new Set(activeClubs.map(c => normalizeCountry(c.country || 'GER'))));
+pyramidCountries.forEach(ctry => {
+  const clubsInCountry = activeClubs.filter(
+    c => normalizeCountry(c.country || 'GER') === ctry && !isReserveClubName(c.name)
+  );
+  const tiersPresent = Array.from(new Set(clubsInCountry.map(c => c.tier || 1))).sort((a, b) => a - b);
+  for (let i = 0; i < tiersPresent.length - 1; i++) {
+    const upperTier = tiersPresent[i];
+    const lowerTier = tiersPresent[i + 1];
+    const upperClubs = clubsInCountry.filter(c => c.tier === upperTier);
+    const lowerClubs = clubsInCountry.filter(c => c.tier === lowerTier);
+    if (upperClubs.length === 0 || lowerClubs.length === 0) continue;
+    const upperAvg = upperClubs.reduce((s, c) => s + getClubStartingAttendance(c), 0) / upperClubs.length;
+    const lowerAvg = lowerClubs.reduce((s, c) => s + getClubStartingAttendance(c), 0) / lowerClubs.length;
+    assert(
+      upperAvg > lowerAvg,
+      `${ctry} Tier ${upperTier} avg attendance (${Math.round(upperAvg)}) must strictly exceed Tier ${lowerTier} (${Math.round(lowerAvg)})`
+    );
+  }
+});
+
+// 7d. Sample non-sellout & sellout Tier-1 and Tier-2 European clubs via initGame -> calculateClubFinancials
+const realLifeChecks = [
+  { name: 'SC Magdeburg', target: 6600, maxPctDiff: 0.01, mustNotSellOut: false },
+  { name: 'SC DHfK Leipzig', target: 4850, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'Rhein-Neckar Löwen', target: 8400, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'TSV Hannover-Burgdorf', target: 9169, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'Bergischer HC', target: 2720, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'Caen HB', target: 2250, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'FC Barcelona', target: 2680, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'Nordsjælland Håndbold', target: 1550, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'ORLEN Wisła Płock', target: 2850, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'OTP Bank - Pick Szeged', target: 5150, maxPctDiff: 0.05, mustNotSellOut: true },
+  { name: 'HBC Nantes', target: 5902, maxPctDiff: 0.01, mustNotSellOut: false },
+  { name: 'Aalborg Håndbold', target: 5145, maxPctDiff: 0.05, mustNotSellOut: true },
+];
+
+realLifeChecks.forEach(chk => {
+  const c = activeClubs.find(x => x.name === chk.name);
+  assert(c, `Missing club ${chk.name}`);
+  useGameStore.getState().initGame(String(c!.id), 'Coach', 2024, 'Balanced', 'standard');
+  const fin = calculateClubFinancials(useGameStore.getState() as any);
+  const diffRatio = Math.abs(fin.expectedAtt - chk.target) / chk.target;
+  assert(
+    diffRatio <= chk.maxPctDiff,
+    `${chk.name} expectedAtt (${fin.expectedAtt}) deviated too far from real-life ${chk.target}`
+  );
+  if (chk.mustNotSellOut) {
+    assert(
+      fin.expectedAtt < c!.stadium,
+      `${chk.name} (${fin.expectedAtt}/${c!.stadium}) must NOT falsely sell out 100% on Day 1`
+    );
+  }
+});
+
+console.log('✓ Test 7 Passed: All Tier-1 & Tier-2 clubs, lower-tier curves (T3–T6), and reserve caps verified across all nations.\n');
 
 console.log('======================================================');
-console.log('ALL HANDBALL REALISM BLINDSPOT AUDIT TESTS PASSED (6/6)');
+console.log('ALL HANDBALL REALISM BLINDSPOT AUDIT TESTS PASSED (7/7)');
 console.log('======================================================');
+
 

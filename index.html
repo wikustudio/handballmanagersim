@@ -1,40 +1,56 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no" class="notranslate courtside-theme">
   <head>
     
 
     <meta charset="UTF-8" />
+    <meta name="google" content="notranslate" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#090a0f" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#ECEAE4" />
+    <meta name="color-scheme" content="light dark" />
     <script>
       (function() {
-        // Disarm any active or stale service worker immediately to prevent cached chunk lock
-        var hadController = Boolean('serviceWorker' in navigator && navigator.serviceWorker.controller);
-        var unregPromise = ('serviceWorker' in navigator && window.location.protocol.startsWith('http'))
-          ? navigator.serviceWorker.getRegistrations().then(function(regs) {
-              return Promise.all(regs.map(function(r) { return r.unregister(); }));
-            }).catch(function() {})
-          : Promise.resolve();
-        var cachePromise = ('caches' in window)
-          ? caches.keys().then(function(keys) {
-              return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-            }).catch(function() {})
-          : Promise.resolve();
-        if (hadController && !sessionStorage.getItem('hms_sw_purged')) {
-          sessionStorage.setItem('hms_sw_purged', '1');
-          Promise.all([unregPromise, cachePromise]).then(function() {
-            window.location.reload();
-          });
+        try {
+          // Disarm any active or stale service worker immediately to prevent cached chunk lock
+          var hadController = Boolean('serviceWorker' in navigator && navigator.serviceWorker.controller);
+          var unregPromise = ('serviceWorker' in navigator && window.location.protocol.startsWith('http'))
+            ? navigator.serviceWorker.getRegistrations().then(function(regs) {
+                return Promise.all(regs.map(function(r) { return r.unregister(); }));
+              }).catch(function() {})
+            : Promise.resolve();
+          var cachePromise = ('caches' in window)
+            ? caches.keys().then(function(keys) {
+                return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+              }).catch(function() {})
+            : Promise.resolve();
+          var swPurged = false;
+          try {
+            swPurged = Boolean(sessionStorage.getItem('hms_sw_purged'));
+          } catch (err) {
+            swPurged = true;
+          }
+          if (hadController && !swPurged) {
+            try { sessionStorage.setItem('hms_sw_purged', '1'); } catch (err) {}
+            Promise.all([unregPromise, cachePromise]).then(function() {
+              window.location.reload();
+            });
+          }
+        } catch (e) {
+          // Never block initial script execution inside restricted iframes
         }
       })();
     </script>
     <style>
       html, body {
-        background-color: #090a0f !important;
+        background-color: #ECEAE4;
+        color: #14161D;
         overscroll-behavior-y: auto !important;
         overscroll-behavior-x: none;
         -webkit-overflow-scrolling: touch;
+      }
+      html.courtside-theme, html.courtside-theme body {
+        background-color: #ECEAE4 !important;
+        color: #14161D;
       }
     </style>
     
@@ -69,7 +85,7 @@
     <meta property="og:url" content="https://handballmanagersim.com/" />
     <meta property="og:title" content="Handball Manager Sim – Career & Strategy Game" />
     <meta property="og:description" content="Lead your handball club to glory. Manage transfers, master tactical systems, expand your arena, and compete in domestic leagues, national cups, and the EHF Champions League." />
-    <meta property="og:image" content="/handballsim_official.png" />
+    <meta property="og:image" content="https://handballmanagersim.com/handballsim_official.png" />
     <meta property="og:image:width" content="400" />
     <meta property="og:image:height" content="400" />
     <meta property="og:image:alt" content="Handball Manager Sim Official Crest" />
@@ -79,7 +95,7 @@
     <meta name="twitter:url" content="https://handballmanagersim.com/" />
     <meta name="twitter:title" content="Handball Manager Sim – Career & Strategy Game" />
     <meta name="twitter:description" content="Lead your handball club to glory. Manage transfers, master tactical systems, expand your arena, and compete in domestic leagues, national cups, and the EHF Champions League." />
-    <meta name="twitter:image" content="/handballsim_official.png" />
+    <meta name="twitter:image" content="https://handballmanagersim.com/handballsim_official.png" />
     <meta name="twitter:image:alt" content="Handball Manager Sim Official Crest" />
     
     <!-- Schema.org JSON-LD Structured Data (WebApplication, VideoGame & FAQPage Rich Snippet) -->
@@ -180,7 +196,7 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <!-- Google Consent Mode v2 (EU GDPR & ePrivacy Directive Compliant) -->
@@ -229,22 +245,22 @@
   </head>
   <body>
     <noscript>
-      <div style="padding: 32px 24px; max-width: 900px; margin: 0 auto; color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6;">
-        <h1 style="font-size: 28px; font-weight: 800; color: #38bdf8; margin-bottom: 12px;">Handball Manager Sim – Free European Handball Strategy Game</h1>
-        <p style="font-size: 16px; color: #d4d4d8; margin-bottom: 24px;">
+      <div style="padding: 32px 24px; max-width: 900px; margin: 0 auto; color: #14161D; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6;">
+        <h1 style="font-size: 28px; font-weight: 800; color: #DF642A; margin-bottom: 12px;">Handball Manager Sim – Free European Handball Strategy Game</h1>
+        <p style="font-size: 16px; color: #363A45; margin-bottom: 24px;">
           Lead your European handball club to glory. Manage transfers, master tactical systems, expand your home arena, and compete across domestic leagues, national cups, and continental tournaments including the EHF Champions League.
         </p>
 
-        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Deep European League Pyramids</h2>
-        <p style="color: #a1a1aa;">
+        <h2 style="font-size: 20px; font-weight: 700; color: #14161D; margin-top: 24px; margin-bottom: 8px;">Deep European League Pyramids</h2>
+        <p style="color: #525866;">
           Compete in authentic domestic divisions across Europe: Germany (from the 1. Bundesliga down through 2. Bundesliga, 3. Liga, and Regional divisions), France (Starligue and Proligue), Denmark (Handboldligaen and 1. Division), Spain (Liga ASOBAL), Poland (Superliga), and Croatia (Premijer Liga). Experience promotion, relegation, and insolvency battles.
         </p>
 
-        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Authentic Handball Tactical Systems</h2>
-        <p style="color: #a1a1aa;">
+        <h2 style="font-size: 20px; font-weight: 700; color: #14161D; margin-top: 24px; margin-bottom: 8px;">Authentic Handball Tactical Systems</h2>
+        <p style="color: #525866;">
           Fine-tune your match plan with real handball tactical archetypes:
         </p>
-        <ul style="color: #d4d4d8; padding-left: 20px;">
+        <ul style="color: #363A45; padding-left: 20px;">
           <li><strong>6:0 Wall Defense:</strong> Compact, physically imposing wall that forces outside shots.</li>
           <li><strong>5:1 Disruptive Point:</strong> Active point defender hunting steals and breaking passing lines.</li>
           <li><strong>3:2:1 Dynamic Pyramid:</strong> High-pressure perimeter defense generating rapid turnovers.</li>
@@ -252,22 +268,22 @@
           <li><strong>7-on-6 Empty Goal Attack:</strong> Extra field player power play creating numerical overloads.</li>
         </ul>
 
-        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Continental Silverware & National Cups</h2>
-        <p style="color: #a1a1aa;">
+        <h2 style="font-size: 20px; font-weight: 700; color: #14161D; margin-top: 24px; margin-bottom: 8px;">Continental Silverware & National Cups</h2>
+        <p style="color: #525866;">
           Qualify for the prestigious EHF Champions League, European League, and European Cup. Battle through single-elimination National Cup and Regional Cup brackets, and earn invitations to the global IHF Super Globe.
         </p>
 
-        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Transfers, Youth Incubator & Arena Expansion</h2>
-        <p style="color: #a1a1aa;">
+        <h2 style="font-size: 20px; font-weight: 700; color: #14161D; margin-top: 24px; margin-bottom: 8px;">Transfers, Youth Incubator & Arena Expansion</h2>
+        <p style="color: #525866;">
           Scout domestic and international talent, negotiate contracts, develop youth academy prospects, and expand your home arena from a modest 1,500-seat gym into an elite 30,000-seat sports temple. Take your club public via an Initial Public Offering (IPO) and pay dividends to shareholders.
         </p>
 
-        <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-top: 24px; margin-bottom: 8px;">Global Hall of Fame & Dynasty Scoring</h2>
-        <p style="color: #a1a1aa;">
+        <h2 style="font-size: 20px; font-weight: 700; color: #14161D; margin-top: 24px; margin-bottom: 8px;">Global Hall of Fame & Dynasty Scoring</h2>
+        <p style="color: #525866;">
           Track your 35-year managerial career score calibrated around an elite ~5.5M ceiling based on match victories, trophies won, stadium infrastructure, manager skill points, and financial treasury reserves.
         </p>
 
-        <p style="margin-top: 32px; font-size: 14px; color: #71717a; border-top: 1px solid #27272a; padding-top: 16px;">
+        <p style="margin-top: 32px; font-size: 14px; color: #686D7B; border-top: 1px solid rgba(20, 22, 29, 0.12); padding-top: 16px;">
           <em>JavaScript is required to launch the interactive real-time match engine and graphical dashboard. Please enable JavaScript in your browser settings.</em>
         </p>
       </div>
@@ -289,20 +305,43 @@
       <textarea name="game_state"></textarea>
     </form>
     <div id="root"></div>
-    <div id="app-loading-fallback" style="position: fixed; inset: 0; z-index: 99999; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #090a0f; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif; padding: 20px; text-align: center;">
-      <div style="width: 56px; height: 56px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.03);">
-        <img src="/handballsim_official.png" alt="Handball Manager Sim" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='/favicon.svg'" />
+    <div id="app-loading-fallback" style="position: fixed; inset: 0; z-index: 99999; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #ECEAE4; color: #14161D; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif; padding: 20px; text-align: center;">
+      <div style="width: 56px; height: 56px; border-radius: 16px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 8px 24px rgba(223,100,42,0.22);">
+        <svg viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%; display: block;">
+          <defs>
+            <clipPath id="hms-loader-ball"><circle cx="200" cy="186" r="102" /></clipPath>
+          </defs>
+          <rect width="400" height="400" rx="88" fill="#DF642A" />
+          <rect x="16" y="16" width="368" height="368" rx="74" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="6" />
+          <path d="M 72 338 C 114 290 286 290 328 338" stroke="#FFFFFF" stroke-opacity="0.34" stroke-width="12" stroke-linecap="round" />
+          <circle cx="200" cy="186" r="102" fill="#FFFFFF" />
+          <g clip-path="url(#hms-loader-ball)">
+            <polygon points="200,140 243.7,171.8 227,223.2 173,223.2 156.3,171.8" fill="#C94E18" />
+            <g stroke="#C94E18" stroke-width="12.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <line x1="200" y1="140" x2="200" y2="104" />
+              <polyline points="164,78 200,104 236,78" />
+              <line x1="243.7" y1="171.8" x2="278" y2="160.7" />
+              <polyline points="291,118 278,160.7 314,186" />
+              <line x1="227" y1="223.2" x2="248.2" y2="252.3" />
+              <polyline points="290,239 248.2,252.3 248,296" />
+              <line x1="173" y1="223.2" x2="151.8" y2="252.3" />
+              <polyline points="152,296 151.8,252.3 110,239" />
+              <line x1="156.3" y1="171.8" x2="122" y2="160.7" />
+              <polyline points="86,186 122,160.7 109,118" />
+            </g>
+          </g>
+        </svg>
       </div>
-      <h1 style="font-size: 18px; font-weight: 700; letter-spacing: -0.015em; color: #ffffff; margin: 0 0 6px 0;">Handball Manager Sim</h1>
-      <p style="font-size: 13px; color: #a1a1aa; max-width: 380px; margin: 0 0 16px 0;">European handball club career, tactics, transfers & arena management simulation.</p>
-      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8e8e93; margin-bottom: 20px;">
-        <div style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.15); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      <h1 style="font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: #14161D; margin: 0 0 6px 0;">Handball Manager Sim</h1>
+      <p style="font-size: 13px; color: #525866; max-width: 380px; margin: 0 0 16px 0;">European handball club career, tactics, transfers & arena management simulation.</p>
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #686D7B; margin-bottom: 20px;">
+        <div style="width: 14px; height: 14px; border: 2px solid rgba(20,22,29,0.14); border-top-color: #DF642A; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
         <span>Loading stadium & rosters...</span>
       </div>
       <div id="slow-load-recovery" style="display: none; flex-direction: column; align-items: center; gap: 8px;">
-        <p id="load-error-detail" style="display: none; font-size: 11px; color: #f87171; max-width: 320px; margin: 0; word-break: break-word; font-mono;"></p>
-        <p style="font-size: 11px; color: #71717a; max-width: 280px; margin: 0;">Taking longer than expected? You can refresh or reset cache.</p>
-        <button onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){} if('caches' in window){caches.keys().then(function(k){k.forEach(function(c){caches.delete(c);});});} if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(regs){regs.forEach(function(r){r.unregister();});});} setTimeout(function(){window.location.href = window.location.origin + window.location.pathname + '?reset=' + Date.now();}, 150);" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #e4e4e7; font-size: 11px; font-weight: 600; padding: 6px 14px; border-radius: 10px; cursor: pointer;">
+        <p id="load-error-detail" style="display: none; font-size: 11px; color: #DC2626; max-width: 320px; margin: 0; word-break: break-word;"></p>
+        <p style="font-size: 11px; color: #686D7B; max-width: 280px; margin: 0;">Taking longer than expected? You can refresh or reset cache.</p>
+        <button onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){} if('caches' in window){caches.keys().then(function(k){k.forEach(function(c){caches.delete(c);});});} if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(regs){regs.forEach(function(r){r.unregister();});});} setTimeout(function(){window.location.href = window.location.origin + window.location.pathname + '?reset=' + Date.now();}, 150);" style="background: #18191F; border: 1px solid rgba(0,0,0,0.08); color: #FFFFFF; font-size: 11px; font-weight: 600; padding: 7px 15px; border-radius: 9999px; cursor: pointer;">
           Clear Cache & Restart
         </button>
       </div>
@@ -323,11 +362,16 @@
     </div>
     <script>
       window.addEventListener('error', function(e) {
+        var msg = (e && e.message) ? String(e.message) : '';
+        var file = (e && e.filename) ? String(e.filename) : '';
+        if (file.indexOf('chrome-extension://') !== -1 || file.indexOf('moz-extension://') !== -1 || msg.indexOf("execute 'insertBefore' on 'Node'") !== -1 || msg.indexOf("execute 'removeChild' on 'Node'") !== -1) {
+          return;
+        }
         var el = document.getElementById('slow-load-recovery');
         if (el) el.style.display = 'flex';
         var detail = document.getElementById('load-error-detail');
-        if (detail && e && e.message) {
-          detail.textContent = e.message;
+        if (detail && msg) {
+          detail.textContent = msg;
           detail.style.display = 'block';
         }
       });

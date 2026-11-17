@@ -160,7 +160,7 @@ console.log(`Auditing visual design tokens across ${modalFiles.length} modal int
 // TEST 7: Tabular-nums & Financial / Score Alignment
 {
   console.log('\nRunning Test 7: Sports Broadcast Tabular-Nums & Alignment Audit...');
-  const keyInterfaces = ['DashboardHeader.tsx', 'KeyMatchModal.tsx', 'SeasonFinishModal.tsx', 'LeagueTableModal.tsx', 'Standings.tsx'];
+  const keyInterfaces = ['Header.tsx', 'CourtsideWorkspace.tsx', 'CourtSimulationCard.tsx', 'KeyMatchModal.tsx', 'SeasonFinishModal.tsx', 'LeagueTableModal.tsx'];
   
   for (const file of keyInterfaces) {
     const content = fs.readFileSync(path.join(MODALS_DIR, file), 'utf8');

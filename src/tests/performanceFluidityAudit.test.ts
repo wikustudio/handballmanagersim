@@ -111,11 +111,10 @@ console.log('✓ Test 2 Passed: Transitions strictly use GPU transforms (opacity
 // -----------------------------------------------------------------------------
 console.log('Running Test 3: Mobile Touch Target Geometry & Tap-Highlight Audit...');
 
-// 1. Inspect Matchday Action Dock / ActionPanel primary simulation CTA
-const dockPath = path.join(componentsDir, 'MatchdayActionDock.tsx');
-const dockContent = fs.existsSync(dockPath) ? fs.readFileSync(dockPath, 'utf8') : '';
-const actionPanelContent = fs.readFileSync(path.join(componentsDir, 'ActionPanel.tsx'), 'utf8');
-const combinedCta = dockContent + actionPanelContent;
+// 1. Inspect Courtside Simulation Card & Workspace primary CTAs
+const courtCardContent = fs.readFileSync(path.join(componentsDir, 'CourtSimulationCard.tsx'), 'utf8');
+const workspaceContent = fs.readFileSync(path.join(componentsDir, 'CourtsideWorkspace.tsx'), 'utf8');
+const combinedCta = courtCardContent + workspaceContent;
 assert(combinedCta.includes('touch-manipulation'), 'Simulation CTA must have touch-manipulation for mobile tap fidelity');
 
 // 2. Inspect Header navigation buttons

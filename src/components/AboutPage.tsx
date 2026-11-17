@@ -4,10 +4,15 @@ import { Club, Language } from '../types';
 interface AboutPageProps {
   clubsDb?: Club[];
   lang?: Language;
+  isCourtside?: boolean;
   onStartCareer?: () => void;
 }
 
-export const AboutPage: React.FC<AboutPageProps> = ({ lang = 'en', onStartCareer }) => {
+export const AboutPage: React.FC<AboutPageProps> = ({
+  lang = 'en',
+  isCourtside = false,
+  onStartCareer,
+}) => {
   const isDe = lang === 'de';
 
   const scrollTo = (id: string) => {
@@ -23,553 +28,394 @@ export const AboutPage: React.FC<AboutPageProps> = ({ lang = 'en', onStartCareer
       const params = new URLSearchParams(window.location.search);
       const view = params.get('view');
       const section = params.get('section');
-      const target = section || (view === 'tactics' ? 'tactics' : view === 'leagues' ? 'rules' : null);
+      const target =
+        section || (view === 'tactics' ? 'tactics' : view === 'leagues' ? 'rules' : null);
       if (target) {
         setTimeout(() => {
           scrollTo(target);
         }, 150);
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, []);
 
+  const cardSurface = isCourtside
+    ? 'courtside-card p-5 sm:p-6'
+    : 'p-5 sm:p-6 rounded-2xl bg-[#12141e] border border-white/[0.06]';
+  const subSurface = isCourtside
+    ? 'p-4 rounded-2xl bg-[#F6F5F1] border border-black/[0.05]'
+    : 'p-4 rounded-xl bg-black/30 border border-white/[0.05]';
+  const headingPrimary = isCourtside ? 'text-[#14161D]' : 'text-white';
+  const bodyCopy = isCourtside ? 'text-[#454B59]' : 'text-zinc-300';
+  const mutedCopy = isCourtside ? 'text-[#6E7381]' : 'text-zinc-400';
+  const accentText = isCourtside ? 'text-[#DF642A]' : 'text-amber-400';
+  const dividerBorder = isCourtside ? 'border-black/[0.06]' : 'border-white/[0.08]';
+
   return (
-    <article className="w-full max-w-4xl px-4 sm:px-8 py-8 sm:py-12 mx-auto text-zinc-300 pb-28 font-sans selection:bg-amber-500/30 selection:text-white">
+    <article
+      className={`w-full max-w-5xl px-4 sm:px-8 py-6 sm:py-10 mx-auto pb-24 font-sans ${bodyCopy}`}
+    >
       {/* Top Header */}
-      <header className="mb-10 pb-6 border-b border-white/[0.08] flex flex-col md:flex-row md:items-end justify-between gap-5">
+      <header
+        className={`mb-8 pb-6 border-b ${dividerBorder} flex flex-col md:flex-row md:items-end justify-between gap-5`}
+      >
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-amber-400">
+          <div className={`flex items-center gap-2 mb-2 text-xs font-semibold ${mutedCopy}`}>
+            <span className={accentText}>
               {isDe ? 'Offizielles Spielhandbuch' : 'Official Game Manual'}
             </span>
-            <span className="text-zinc-600 select-none">·</span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-black uppercase tracking-wider">
-              v 2.3 Game Logic
-            </span>
+            <span aria-hidden="true">·</span>
+            <span>v 3.0 Courtside Edition</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight uppercase">
+          <h1
+            className={`text-3xl sm:text-4xl font-extrabold tracking-tight text-balance ${headingPrimary}`}
+          >
             {isDe ? 'Über Handball Manager & Spielregeln' : 'About Handball Manager & Rules'}
           </h1>
-          <p className="text-sm sm:text-base text-zinc-400 mt-2 leading-relaxed max-w-2xl">
+          <p className={`text-sm sm:text-base mt-2 leading-relaxed max-w-2xl ${mutedCopy}`}>
             {isDe
-              ? 'Ein umfassender Leitfaden zu den 18 europäischen Ligapyramiden, dem 2-1-0-Punktesystem, Abstiegsregeln, Matchday-Taktiken, Hallenwirtschaft und Nachwuchsförderung.'
-              : 'A comprehensive reference guide to the 18 European league pyramids, the 2-1-0 scoring system, relegation rules, tactical match variety, arena economics, and youth development.'}
+              ? 'Der vollständige Leitfaden zu 20 europäischen Ligapyramiden, dem 2-1-0-Punktesystem, der 3D-40×20m-Halle bis 30.000 Plätze, Taktik, Vereinsfinanzen und Nachwuchsförderung.'
+              : 'The complete guide to European club pyramids, 2-1-0 handball scoring, live 3D 40×20m arenas scaling up to 30,000 seats, training gym warmups, club commerce, and U19 youth development.'}
           </p>
         </div>
 
         {onStartCareer && (
           <button
+            type="button"
             onClick={onStartCareer}
-            className="shrink-0 py-2.5 px-5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider transition cursor-pointer shadow-md flex items-center gap-2 self-start md:self-auto active:scale-95"
+            className={`shrink-0 min-h-[42px] py-2.5 px-5 rounded-full font-semibold text-xs transition cursor-pointer flex items-center gap-2 self-start md:self-auto whitespace-nowrap ${
+              isCourtside
+                ? 'bg-[#18191F] hover:bg-[#2A2D37] text-white'
+                : 'bg-white hover:bg-zinc-200 text-slate-950'
+            }`}
           >
-            <i className="fas fa-arrow-left text-xs" />
-            <span>{isDe ? 'Zurück zum Spiel' : 'Return to Career'}</span>
+            <i aria-hidden="true" className="fas fa-arrow-left text-xs" />
+            <span>{isDe ? 'Zurück zum Verein' : 'Return to Career'}</span>
           </button>
         )}
       </header>
 
-      {/* Quick Table of Contents - Clean inline text links */}
-      <nav aria-label="Table of contents" className="mb-12 py-3.5 px-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-xs text-zinc-400 flex flex-wrap items-center gap-x-4 gap-y-2.5">
-        <span className="font-extrabold uppercase tracking-wider text-zinc-200">{isDe ? 'Inhalt:' : 'Contents:'}</span>
-        <button onClick={() => scrollTo('intro')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? 'Einführung' : 'Overview'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('rules')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '1. 2-1-0 Wertung & Ligen' : '1. 2-1-0 Scoring & Pyramids'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('relegation')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '2. Abstieg & Untere Ligen' : '2. Relegation & Floor Rules'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('career')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '3. 35-Jahre-Karriere' : '3. 35-Season Career'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('cups')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '4. Europapokal & Pokale' : '4. Continental & National Cups'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('tactics')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '5. Taktik & Decision Day' : '5. Tactics & Decision Day'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('arena')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '6. Halle & Fankultur' : '6. Arena & Supporter Focus'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('finances')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '7. Finanzen & Lizenzierung' : '7. Finances & Licensing'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('youth')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '8. Jugend & Medizin (Lvl 1–5)' : '8. Academy & Medical (Lvl 1–5)'}
-        </button>
-        <span className="text-zinc-600 select-none">·</span>
-        <button onClick={() => scrollTo('mods')} className="hover:text-amber-400 transition cursor-pointer">
-          {isDe ? '9. Mods & Datenbank' : '9. Mods & Community Data'}
-        </button>
+      {/* Quick Table of Contents */}
+      <nav
+        aria-label="Table of contents"
+        className={`mb-8 py-3.5 px-4 rounded-2xl text-xs flex flex-wrap items-center gap-x-3.5 gap-y-2 ${
+          isCourtside
+            ? 'bg-white border border-black/[0.06] text-[#525866]'
+            : 'bg-white/[0.03] border border-white/[0.06] text-zinc-400'
+        }`}
+      >
+        <span className={`font-bold ${headingPrimary}`}>{isDe ? 'Inhalt:' : 'Contents:'}</span>
+        {[
+          { id: 'intro', label: isDe ? 'Einführung & v3.0' : 'Overview & v3.0' },
+          { id: 'rules', label: isDe ? '01. 2-1-0 Wertung' : '01. 2-1-0 Scoring' },
+          { id: 'relegation', label: isDe ? '02. Auf- & Abstieg' : '02. Promotion & Floor' },
+          { id: 'career', label: isDe ? '03. 35-Jahre-Karriere' : '03. 35-Season Career' },
+          { id: 'cups', label: isDe ? '04. Europapokal' : '04. EHF & Domestic Cups' },
+          { id: 'tactics', label: isDe ? '05. Taktik & Kader' : '05. Squad & Tactics' },
+          { id: 'arena', label: isDe ? '06. 3D-Halle & Fans' : '06. 3D Arena & Fan Strategy' },
+          { id: 'finances', label: isDe ? '07. Büro & Finanzen' : '07. Commercial & IPO' },
+          { id: 'youth', label: isDe ? '08. U19 & Medizin' : '08. U19 Cup & Facilities' },
+          { id: 'network', label: isDe ? '09. Weitere Sport-Sims' : '09. Sister Sports Sims' },
+        ].map((item, idx) => (
+          <React.Fragment key={item.id}>
+            {idx > 0 && <span aria-hidden="true" className="opacity-40">·</span>}
+            <button
+              type="button"
+              onClick={() => scrollTo(item.id)}
+              className={`hover:${accentText} font-medium transition cursor-pointer whitespace-nowrap`}
+            >
+              {item.label}
+            </button>
+          </React.Fragment>
+        ))}
       </nav>
 
-      {/* Main Editorial Text Flow */}
-      <div className="space-y-12 leading-relaxed text-sm sm:text-base">
-
-        {/* Section 0: Overview */}
-        <section id="intro" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-amber-400">
-            <i className="fas fa-hand-fist text-lg" />
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Handball als Sportmanager neu erleben' : 'Authentic European Handball Simulation'}
-            </h2>
-          </div>
+      {/* Main Content Sections */}
+      <div className="space-y-6 leading-relaxed text-sm sm:text-[15px]">
+        {/* Section 0: Overview & v3.0 */}
+        <section id="intro" className={`scroll-mt-20 ${cardSurface} space-y-4`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            {isDe
+              ? 'Authentischer Europäischer Vereinshandball'
+              : 'Authentic European Club Handball Management'}
+          </h2>
           <p>
             {isDe
-              ? 'Handball Manager ist eine authentische, tiefgründige Sportsimulation des europäischen Vereinshandballs. Im Gegensatz zum Fußball zeichnet sich Spitzenhandball durch extrem hohes Tempo, intensive Physis, 50 bis 70 Tore pro Partie und ständige Führungswechsel aus. Als sportlicher Leiter und Cheftrainer steuerst du deinen Verein durch Auf- und Abstiege, managst Spielerverträge, baust deine Halle zur Festung aus und führst dein Team in die EHF Champions League.'
-              : 'Handball Manager is a fast-paced, deeply authentic simulation of European club handball. Unlike association football, handball features relentless physical duels, rapid transitions, 50 to 70 total goals per match, and constant momentum swings. As head coach and sporting director, you oversee every aspect of your club: steering tactics on matchday, navigating promotions and relegations, balancing payroll, expanding your home arena into a deafening cauldron, and conquering Europe.'}
+              ? 'Handball Manager Sim verbindet die rasante Dynamik des Hallenhandballs (50 bis 70 Tore pro Spiel, 6:0- und 3:2:1-Deckungssysteme, Siebenmeter und Tempospiel) mit tiefgreifendem Vereinsmanagement. Als vereinter Cheftrainer und General Manager verantwortest du Taktik, Kaderplanung, Sponsoren, Hallenausbau und Pressearbeit.'
+              : 'Handball Manager Sim captures the high-tempo intensity of indoor club handball—50 to 70 goals per match, painted 6m goal creases, dashed 9m free-throw arcs, tactical 7v6 power plays, and deafening arena atmospheres—paired with deep executive club management. Operating as unified Head Coach and General Manager, you control matchday systems, transfers, U19 youth development, commercial deals, and arena infrastructure.'}
           </p>
-          <div className="p-4 rounded-2xl bg-black/40 border border-white/[0.08] flex items-start gap-3.5">
-            <i className="fas fa-sparkles text-amber-400 mt-1 shrink-0" />
-            <div className="text-xs sm:text-sm text-zinc-300 space-y-2">
-              <div>
-                <strong className="text-white block font-bold mb-1">
-                  {isDe
-                    ? 'Neu in Version 2.3: Mehrjährige Sponsorenverträge, Einheitliches Broadcast-UI & Engine-Feinschliff'
-                    : 'New in Version 2.3: Multi-Year Sponsorship Contracts, Unified Broadcast UI & Engine Refinements'}
-                </strong>
-                <span>
-                  {isDe
-                    ? 'Das v2.3-Update vereint alle Sponsorenkategorien (Standard, Megadeal & Performance) in einem zentralen Verhandlungs-Hub mit wählbaren Vertragslaufzeiten von 1, 2 (+5 %/Jahr) oder 3 Saisons (+10 %/Jahr) und garantierten jährlichen Raten. Zudem wurden alle Management-Modals (inkl. Vorstandsvertrauen, Sponsoren, Akademie, Team-Retreat & Transfermarkt) auf das einheitliche Broadcast-Design aktualisiert und die Solvenz-, Playoff- und Kadernachwuchs-Logik präzisiert.'
-                    : 'The v2.3 update consolidates Standard, Megadeal, and Performance sponsorships into a unified Sponsorship Deals hub with negotiable 1-year, 2-year (+5%/yr), and 3-year (+10%/yr) contract terms and automated recurring season installments. It also brings a streamlined Board Confidence & Club Impact HUD, a unified broadcast design language across all management modals, and core solvency, playoff, and academy protection refinements.'}
-                </span>
-              </div>
-              <div className="pt-2 border-t border-white/[0.06] text-xs text-zinc-400">
-                <strong className="text-zinc-200 font-semibold">
-                  {isDe ? 'v2.2, v2.1 & v2.0 Fundament:' : 'v2.2, v2.1 & v2.0 Core Foundation:'}
-                </strong>{' '}
-                {isDe
-                  ? 'Länderspezifische Sponsoren-Pools (20 Nationen, Liga 1–5), Nationales Supercup-Finale, 5-stufige Jugendakademie & Medizinisches Zentrum, Generationen-Umbruch, Anti-Metronom-Taktikverschleiß, Bankdarlehen, 18 Ligapyramiden und striktes 2-1-0-Punktesystem.'
-                  : '20-country tier-scaled sponsor pools (Tiers 1–5), Domestic Supercup Final, 5-tier Youth Academy & Medical Center milestones, Generational Squad Rebuilds, Anti-Metronome tactical staleness, Institutional Bank Loans, 18 calibrated league pyramids, and strict 2-1-0 handball scoring.'}
-              </div>
-            </div>
+          <div className={subSurface}>
+            <strong className={`block font-bold text-sm mb-1.5 ${headingPrimary}`}>
+              {isDe
+                ? 'Neu in Version 3.0 (Courtside Edition)'
+                : 'What’s New in Version 3.0 (Courtside Edition)'}
+            </strong>
+            <ul className={`list-disc pl-5 space-y-1 text-xs sm:text-sm ${bodyCopy}`}>
+              <li>
+                <strong className={headingPrimary}>Real-Life Calibrated Attendance Across All 13 Nations:</strong>{' '}
+                Starting crowds, fanbases, and arena turnstiles across Daikin HBL, StarLigue, Herreligaen, ASOBAL, ORLEN Superliga, K&amp;H Liga, and every European pyramid reflect authentic 2024/25 real-world club attendances with dynamic multi-season growth.
+              </li>
+              <li>
+                <strong className={headingPrimary}>Multi-Scene Live 3D 40×20m Handball Arena (Up to 30,000 Seats):</strong>{' '}
+                Dynamic 3D match sequences (passing build-up, fast-break transitions, and goal celebrations), luxury 14k+ hospitality bowls, dynamic sideline-to-corner crowd fill, and clean perimeter signage for active sponsors.
+              </li>
+              <li>
+                <strong className={headingPrimary}>3D Squad Training Gym, Level 1–5 HQ &amp; 3D Boardroom:</strong>{' '}
+                Run synchronized warmups on the Squad tab, scale Club HQ from Level 1 to Level 5 via Academy &amp; Medical upgrades, and navigate the 3D executive conference table on the Board view.
+              </li>
+            </ul>
           </div>
         </section>
 
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 1: Core Rules, Scoring & 18 Leagues */}
-        <section id="rules" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-sky-400">
-            <span className="text-sky-400 text-lg font-mono font-bold">01.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Das 2-1-0 Punktesystem & 18 Ligen' : 'The 2-1-0 Scoring System & 18 League Pyramids'}
-            </h2>
-          </div>
+        {/* Section 1: 2-1-0 Scoring */}
+        <section id="rules" className={`scroll-mt-20 ${cardSurface} space-y-4`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            01. The 2-1-0 Scoring System &amp; European Pyramids
+          </h2>
           <p>
-            {isDe
-              ? 'Der europäische Vereinshandball folgt traditionell dem klassischen 2-1-0-Punktesystem und nicht der modernen Drei-Punkte-Regel des Fußballs. Jede reguläre Spielzeit umfasst Hin- und Rückrunde mit Heim- und Auswärtsspielen.'
-              : 'European handball historically operates under the classic 2-1-0 Points System rather than the three-point football rule. Every standard league season consists of a double round-robin format with balanced home and away fixtures.'}
+            European handball operates under the classic <strong>2-1-0 points system</strong> across a double round-robin league calendar. Parity in the table is broken by Points, Goal Difference, Goals Scored, and Head-to-Head record.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-3">
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] text-center">
-              <span className="text-2xl font-black text-emerald-400 block mb-0.5">2</span>
-              <strong className="text-white text-xs uppercase tracking-wider block font-bold">{isDe ? 'Punkte bei Sieg' : 'Points for Win'}</strong>
-              <span className="text-zinc-400 text-[11px]">{isDe ? 'Erfolg nach 60 Minuten' : 'Victory after 60 regulation minutes'}</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 tabular-nums">
+            <div className={`${subSurface} text-center`}>
+              <span className="text-2xl font-extrabold text-emerald-600 block">2 pts</span>
+              <strong className={`text-xs font-bold block mt-0.5 ${headingPrimary}`}>Win</strong>
+              <span className={`text-[11px] ${mutedCopy}`}>Victory after 60 minutes</span>
             </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] text-center">
-              <span className="text-2xl font-black text-amber-400 block mb-0.5">1</span>
-              <strong className="text-white text-xs uppercase tracking-wider block font-bold">{isDe ? 'Punkt bei Remis' : 'Point for Draw'}</strong>
-              <span className="text-zinc-400 text-[11px]">{isDe ? 'Unentschieden bei Abpfiff' : 'Both teams share the points'}</span>
+            <div className={`${subSurface} text-center`}>
+              <span className={`text-2xl font-extrabold block ${accentText}`}>1 pt</span>
+              <strong className={`text-xs font-bold block mt-0.5 ${headingPrimary}`}>Draw</strong>
+              <span className={`text-[11px] ${mutedCopy}`}>Shared points at full-time</span>
             </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] text-center">
-              <span className="text-2xl font-black text-rose-400 block mb-0.5">0</span>
-              <strong className="text-white text-xs uppercase tracking-wider block font-bold">{isDe ? 'Punkte bei Niederlage' : 'Points for Loss'}</strong>
-              <span className="text-zinc-400 text-[11px]">{isDe ? 'Keine Punkte gutgeschrieben' : 'Zero points awarded'}</span>
+            <div className={`${subSurface} text-center`}>
+              <span className="text-2xl font-extrabold text-rose-600 block">0 pts</span>
+              <strong className={`text-xs font-bold block mt-0.5 ${headingPrimary}`}>Loss</strong>
+              <span className={`text-[11px] ${mutedCopy}`}>Zero points awarded</span>
             </div>
           </div>
-          <ul className="list-disc pl-5 space-y-1.5 text-zinc-300">
-            <li>
-              <strong className="text-white">{isDe ? 'Tabellen-Reihenfolge:' : 'Standings Hierarchy & Tiebreakers:'}</strong>{' '}
-              {isDe
-                ? 'Bei Punktgleichheit entscheiden nacheinander Tordifferenz, erzielte Tore und direkter Vergleich.'
-                : 'Standings parity is resolved by Total Points, followed by Goal Difference, Total Goals Scored, and Head-to-Head record.'}
-            </li>
-            <li>
-              <strong className="text-white">{isDe ? '18 Spielbare Nationen:' : '18 Playable Nations & Pyramids:'}</strong>{' '}
-              {isDe
-                ? 'Deutschland (6 Ligen bis zur Regionalliga), Dänemark, Frankreich, Spanien, Schweden, Kroatien, Portugal, Norwegen, Ungarn, Island, Polen, Österreich, Schweiz, Slowenien, Italien, Nordmazedonien, Rumänien und die USA.'
-                : 'Germany (6 tiers down to Regionalliga), Denmark, France, Spain, Sweden, Croatia, Portugal, Norway, Hungary, Iceland, Poland, Austria, Switzerland, Slovenia, Italy, North Macedonia, Romania, and the United States.'}
-            </li>
-          </ul>
+          <p className={`text-xs sm:text-sm ${mutedCopy}`}>
+            Playable domestic pyramids span Germany (6 divisions down to Regionalliga), Denmark, France, Spain, Sweden, Norway, Hungary, Poland, Croatia, Portugal, Slovenia, Iceland, Switzerland, Austria, Romania, North Macedonia, Italy, and more.
+          </p>
         </section>
 
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 2: Relegation & Lowest Tier Floor Retention */}
-        <section id="relegation" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-rose-400">
-            <span className="text-rose-400 text-lg font-mono font-bold">02.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Abstiegsregeln & Untere Ligen' : 'Promotion, Relegation & Lowest Tier Floor Rules'}
-            </h2>
-          </div>
+        {/* Section 2: Promotion & Relegation */}
+        <section id="relegation" className={`scroll-mt-20 ${cardSurface} space-y-3.5`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            02. Promotion, Relegation &amp; Pyramid Floor Rules
+          </h2>
           <p>
-            {isDe
-              ? 'Auf- und Abstiege verbinden die Spielklassen jeder Nation. Am Saisonende steigen die Tabellenletzten ab, während die Meister der unteren Staffeln aufsteigen.'
-              : 'Promotions and relegations form the connective tissue of each country’s league pyramid. At the end of Matchday 34, clubs in the red drop zone are relegated, while tier champions ascend to the division above.'}
+            Division champions and top finishers earn promotion to the tier above, while clubs finishing in the drop zone are relegated—including authentic promotion/relegation playoffs on Decision Day.
           </p>
-          <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/30 space-y-2.5">
-            <div className="flex items-center gap-2 text-rose-300 font-bold text-sm">
-              <i className="fas fa-shield-halved text-rose-400" />
-              <span>{isDe ? 'Besondere Regelung für die tiefste Liga (z.B. Liga 6 in Deutschland):' : 'Special Division Floor Retention Rule (e.g. Tier 6 in Germany):'}</span>
-            </div>
-            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
-              {isDe
-                ? 'Vereine in der untersten Liga einer Nation behalten die rote Abstiegszonen-Markierung („R“) in der Tabelle für vollständige visuelle Spannung. Die Teams können jedoch nicht unter den Boden der Pyramide abstürzen und verbleiben in der Liga. Wenn du als Manager jedoch in der Abstiegszone landest, wirst du vom Vorstand wegen sportlichen Misserfolgs fristlos entlassen!'
-                : 'Clubs situated in the lowest division of any national pyramid retain the red relegation drop-zone marker ("R") for authentic league tension. However, clubs cannot physically drop below the pyramid floor and remain in the division. If you as manager finish inside the drop zone, the board terminates your contract immediately for sporting failure!'}
+          <div className={subSurface}>
+            <strong className={`block text-xs sm:text-sm font-bold mb-1 ${headingPrimary}`}>
+              Lowest Division Floor Rule
+            </strong>
+            <p className={`text-xs sm:text-sm ${bodyCopy}`}>
+              Clubs in the bottom playable tier of a national pyramid cannot drop out of the game world, preserving full division tables—however, finishing inside the red relegation zone still triggers immediate board dismissal for sporting failure unless protected by an Immunity Shield.
             </p>
           </div>
         </section>
 
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 3: Career Progression & Endless Mode */}
-        <section id="career" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-amber-400">
-            <span className="text-amber-400 text-lg font-mono font-bold">03.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Die 35-Jahre-Karriere & Endlos-Modus' : 'The 35-Season Career & Endless Mode'}
-            </h2>
-          </div>
+        {/* Section 3: 35-Season Career */}
+        <section id="career" className={`scroll-mt-20 ${cardSurface} space-y-3.5`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            03. 35-Season Career Horizon &amp; Endless Dynasty Mode
+          </h2>
           <p>
-            {isDe
-              ? 'Deine Trainerlaufbahn erstreckt sich über einen Horizont von 35 Saisons. Du kannst einen europäischen Spitzenclub an der Spitze halten oder einen unterklassigen Traditionsverein aus der Regionalliga nach oben führen. Nach Saison 35 kannst du nahtlos in den Endlos-Modus wechseln, um unbegrenzt weiterzuspielen.'
-              : 'Your managerial tenure spans a core 35-season window to build an indelible legacy. You can take charge of an established continental powerhouse or choose a regional underdog and engineer an ascent up the European pyramid. Completing Season 35 unlocks Endless Mode so you can manage indefinitely.'}
-          </p>
-          <p>
-            {isDe
-              ? 'Trainerwechsel & Vereinsgedächtnis: Als erfolgreicher Manager erhältst du Angebote von anderen Vereinen. Wenn du zu einem neuen Club wechselst, speichert das Spiel den Fortschritt deines bisherigen Vereins (Hallenkapazität, Jugendakademie, medizinisches Zentrum). Kehrst du Jahre später zurück, findest du all deine aufgebauten Strukturen intakt vor.'
-              : 'Managerial Mobility & World Continuity: You are never locked to one club. As your reputation grows, European clubs will extend contract offers. When you change clubs, the persistent universe remembers your previous club’s arena expansions, youth academy, and medical investments, ensuring seamless continuity if you return years later.'}
+            Official Hall of Fame leaderboard runs are evaluated across a 35-season managerial career, after which Endless Mode unlocks so you can continue building your dynasty indefinitely. When you accept job offers elsewhere in Europe, the simulation preserves every club’s arena expansions, academy upgrades, and financial history.
           </p>
         </section>
 
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 4: Continental & National Cups */}
-        <section id="cups" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-emerald-400">
-            <span className="text-emerald-400 text-lg font-mono font-bold">04.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Europapokal & Nationale Pokale' : 'Continental Tournaments & National Cups'}
-            </h2>
-          </div>
-          <p>
-            {isDe
-              ? 'Der europäische Handball bietet ein renommiertes internationales Pokalsystem, organisiert von der EHF (European Handball Federation) und IHF, sowie traditionsreiche nationale Pokalwettbewerbe:'
-              : 'European club handball features a prestigious continental pyramid organized by the European Handball Federation (EHF) and International Handball Federation (IHF), alongside rich domestic cup tournaments:'}
-          </p>
-          <div className="space-y-3 text-zinc-300">
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.05]">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                <i className="fas fa-trophy text-amber-400 text-xs" />
-                <span>{isDe ? 'EHF Champions League (Platz 1 & 2)' : 'EHF Champions League (Places 1 & 2)'}</span>
-              </h3>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                {isDe
-                  ? 'Die Königsklasse des Welthandballs. Die beiden Erstplatzierten der 1. Liga qualifizieren sich direkt für dieses Elite-Turnier bis zum spektakulären EHF FINAL4 in der LANXESS arena in Köln.'
-                  : 'The pinnacle of club handball. Finishing 1st or 2nd in Tier 1 grants direct entry into Europe’s premier club tournament culminating in the prestigious EHF FINAL4 at the LANXESS arena in Cologne.'}
-              </p>
+        {/* Section 4: Cups */}
+        <section id="cups" className={`scroll-mt-20 ${cardSurface} space-y-3.5`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            04. EHF Continental Competitions, National Cups &amp; Supercups
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-1 ${headingPrimary}`}>
+                EHF Champions League (Top 2)
+              </strong>
+              <span className={mutedCopy}>
+                Europe’s premier club competition culminating at the EHF FINAL4, unlocking the IHF Super Globe club world cup.
+              </span>
             </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.05]">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                <i className="fas fa-shield text-sky-400 text-xs" />
-                <span>{isDe ? 'EHF European League (Platz 3 bis 5 & Pokalsieger)' : 'EHF European League (Places 3 to 5 & Cup Winners)'}</span>
-              </h3>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                {isDe
-                  ? 'Der zweithöchste kontinentale Wettbewerb. Teams auf den Rängen 3 bis 5 sowie der Sieger des nationalen Pokals treten hier in Gruppen- und K.-o.-Phasen an.'
-                  : 'The second-tier continental showcase. Teams finishing 3rd through 5th, plus national cup winners, qualify for the European League.'}
-              </p>
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-1 ${headingPrimary}`}>
+                EHF European League &amp; Cup (Places 3–6)
+              </strong>
+              <span className={mutedCopy}>
+                Continental knockout silverwares for upper-table clubs and domestic cup winners.
+              </span>
             </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.05]">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                <i className="fas fa-medal text-emerald-400 text-xs" />
-                <span>{isDe ? 'EHF European Cup (Platz 6)' : 'EHF European Cup (Place 6)'}</span>
-              </h3>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                {isDe
-                  ? 'Der dritte kontinentale Pokalwettbewerb für qualifizierte Clubs europäischer Verbände.'
-                  : 'The third continental cup contested by eligible European contenders.'}
-              </p>
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-1 ${headingPrimary}`}>
+                National Cups (DHB-Pokal, Santander Cup, etc.)
+              </strong>
+              <span className={mutedCopy}>
+                Single-elimination domestic cups offering major prize purses and European qualification.
+              </span>
             </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.05]">
-              <h3 className="font-bold text-white flex items-center gap-2">
-                <i className="fas fa-earth-europe text-indigo-400 text-xs" />
-                <span>{isDe ? 'Nationale Pokalwettbewerbe & IHF Super Globe' : '18 Domestic Cups & IHF Super Globe'}</span>
-              </h3>
-              <p className="text-xs sm:text-sm text-zinc-400 mt-1">
-                {isDe
-                  ? 'Alle 18 Nationen besitzen ihren offiziellen Verbandspokal (DHB-Pokal, Santander Cup, Coupe de France, Copa del Rey, Pokal Slovenije, Coppa Italia usw.) mit Endspielen in legendären Arenen. Der Champions-League-Sieger qualifiziert sich für den IHF Super Globe zur Vereins-WM.'
-                  : 'All 18 nations feature their authentic national cup (DHB-Pokal, Santander Cup, Coupe de France, Copa del Rey, Pokal Slovenije, Coppa Italia, etc.) with finals in legendary arenas. The Champions League winner unlocks the IHF Super Globe club world championship.'}
-              </p>
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-1 ${headingPrimary}`}>
+                Season-Opening Supercup
+              </strong>
+              <span className={mutedCopy}>
+                Reigning league champions and cup holders clash before Matchday 1 for early silverware and treasury prize money.
+              </span>
             </div>
           </div>
         </section>
 
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 5: Tactics, Match Simulation & Decision Day */}
-        <section id="tactics" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-indigo-400">
-            <span className="text-indigo-400 text-lg font-mono font-bold">05.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Taktik, Match-Vielfalt & Decision Day' : 'Match Tactics, Results Variety & Decision Day'}
-            </h2>
-          </div>
+        {/* Section 5: Squad & Tactics */}
+        <section id="tactics" className={`scroll-mt-20 ${cardSurface} space-y-3.5`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            05. Squad Building, Training Warmups &amp; Tactical Systems
+          </h2>
           <p>
-            {isDe
-              ? 'Deine taktische Ausrichtung beeinflusst Tore, Gegentore und Spieltempo direkt im Match:'
-              : 'Your tactical instructions directly alter match simulation scores, goal frequency, and defensive rigidity:'}
-          </p>
-          <div className="space-y-2.5 text-xs sm:text-sm">
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold">Total Handball:</strong>
-              <span className="text-zinc-400">{isDe ? 'Ausgewogenes modernes Spiel mit disziplinierter 6-0 Abwehr und geregeltem Positionsangriff.' : 'Balanced modern game emphasizing disciplined transition play and sound 6-0 defensive retreats.'}</span>
-            </div>
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold">{isDe ? 'Tempospiel / Erste Welle (+18% Tore, +10% Gegentore):' : 'Fast Break (+18% Scored, +10% Conceded):'}</strong>
-              <span className="text-zinc-400">{isDe ? 'Höchstes Tempo über schnelle Außen, sorgt für torreiche Schlagabtausche.' : 'Rapid counter-attacks and wing rushes, producing high-scoring contests.'}</span>
-            </div>
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold">{isDe ? 'Abwehrbollwerk 6:0 (-38% Tore, -48% Gegentore):' : 'Defensive Wall 6:0 (-38% Scored, -48% Conceded):'}</strong>
-              <span className="text-zinc-400">{isDe ? 'Körperbetonter, massiver Abwehrriegel am eigenen Kreis, der das Spieltempo drosselt.' : 'A physically imposing low-block defense creating gritty, low-scoring battles.'}</span>
-            </div>
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold">{isDe ? 'Offensive 3:2:1 Deckung:' : 'Offensive 3:2:1 (Interception Hunting):'}</strong>
-              <span className="text-zinc-400">{isDe ? 'Aggressives Vorrücken zur Passunterbrechung, birgt aber Lücken gegen wendige Kreisläufer.' : 'Active perimeter pressure designed to force turnovers, but leaves vulnerabilities against agile line pivots.'}</span>
-            </div>
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold">{isDe ? 'Überzahl 7 gegen 6:' : 'Power Play 7v6 (Empty Net Attack):'}</strong>
-              <span className="text-zinc-400">{isDe ? 'Nimmt den Torwart für einen siebten Feldspieler heraus, birgt aber die Gefahr von Gegentoren ins leere Tor.' : 'Pulls the goalkeeper for an extra outfield attacker to crack defensive blocks, at the risk of conceding empty-net goals.'}</span>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-black/40 border border-white/[0.08] space-y-2 mt-4">
-            <h3 className="font-bold text-white text-sm flex items-center gap-2">
-              <i className="fas fa-chess-knight text-amber-400 text-xs" />
-              <span>{isDe ? 'Taktischer Verschleiß (Anti-Metronom) & Trainer-Archetypen' : 'Tactical Staleness (Anti-Metronome) & Staff Archetypes'}</span>
-            </h3>
-            <p className="text-xs sm:text-sm text-zinc-300">
-              {isDe
-                ? 'Gegnerische Trainer entschlüsseln dein Spielsystem über ein rollierendes 4-Saisons-Fenster: Selbst wer nur zwischen zwei Taktiken hin- und herwechselt, erleidet ab dem 3. Einsatzjahr spürbare Effizienzverluste. Zudem kannst du Cheftrainer- und Sportdirektor-Archetypen (z. B. Taktiker, Jugendförderer, Finanzmogul) verpflichten, um deine Vereinsphilosophie gezielt zu schärfen.'
-                : 'Opposing coaches scout and adapt to your tactical system across a rolling 4-season window—preventing two-tactic alternating exploits and requiring genuine tactical evolution after 3 seasons of heavy usage. You can also appoint specialized Head Coach and Sporting Director archetypes (Tactician, Youth Developer, Continental Legend, Financial Mogul) to shape your club identity.'}
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-black/40 border border-white/[0.08] space-y-2 mt-3">
-            <h3 className="font-bold text-white text-sm flex items-center gap-2">
-              <i className="fas fa-tv text-sky-400 text-xs" />
-              <span>{isDe ? 'Decision Day (34. Spieltag) & Live-Broadcaster' : 'Decision Day (Matchday 34) & Authentic Broadcasters'}</span>
-            </h3>
-            <p className="text-xs sm:text-sm text-zinc-300">
-              {isDe
-                ? 'Am 34. Spieltag schaltet das Spiel in den Decision Day-Modus: Meisterschaftsfinale, direkter Aufstiegskampf, Relegationsduelle (Platz 16 gegen 2. Liga Platz 3) und direkter Abstiegskampf werden live von authentischen TV-Sendern (ARD, ZDF, Dyn, DR, France TV, TVP, NRK, SVT, ORF, SRF, DAZN) begleitet und 1:1 mit der Abschlusstabelle synchronisiert.'
-                : 'Matchday 34 triggers Decision Day mode: Title deciders, direct promotion shootouts, 3rd-place promotion/relegation playoffs, and survival dogfights are staged with live score tickers on authentic regional broadcasters (ARD, ZDF, Dyn, DR, France TV, TVP, NRK, SVT, ORF, SRF, DAZN) and strictly synchronized with the final league standings.'}
-            </p>
-          </div>
-        </section>
-
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 6: Arena Operations & Supporter Culture */}
-        <section id="arena" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-rose-400">
-            <span className="text-rose-400 text-lg font-mono font-bold">06.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Hallen-Wirtschaft & Fankultur' : 'Arena Operations & Supporter Culture'}
-            </h2>
-          </div>
-          <p>
-            {isDe
-              ? 'Deine Heimspielstätte ist das wirtschaftliche Herzstück des Vereins. Zuschauereinnahmen entstehen aus dem Zusammenspiel von Ticketnachfrage und Hallenkapazität. Ist die Nachfrage größer als die Halle, gehen wertvolle Einnahmen verloren.'
-              : 'Your home venue is your primary operational engine. Ticket revenue scales with matchday attendance, which is governed by active supporter demand and physical seat capacity. When demand exceeds capacity, fans are turned away and potential ticket receipts are lost.'}
+            On the <strong>Squad</strong> workspace, your players warm up in a 3D indoor Sporthalle alongside five core management hubs: <strong>Squad Overview</strong> (OVR, Squad Size, Morale, Youth Slots, Funds Available), <strong>Transfer Market</strong>, <strong>Youth Academy</strong>, <strong>Youth Tournament</strong>, and <strong>Team Retreat</strong>.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold mb-1">{isDe ? 'Hexenkessel & Fanclubs:' : 'Acoustic Cauldron & Fan Clubs:'}</strong>
-              <span className="text-zinc-400">{isDe ? 'Vergünstigte Stehplätze, Pauken und Trommeln erzeugen ohrenbetäubenden Lärm (+2 Heim-OVR-Boost bei -8% Ticketausbeute).' : 'Discount standing terraces and marching drums create a deafening arena roar (+2 Home OVR boost, -8% ticket yield).'}</span>
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-1 ${headingPrimary}`}>
+                Total Handball &amp; Fast Break
+              </strong>
+              <span className={mutedCopy}>
+                Balanced two-way handball or relentless first-wave counterattacks (+18% goals scored, +10% conceded).
+              </span>
             </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold mb-1">{isDe ? 'Basis & Familien:' : 'Grassroots & Family:'}</strong>
-              <span className="text-zinc-400">{isDe ? 'Schulaktionen und Familienblöcke steigern das langfristige Fanwachstum um +25%.' : 'Family sectors and school clinic visits boost long-term fanbase growth by +25%.'}</span>
-            </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold mb-1">{isDe ? 'VIP & Firmen-Logen:' : 'VIP & Corporate Hospitality:'}</strong>
-              <span className="text-zinc-400">{isDe ? 'Geschäftskunden und VIP-Pakete maximieren die Ticketeinnahmen (+30%), dämpfen aber die Stimmung leicht (-1 OVR).' : 'Executive hospitality suites increase ticket revenue by +30% at a slight cost to crowd intensity (-1 OVR).'}</span>
-            </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.04]">
-              <strong className="text-white block font-bold mb-1">{isDe ? 'Ausgewogen:' : 'Balanced Standard:'}</strong>
-              <span className="text-zinc-400">{isDe ? 'Klassischer Mittelweg aus Stimmung, Wachstum und Einnahmen.' : 'Traditional baseline balancing atmosphere, growth, and finances.'}</span>
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-1 ${headingPrimary}`}>
+                6:0 Wall, Offensive 3:2:1 &amp; 7v6 Power Play
+              </strong>
+              <span className={mutedCopy}>
+                Compact crease protection, high-pressure interception traps, or pulling the keeper for an extra backcourt attacker.
+              </span>
             </div>
           </div>
         </section>
 
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 7: Finances, Debt & Licensing */}
-        <section id="finances" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-emerald-400">
-            <span className="text-emerald-400 text-lg font-mono font-bold">07.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Vereinsfinanzen, Schulden & Lizenzierung' : 'Club Finances, Debt & Licensing'}
-            </h2>
-          </div>
+        {/* Section 6: Arena & Fan Strategy */}
+        <section id="arena" className={`scroll-mt-20 ${cardSurface} space-y-3.5`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            06. 3D Arena Architecture (Up to 30,000 Seats) &amp; Fan Strategy
+          </h2>
           <p>
-            {isDe
-              ? 'Handballclubs wirtschaften mit realistischen europäischen Etats (ca. 500.000 € in unteren Klassen bis zu 10–15 Millionen € bei Champions-League-Spitzenteams). Die Liga prüft die Finanzen streng:'
-              : 'Handball clubs operate on realistic European balance sheets (€500k in lower divisions to €10M–€15M at elite top-flight clubs). The league enforces strict licensing criteria:'}
+            Your venue scales organically up to <strong>30,000 seats</strong> via modular <strong>Arena Expansions</strong> or commissioning a landmark <strong>New Arena Complex</strong> with 10–25 year municipal financing. Choose between four 40×20m court designs and tailor your matchday <strong>Fan Strategy</strong>:
           </p>
-          <ul className="list-disc pl-5 space-y-1.5 text-zinc-300">
-            <li>
-              <strong className="text-white">{isDe ? 'Punkteabzug bei Minusbilanz:' : 'Point Deductions for Deficits:'}</strong>{' '}
-              {isDe ? 'Schließt du eine Saison im Minus ab, startet dein Verein mit Strafpunkten in die Folgesaison.' : 'Ending a season with a negative treasury balance incurs disciplinary point deductions next season.'}
-            </li>
-            <li>
-              <strong className="text-white">{isDe ? '3-Jahre-Insolvenzregel:' : '3-Year Insolvency Threat:'}</strong>{' '}
-              {isDe ? 'Drei aufeinanderfolgende Saisons mit Schulden führen zur Lizenzverweigerung und sofortigen Entlassung.' : 'Finishing 3 consecutive seasons in deficit triggers an insolvency crisis and board dismissal.'}
-            </li>
-            <li>
-              <strong className="text-white">{isDe ? 'Regionales Partner-Konsortium:' : 'Regional Partner Consortium (Emergency Relief):'}</strong>{' '}
-              {isDe ? 'Einmal alle 3 Saisons kannst du bei drohender Zahlungsunfähigkeit das Konsortium lokaler Förderer einberufen. Die Partner übernehmen 50% der aufgelaufenen Schulden.' : 'Once every 3 seasons, clubs facing severe debt can convene regional business patrons to inject capital and absorb 50% of outstanding debt.'}
-            </li>
-            <li>
-              <strong className="text-white">{isDe ? 'Sponsoren-Verhandlungen & Mehrjahresverträge (1–3 Jahre):' : 'Commercial Sponsorship Pitches & Multi-Year Contracts (1–3 Years):'}</strong>{' '}
-              {isDe ? 'Verhandle im zentralen Sponsoren-Hub über Standard-, Megadeal- und Performance-Pakete mit länderspezifischen Partnern. Wähle zwischen 1-, 2- (+5 %/Jahr) und 3-Jahres-Laufzeiten (+10 %/Jahr) für wiederkehrende jährliche Auszahlungen.' : 'Negotiate Standard, Megadeal, and Performance packages in the unified Sponsorship Deals hub with tier-scaled national brands, choosing 1-year, 2-year (+5%/yr), or 3-year (+10%/yr) terms for recurring annual payouts.'}
-            </li>
-            <li>
-              <strong className="text-white">{isDe ? 'Institutionelle Bankdarlehen & Vorzeitige Tilgung:' : 'Institutional Bank Loans & Early Settlement Rebates:'}</strong>{' '}
-              {isDe
-                ? 'Nimm zweckgebundene Vereinsdarlehen mit Laufzeiten von 10 (3,5%), 15 (4,5%) oder 25 Jahren (5,5%) für Hallen- und Infrastrukturprojekte auf. Sondertilgungen gewähren sofortige Zinsrabatte.'
-                : 'Access institutional credit facilities across 10-year (3.5%), 15-year (4.5%), and 25-year (5.5%) amortization terms, with interest rebates for early principal settlement.'}
-            </li>
-            <li>
-              <strong className="text-white">{isDe ? 'Gehalts-Soft-Cap, Luxussteuer & Dynastie-Abgabe:' : 'Payroll Soft Cap, Luxury Tax & Dynasty Repeater Levy:'}</strong>{' '}
-              {isDe
-                ? 'Progressive Luxussteuern auf gehortete Milliarden-Reserven (Endowment-Rendite gedeckelt bei max. 2,5 Mio. €/Jahr) sowie eine Gehalts-Luxusabgabe für überdimensionierte Galactico-Kader sichern die langfristige Wettbewerbsbalance.'
-                : 'Progressive Competitive Balance Luxury Taxes on excessive cash hoarding (with annual treasury endowment yields capped at €2.5M) and a Squad Payroll Soft Cap & Dynasty Repeater Levy prevent runaway financial monopolies.'}
-            </li>
-            <li>
-              <strong className="text-white">{isDe ? 'Börsengang (IPO) & Aktienmarkt:' : 'Corporate Equity (IPO) & Stock Market:'}</strong>{' '}
-              {isDe 
-                ? 'Wandle deinen Verein in eine börsennotierte Kapitalgesellschaft (z. B. AG in Deutschland, SAD in Portugal/Spanien, PLC) um und gehe an die Börse, um massiv Kapital einzusammeln. Aber Vorsicht: Fällt der Aktienkurs unter den IPO-Wert, wird eine Strafdividende (Shareholder Dividend Trap) von bis zu 60% deiner operativen Marge fällig!' 
-                : 'Transform your club into a public corporation (e.g. AG in Germany, SAD in Portugal/Spain, PLC) and launch an IPO for a massive capital injection. Beware the Shareholder Dividend Trap: if your live stock price falls below the initial offering price, the board will siphon up to 60% of your operating margin to appease angry shareholders!'}
-            </li>
-          </ul>
-        </section>
-
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 8: Youth Academy & Medical Center (Levels 1-5) */}
-        <section id="youth" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-sky-400">
-            <span className="text-sky-400 text-lg font-mono font-bold">08.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Jugendakademie & Medizinisches Zentrum (Stufe 1–5)' : 'Youth Academy & Medical Center Milestones (Levels 1–5)'}
-            </h2>
-          </div>
-          <p>
-            {isDe
-              ? 'Beide Säulen deiner Vereinsinfrastruktur lassen sich über 5 Ausbaustufen entwickeln (max. 2 Baukräne pro Saison) und schalten auf jeder Stufe einzigartige strategische Vorteile frei:'
-              : 'Both pillars of your club infrastructure scale across 5 upgrade levels (up to 2 active construction cranes per season), unlocking transformative strategic capabilities at every tier:'}
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
-            {/* Academy Milestones Card */}
-            <div className="p-4 rounded-2xl bg-emerald-950/15 border border-emerald-500/25 space-y-2.5">
-              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-                <i className="fas fa-seedling" />
-                <span>{isDe ? 'Nachwuchsleistungszentrum (Stufe 1–5)' : 'Youth Academy Progression (Lvl 1–5)'}</span>
-              </div>
-              <ul className="space-y-1.5 text-zinc-300 text-xs leading-relaxed">
-                <li><strong className="text-white">Lvl 1 (6 Slots):</strong> {isDe ? '1 Scouting-Mission pro Saison + 1 kostenloser Schul-Tryout.' : '1 paid scouting mission per season + 1 free regional school trialist.'}</li>
-                <li><strong className="text-emerald-300">Lvl 2 · Regional Hub (8 Slots):</strong> {isDe ? 'Schaltet 2 Scouting-Missionen pro Saison frei (+1 OVR Potenzial für bestehende Talente).' : 'Unlocks 2 scouting missions per season & elevates existing prospects (+1 OVR potential).'}</li>
-                <li><strong className="text-emerald-300">Lvl 3 · National NLZ (10 Slots):</strong> {isDe ? '3 Scouts/Saison & Rechtsschild-Abwerbeschutz gegen Top-Clubs.' : '3 scouts/season & unlocks Anti-Poaching Legal Shielding against rival predators.'}</li>
-                <li><strong className="text-emerald-300">Lvl 4 · Continental Setup (12 Slots):</strong> {isDe ? '4 Scouts/Saison & Internationale Top-Talente 🌍 (DEN, FRA, ESP, SWE, NOR, CRO, SLO) mit erhöhtem Basis-Potenzial.' : '4 scouts/season & unlocks Foreign Wonderkid Imports 🌍 (DEN, FRA, ESP, SWE, NOR, CRO, SLO) with enhanced skill baselines.'}</li>
-                <li><strong className="text-emerald-300">Lvl 5 · Global Dynasty (14 Slots):</strong> {isDe ? '5 Scouts/Saison, 100% Abwerbe-Immunität & permanente Befreiung vom „Target on the Back“-Meister-Malus.' : '5 scouts/season, 100% poaching immunity & permanent immunity from the "Target on the Back" multi-year title defender penalty.'}</li>
-              </ul>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-0.5 ${headingPrimary}`}>Home Fortress</strong>
+              <span className={mutedCopy}>+2 Home OVR cauldron roar · -8% ticket yield.</span>
             </div>
-
-            {/* Medical Milestones Card */}
-            <div className="p-4 rounded-2xl bg-purple-950/15 border border-purple-500/25 space-y-2.5">
-              <div className="flex items-center gap-2 text-purple-400 font-bold text-sm">
-                <i className="fas fa-heart-pulse" />
-                <span>{isDe ? 'Medizinisches Zentrum (Stufe 1–5)' : 'Medical Center Progression (Lvl 1–5)'}</span>
-              </div>
-              <ul className="space-y-1.5 text-zinc-300 text-xs leading-relaxed">
-                <li><strong className="text-white">Lvl 1:</strong> {isDe ? 'Basis-Physiotherapie zur Standard-Belastungssteuerung.' : 'Baseline physiotherapy and standard squad recovery.'}</li>
-                <li><strong className="text-purple-300">Lvl 2 · In-House Rehab Suite:</strong> {isDe ? 'Kostenlose Reha bei Saison-Verletzungsdilemmas (0 € statt 40.000 €) & -50% Krisen-Rehakosten.' : 'Free mid-season injury dilemma rehab (€0 vs €40k) & -50% crisis rehabilitation cost.'}</li>
-                <li><strong className="text-purple-300">Lvl 3 · Sports Science Lab:</strong> {isDe ? 'Permanente Immunität gegen dramatischen Kaderverfall, 100% Star-Playmaker-Genesung & -50% Meister-Ermüdung.' : 'Permanent immunity from Dramatic Squad Decay, 100% Star Injury recovery & -50% Title Defender fatigue tax.'}</li>
-                <li><strong className="text-purple-300">Lvl 4 · Cryo &amp; Biomechanics:</strong> {isDe ? 'Begrenzt Karriereenden auf max. 1 Spieler/Jahr & bewahrt 50% des Veteran-Ringer-OVR-Bonus bei Rücktritt.' : 'Caps annual retirements at max 1 player/yr & retains 50% of Veteran Ringer OVR bonus upon retirement.'}</li>
-                <li><strong className="text-purple-300">Lvl 5 · Peak Performance Institute:</strong> {isDe ? '+1.0 Matchday-Konditions-OVR in jedem Pflichtspiel, -50% Generationen-Fluktuationsschutz & Dynastie-Immunität.' : '+1.0 Matchday Conditioning OVR in every match, -50% Generational Turnover shield & permanent Dynasty Immunity.'}</li>
-              </ul>
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-0.5 ${headingPrimary}`}>Grassroots</strong>
+              <span className={mutedCopy}>+25% long-term supporter &amp; youth pull growth.</span>
+            </div>
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-0.5 ${headingPrimary}`}>VIP Hospitality</strong>
+              <span className={mutedCopy}>+30% matchday gate revenue · -1 Home OVR.</span>
+            </div>
+            <div className={subSurface}>
+              <strong className={`block font-bold mb-0.5 ${headingPrimary}`}>Balanced</strong>
+              <span className={mutedCopy}>Standard ticket yield and neutral home-court balance.</span>
             </div>
           </div>
-
-          <ul className="list-disc pl-5 space-y-1.5 text-zinc-300">
-            <li>
-              <strong className="text-white">{isDe ? 'Generationen-Umbruch (5-Jahres-Cooldown):' : 'Generational Squad Rebuild (5-Season Cooldown):'}</strong>{' '}
-              {isDe ? 'Verkaufe alternde Großverdiener für eine hohe Transfer-Abfindung, senke sofort die Gehaltsliste und führe 2 hochveranlagte Akademietalente in den Kader ein.' : 'Liquidate aging high-earners for an immediate transfer windfall, slash bloated wage bills, and inject 2 high-ceiling wonderkids into your academy pipeline.'}
-            </li>
-            <li>
-              <strong className="text-white">{isDe ? 'Kooperationsverein-Leihe (+1 OVR) & Zweitvertretungen („II“):' : 'Affiliate Farm Loan (+1 OVR) & Reserve Teams ("II"):'}</strong>{' '}
-              {isDe ? 'Verleihe Talente für 1 Saison (+1 OVR Bonus bei Rückkehr). Zweitmannschaften (z. B. Füchse Berlin II) rotieren automatisch Nachwuchsspieler ohne Notfall-Abzüge und sind auf 1.500 Hallenplätze begrenzt.' : 'Loan prospects for 1 season for a guaranteed +1 OVR developmental boost. Reserve clubs ("II") automatically rotate academy affiliates without emergency callup penalties and operate under an authentic 1,500-seat arena cap.'}
-            </li>
-          </ul>
         </section>
 
-        <hr className="border-white/[0.06]" />
-
-        {/* Section 9: Mods & Community Data */}
-        <section id="mods" className="scroll-mt-10 space-y-4">
-          <div className="flex items-center gap-2.5 text-amber-400">
-            <span className="text-amber-400 text-lg font-mono font-bold">09.</span>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
-              {isDe ? 'Community-Datenbanken & Mods' : 'Community Database Mods & Base Export'}
-            </h2>
-          </div>
+        {/* Section 7: Commercial & IPO */}
+        <section id="finances" className={`scroll-mt-20 ${cardSurface} space-y-3.5`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            07. Commercial Headquarters, Multi-Year Sponsors, Loans &amp; IPO
+          </h2>
           <p>
-            {isDe
-              ? 'Passe Handball Manager mit benutzerdefinierten Community-Datenbanken nach deinen Wünschen an:'
-              : 'Customize Handball Manager with authentic community rosters, real team names, or custom universe files:'}
+            Manage five commercial pillars around your 3D Club Office: <strong>Treasury</strong>, <strong>Sponsorship Deals</strong> (1–3 year Standard, Megadeal, and Performance contracts), <strong>Marketing &amp; PR</strong>, <strong>Loans</strong> (10, 15, or 25-year amortization with early-repayment rebates), and <strong>Go Public / IPO</strong>. Avoid ending 3 consecutive seasons in debt to pass league licensing!
           </p>
-          <div className="space-y-2.5 text-xs sm:text-sm">
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.04] flex items-start gap-3">
-              <i className="fas fa-file-arrow-up text-amber-400 mt-1 shrink-0" />
+        </section>
+
+        {/* Section 8: U19 Youth Cup & Facilities */}
+        <section id="youth" className={`scroll-mt-20 ${cardSurface} space-y-3.5`}>
+          <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+            08. Youth Academy, U19 National Tournament &amp; Sports Medicine (Lvl 1–5)
+          </h2>
+          <p>
+            Upgrade both your <strong>Youth Academy</strong> (6 to 14 prospect slots, foreign wonderkid scouting, and poaching shields) and <strong>Medical Department</strong> (injury rehab savings, retirement caps, and +1.0 Matchday OVR at Lvl 5). Once 6 active U19 prospects are enrolled, enter the annual <strong>Youth Tournament</strong> to compete for a permanent <strong>+1 Senior OVR</strong> and <strong>+15% Morale</strong> championship boost.
+          </p>
+        </section>
+
+        {/* Section 9: Sister Sports Management Sims */}
+        <section id="network" className={`scroll-mt-20 ${cardSurface} space-y-4`}>
+          <div>
+            <h2 className={`text-xl sm:text-2xl font-bold tracking-tight ${headingPrimary}`}>
+              09. Sister Sports Management Sims
+            </h2>
+            <p className={`text-xs sm:text-sm mt-1 ${mutedCopy}`}>
+              Enjoying Handball Manager Sim? Take charge of a football club or a basketball franchise in our companion management simulations:
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <a
+              href="https://footballmanagersim.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${subSurface} flex items-center justify-between gap-3 group transition ${
+                isCourtside ? 'hover:bg-[#ECE9E0]' : 'hover:bg-white/[0.06]'
+              }`}
+            >
               <div>
-                <strong className="text-white block font-bold">{isDe ? 'Eigene JSON-Mods importieren:' : 'Upload Custom JSON Database:'}</strong>
-                <span className="text-zinc-400">{isDe ? 'Lade eine eigene Club- und Spielerdatei im JSON-Format hoch. Das System validiert das Schema in Echtzeit.' : 'Import your custom clubs and rosters in JSON format with real-time schema validation.'}</span>
+                <strong className={`text-sm font-bold block ${headingPrimary}`}>
+                  Football Manager Sim
+                </strong>
+                <span className={`text-xs block mt-0.5 ${mutedCopy}`}>
+                  Domestic pyramids, European nights, transfers &amp; stadium dynasties — footballmanagersim.com
+                </span>
               </div>
-            </div>
-            <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.04] flex items-start gap-3">
-              <i className="fas fa-file-arrow-down text-emerald-400 mt-1 shrink-0" />
+              <i
+                aria-hidden="true"
+                className={`fas fa-arrow-up-right-from-square text-xs shrink-0 ${mutedCopy}`}
+              />
+            </a>
+
+            <a
+              href="https://basketballmanagersim.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${subSurface} flex items-center justify-between gap-3 group transition ${
+                isCourtside ? 'hover:bg-[#ECE9E0]' : 'hover:bg-white/[0.06]'
+              }`}
+            >
               <div>
-                <strong className="text-white block font-bold">{isDe ? 'Basis-Datenbank exportieren:' : 'Export Base Handball Database:'}</strong>
-                <span className="text-zinc-400">{isDe ? 'Lade die vollständige Basis-Datenbank (handball_base_database.json) mit einem Klick herunter, um als Vorlage für eigene Modifikationen zu dienen.' : 'Download the complete canonical database (handball_base_database.json) with one click to use as a starting template for your own mods.'}</span>
+                <strong className={`text-sm font-bold block ${headingPrimary}`}>
+                  Basketball Manager Sim
+                </strong>
+                <span className={`text-xs block mt-0.5 ${mutedCopy}`}>
+                  Draft lottery, salary cap strategy, hardwood tactics &amp; playoff runs — basketballmanagersim.com
+                </span>
               </div>
-            </div>
+              <i
+                aria-hidden="true"
+                className={`fas fa-arrow-up-right-from-square text-xs shrink-0 ${mutedCopy}`}
+              />
+            </a>
           </div>
         </section>
-
       </div>
 
       {/* Bottom Action Footer */}
       {onStartCareer && (
-        <div className="text-center pt-10 mt-14 border-t border-white/[0.08]">
+        <div className={`text-center pt-8 mt-10 border-t ${dividerBorder}`}>
           <button
+            type="button"
             onClick={onStartCareer}
-            className="inline-flex items-center gap-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-sm uppercase tracking-wider py-3.5 px-8 rounded-xl transition active:scale-95 shadow-xl cursor-pointer"
+            className={`inline-flex items-center gap-2.5 min-h-[44px] py-3 px-7 rounded-full font-semibold text-xs sm:text-sm transition cursor-pointer ${
+              isCourtside
+                ? 'bg-[#18191F] hover:bg-[#2A2D37] text-white'
+                : 'bg-white hover:bg-zinc-200 text-slate-950'
+            }`}
           >
-            <i className="fas fa-play text-xs" />
-            <span>{isDe ? 'Zurück zum Spielgeschehen' : 'Return to Career Dashboard'}</span>
+            <i aria-hidden="true" className="fas fa-arrow-left text-xs" />
+            <span>{isDe ? 'Zurück zum Dashboard' : 'Return to Career Dashboard'}</span>
           </button>
         </div>
       )}

@@ -170,6 +170,35 @@ console.log('--- RUNNING BROADCASTING REAL DATA MOD & VECTOR LOGOS TEST SUITE --
   console.log('✓ Test 4 Passed: 6/6 German regional cup rights holders & badges verified.');
 }
 
+// ============================================================================
+// TEST 5: DAZN Vector Monogram & CSS Modal Contrast Protection
+// ============================================================================
+{
+  console.log('\nTest 5: DAZN Vector Monogram & [data-broadcast-logo] CSS Protection...');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const logoSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/BroadcastLogo.tsx'), 'utf8');
+  const cssSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/index.css'), 'utf8');
+
+  // Ensure DAZN renders a crisp SVG 2x2 monogram with explicit dark fill (#09090b) on white (#ffffff)
+  assert(logoSrc.includes("if (key === 'DAZN')"), 'BroadcastLogo must handle DAZN key');
+  const daznSection = logoSrc.slice(logoSrc.indexOf("if (key === 'DAZN')"), logoSrc.indexOf("if (key === 'BEIN')"));
+  assert(daznSection.includes('<svg'), 'DAZN mark must render a scalable <svg> emblem');
+  assert(daznSection.includes('fill="#ffffff"'), 'DAZN emblem must have a white square background');
+  assert(daznSection.includes('fill="#09090b"'), 'DAZN 2x2 monogram text must have explicit dark #09090b fill');
+  assert(daznSection.includes('>DA<') || daznSection.includes('DA\n'), 'DAZN emblem must include DA row');
+  assert(daznSection.includes('>ZN<') || daznSection.includes('ZN\n'), 'DAZN emblem must include ZN row');
+
+  // Ensure Rule 7 in src/index.css excludes [data-broadcast-logo] so inner spans/icons are never bleached white
+  assert(
+    cssSrc.includes(':is(.text-white, .text-white\\/90, .text-zinc-100, .text-emerald-50, .text-rose-50, .text-sky-50, i, span):not([data-club-logo]):not([data-club-logo] *):not([data-broadcast-logo]):not([data-broadcast-logo] *)'),
+    'src/index.css Rule 7 must exclude [data-broadcast-logo] descendants from white color override'
+  );
+
+  console.log('✓ Test 5 Passed: DAZN SVG 2x2 monogram and [data-broadcast-logo] CSS protection verified.');
+}
+
 console.log('\n======================================================');
-console.log('ALL BROADCASTING REAL DATA MOD & LOGOS TESTS PASSED (4/4)');
+console.log('ALL BROADCASTING REAL DATA MOD & LOGOS TESTS PASSED (5/5)');
 console.log('======================================================\n');

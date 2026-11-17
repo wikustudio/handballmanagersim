@@ -22,21 +22,21 @@ describe('Relegation Hangover UI Fix', () => {
     );
   });
 
-  it('MatchdayActionDock.tsx excludes newly relegated teams from finishedInRelegationDanger & isRelegationFight', () => {
-    const filePath = path.resolve(process.cwd(), 'src/components/MatchdayActionDock.tsx');
+  it('Dashboard.tsx excludes newly relegated teams from finishedInRelegationDanger & isRelegationDanger', () => {
+    const filePath = path.resolve(process.cwd(), 'src/components/Dashboard.tsx');
     const content = fs.readFileSync(filePath, 'utf8');
 
     assert.ok(
-      content.includes('const finishedInRelegationDanger = Boolean(lastHist && !lastHist.relegated && !lastHist.promoted && lastHist.pos >= relegationLine);'),
-      'MatchdayActionDock must exclude lastHist.relegated and lastHist.promoted from finishedInRelegationDanger'
+      content.includes('lastSameClubHist && !lastSameClubHist.relegated && !lastSameClubHist.promoted && lastSameClubHist.pos >= relegationLine'),
+      'Dashboard must exclude relegated and promoted seasons from finishedInRelegationDanger'
     );
     assert.ok(
-      content.includes('const isNewlyRelegated = Boolean(lastHist && lastHist.relegated);'),
-      'MatchdayActionDock must define isNewlyRelegated'
+      content.includes('const isNewlyRelegated = Boolean(lastSameClubHist && lastSameClubHist.relegated);'),
+      'Dashboard must define isNewlyRelegated'
     );
     assert.ok(
-      content.includes('!isNewlyRelegated && !isProvenTopHalf && ('),
-      'MatchdayActionDock must exclude isNewlyRelegated from isRelegationFight'
+      content.includes('!isNewlyRelegated &&') && content.includes('!isProvenTopHalf'),
+      'Dashboard must exclude isNewlyRelegated and isProvenTopHalf from isRelegationDanger'
     );
   });
 });

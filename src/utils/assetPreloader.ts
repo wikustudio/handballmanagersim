@@ -1,5 +1,4 @@
 import { Club } from '../types';
-import { REAL_WORLD_LOGOS } from '../data/realWorldLogos';
 import { getLocalAssetPath, hasVerifiedLocalAsset } from '../data/teams';
 
 // In-memory set of URLs that have already been warm-loaded

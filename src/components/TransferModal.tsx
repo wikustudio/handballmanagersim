@@ -147,9 +147,6 @@ export const TransferModal: React.FC<TransferModalProps> = ({
                 <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 leading-none">
                   {t('SQUAD & TRANSFERS', 'KADER & TRANSFERS')}
                 </span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/[0.03] border border-white/[0.06] text-zinc-400 tabular-nums leading-none">
-                  {currentSquadSize}/22
-                </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-snug py-0.5 truncate">
                 {t('Transfer Market', 'Transfermarkt')}

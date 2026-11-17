@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { GameState, Language, getAcademySlotLimit } from '../types';
-import { t as tr } from '../data/translations';
 import { formatMoney, getCountryMult, isReserveClub } from '../data/gameConstants';
 import { useModalDismiss } from '../utils/modalUtils';
 
@@ -173,16 +172,16 @@ export const FacilityModal: React.FC<FacilityModalProps> = ({ type, state, lang,
                     }`}>
                       Lvl {m.lvl} · {m.title}
                     </span>
-                    <span className={`text-[9px] uppercase font-semibold px-1.5 py-0.5 rounded ${
+                    <span className={`text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded ${
                       isUnlocked
                         ? isAcademy
                           ? 'bg-emerald-500/15 text-emerald-300'
                           : 'bg-purple-500/15 text-purple-300'
                         : isNext
                         ? 'bg-amber-500/15 text-amber-300'
-                        : 'bg-white/[0.04] text-zinc-500'
+                        : 'bg-white/[0.04] text-zinc-400'
                     }`}>
-                      {isUnlocked ? 'Active' : isNext ? 'Next Unlock' : `Lvl ${m.lvl}`}
+                      {isUnlocked ? 'Active' : isNext ? 'Next Unlock' : 'Locked'}
                     </span>
                   </div>
                   <p className="text-[11px] text-zinc-400 leading-snug mt-0.5">{m.desc}</p>

@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { useGameStore } from '../store/useGameStore';
 import {
   getDynamicSponsorPitchTerms,
+  getClubHomeArena,
   formatMoney,
   SponsorBrand,
 } from '../data/gameConstants';
@@ -13,7 +14,7 @@ import { useModalDismiss } from '../utils/modalUtils';
 export interface SponsorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialDealIndex?: 0 | 1 | 2;
+  initialDealIndex?: 0 | 1 | 2 | 3;
   lang?: 'en' | 'de' | 'es';
 }
 
@@ -300,12 +301,17 @@ export const SponsorModal: React.FC<SponsorModalProps> = ({
 }) => {
   useModalDismiss(onClose, isOpen);
   const stateStore = useGameStore();
-  const [selectedDeal, setSelectedDeal] = useState<0 | 1 | 2>(initialDealIndex);
+  const [selectedDeal, setSelectedDeal] = useState<0 | 1 | 2 | 3>(initialDealIndex);
   const [dealLengths, setDealLengths] = useState<Record<0 | 1 | 2, 1 | 2 | 3>>({
     0: 1,
     1: 1,
     2: 1,
   });
+  const [namingOfferIdx, setNamingOfferIdx] = useState<0 | 1 | 2>(0);
+  const [namingSuffix, setNamingSuffix] = useState<'Arena' | 'Halle' | 'Dome' | 'Park'>(() =>
+    ['GER', 'AUT', 'SUI'].includes(stateStore.club?.country || 'GER') ? 'Arena' : 'Arena'
+  );
+  const [namingYears, setNamingYears] = useState<2 | 3 | 5>(3);
   const [, setModTick] = useState(0);
 
   useEffect(() => {
@@ -353,7 +359,9 @@ export const SponsorModal: React.FC<SponsorModalProps> = ({
     return dealLengths[idx] || 1;
   };
 
-  const activeYears = getDurationForDeal(selectedDeal);
+  const selectedStandardIdx: 0 | 1 | 2 =
+    selectedDeal === 3 ? 0 : (selectedDeal as 0 | 1 | 2);
+  const activeYears = getDurationForDeal(selectedStandardIdx);
   const getDurationMult = (yrs: 1 | 2 | 3) => (yrs === 3 ? 1.1 : yrs === 2 ? 1.05 : 1.0);
   const getMegaOddsForYears = (yrs: 1 | 2 | 3) => {
     const penalty = yrs === 3 ? 10 : yrs === 2 ? 5 : 0;
@@ -498,10 +506,52 @@ export const SponsorModal: React.FC<SponsorModalProps> = ({
     },
   ];
 
-  const activeDeal = deals[selectedDeal] || deals[0];
+  const activeDeal = deals[selectedStandardIdx] || deals[0];
   const isQuotaFull = currentCommercial >= limitCommercial;
   const canPitchActive =
     !isQuotaFull && !activeDeal.isSigned && !activeDeal.isFailed && !activeDeal.isEmpty;
+
+  const country = stateStore.club?.country || 'GER';
+  const rawHeritageArena = getClubHomeArena({
+    ...stateStore.club,
+    customArenaName: undefined,
+  });
+  const heritageArenaName = rawHeritageArena.includes(',')
+    ? rawHeritageArena.split(',')[0].trim()
+    : rawHeritageArena.trim();
+
+  const activeNamingDeal =
+    stateStore.namingRightsDeal && stateStore.namingRightsDeal.yearsRemaining > 0
+      ? stateStore.namingRightsDeal
+      : null;
+  const namingOffers = sponsorTerms.namingOffers || [];
+  const chosenNamingOffer = namingOffers[namingOfferIdx] || namingOffers[0];
+  const namingTermMult = namingYears === 5 ? 1.12 : namingYears === 2 ? 0.94 : 1.0;
+  const namingRoundStep =
+    (stateStore.club?.tier || 1) <= 2 ? 500 : (stateStore.club?.tier || 1) === 3 ? 250 : 50;
+  const baseNamingOfferAnnual =
+    chosenNamingOffer?.annualPayout || sponsorTerms.namingBaseAnnual || 250000;
+  const previewNamingAnnual = activeNamingDeal
+    ? activeNamingDeal.annualPayout
+    : Math.max(
+        namingRoundStep,
+        Math.round((baseNamingOfferAnnual * namingTermMult) / namingRoundStep) * namingRoundStep
+      );
+  const effectiveNamingYears = activeNamingDeal ? activeNamingDeal.contractYears : namingYears;
+  const previewArenaTitle = activeNamingDeal
+    ? activeNamingDeal.arenaName
+    : `${chosenNamingOffer?.brand?.name || 'Partner'} ${namingSuffix}`;
+  const namingBuyoutCost = activeNamingDeal
+    ? Math.round(activeNamingDeal.annualPayout * 0.35 * activeNamingDeal.yearsRemaining)
+    : 0;
+  const namingTabBrand: SponsorBrand = activeNamingDeal
+    ? {
+        name: activeNamingDeal.brandName,
+        fullName: activeNamingDeal.arenaName,
+        logo: activeNamingDeal.brandLogo || '',
+        tag: 'STADIUM NAMING',
+      }
+    : chosenNamingOffer?.brand || sponsorTerms.megaBrand;
 
   const durationOptions: {
     years: 1 | 2 | 3;
@@ -563,14 +613,22 @@ export const SponsorModal: React.FC<SponsorModalProps> = ({
             <div className="min-w-0 flex flex-col">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400 leading-none">
-                  {tr('COMMERCIAL & SPONSORSHIPS', 'KOMMERZ & SPONSORING')}
+                  {selectedDeal === 3
+                    ? tr('STADIUM NAMING RIGHTS', 'HALLEN-NAMENSRECHTE')
+                    : tr('COMMERCIAL & SPONSORSHIPS', 'KOMMERZ & SPONSORING')}
                 </span>
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-white/[0.03] border border-white/[0.06] text-zinc-400 tabular-nums leading-none">
-                  {currentCommercial} / {limitCommercial}
+                  {selectedDeal === 3
+                    ? activeNamingDeal
+                      ? tr('Locked', 'Aktiv')
+                      : tr('Venue Title', 'Frei')
+                    : `${currentCommercial} / ${limitCommercial}`}
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-snug py-0.5 truncate">
-                {tr('Sponsorship Deals', 'Sponsorenverträge')}
+                {selectedDeal === 3
+                  ? tr('Stadium Naming Rights', 'Stadion-Namensrechte')
+                  : tr('Sponsorship Deals', 'Sponsorenverträge')}
               </h2>
             </div>
           </div>
@@ -585,9 +643,9 @@ export const SponsorModal: React.FC<SponsorModalProps> = ({
           </button>
         </div>
 
-        {/* 3-Deal Segmented Switcher */}
+        {/* 4-Deal Segmented Switcher */}
         <div className="px-5 pt-4 shrink-0">
-          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#10121a] border border-white/[0.04]">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-2xl bg-[#10121a] border border-white/[0.04]">
             {deals.map((d) => {
               const isSelected = d.index === selectedDeal;
               return (
@@ -595,7 +653,7 @@ export const SponsorModal: React.FC<SponsorModalProps> = ({
                   key={d.index}
                   type="button"
                   onClick={() => setSelectedDeal(d.index)}
-                  className={`py-2 px-2.5 rounded-xl text-xs font-medium transition flex items-center justify-center gap-2 cursor-pointer truncate ${
+                  className={`py-2 px-2.5 rounded-xl text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap truncate ${
                     isSelected
                       ? 'bg-[#181924] text-white border border-white/[0.06] shadow-sm'
                       : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
@@ -603,253 +661,500 @@ export const SponsorModal: React.FC<SponsorModalProps> = ({
                 >
                   <SponsorBrandLogo brand={d.brand} isModActive={isMod} size="sm" />
                   <span className="truncate">{d.tabLabel}</span>
-                  {d.isSigned && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                  )}
-                  {d.isFailed && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-                  )}
+                  {d.isSigned && <i className="fas fa-check text-[10px] text-emerald-400 shrink-0" />}
+                  {d.isFailed && <i className="fas fa-xmark text-[10px] text-rose-400 shrink-0" />}
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => setSelectedDeal(3)}
+              className={`py-2 px-2.5 rounded-xl text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap truncate ${
+                selectedDeal === 3
+                  ? 'bg-[#181924] text-white border border-white/[0.06] shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+              }`}
+            >
+              <SponsorBrandLogo brand={namingTabBrand} isModActive={isMod} size="sm" />
+              <span className="truncate">{tr('Naming Rights', 'Hallenname')}</span>
+              {activeNamingDeal && (
+                <i className="fas fa-check text-[10px] text-emerald-400 shrink-0" />
+              )}
+            </button>
           </div>
         </div>
 
         {/* Scrollable Body */}
-        <div className="p-5 space-y-3.5 overflow-y-auto custom-scrollbar flex-1 min-h-0">
-          {/* Sponsor Identity Bento Card */}
-          <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 sm:p-5 flex flex-col gap-3.5">
-            <div className="flex items-start sm:items-center gap-4">
-              <SponsorBrandLogo brand={activeDeal.brand} isModActive={isMod} size="lg" />
+        {selectedDeal === 3 ? (
+          <div className="p-5 space-y-3.5 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+            {/* Official Stadium Title Preview Card */}
+            <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 sm:p-5 flex flex-col gap-3">
+              <div className="flex items-start sm:items-center gap-4">
+                <SponsorBrandLogo brand={namingTabBrand} isModActive={isMod} size="lg" />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-400 flex-wrap">
+                    <span>
+                      {tr('Heritage Venue:', 'Traditionsname:')} {heritageArenaName}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className={activeNamingDeal ? 'text-emerald-400 font-medium tabular-nums' : 'text-purple-300 font-medium'}>
+                      {activeNamingDeal
+                        ? tr(
+                            `Active (${activeNamingDeal.yearsRemaining} Yr${activeNamingDeal.yearsRemaining === 1 ? '' : 's'} Left)`,
+                            `Aktiv (${activeNamingDeal.yearsRemaining} J. übrig)`
+                          )
+                        : tr('100% Guaranteed Venue Rights', '100% Garantierte Namensrechte')}
+                    </span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tight truncate">
+                    {previewArenaTitle}
+                  </h3>
+                  <div className="text-xs text-zinc-500 truncate">
+                    {activeNamingDeal
+                      ? tr(
+                          `Signed with ${activeNamingDeal.brandName} · Stenciled live on your 3D court`,
+                          `Vertrag mit ${activeNamingDeal.brandName} · Live auf dem 3D-Spielfeld`
+                        )
+                      : tr(
+                          `Partner with ${chosenNamingOffer?.brand?.fullName || chosenNamingOffer?.brand?.name} · Independent of 3/3 kit quota`,
+                          `Partner: ${chosenNamingOffer?.brand?.fullName || chosenNamingOffer?.brand?.name} · Unabhängig vom 3/3-Limit`
+                        )}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-white/[0.03] border border-white/[0.06] text-zinc-300">
-                    {activeDeal.brand.tag || activeDeal.subtitle}
+            {/* Naming Partner Selection */}
+            {!activeNamingDeal && namingOffers.length > 0 && (
+              <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    {tr('TITLE SPONSOR BIDDERS', 'NAMENSSPONSOR-ANGEBOTE')}
                   </span>
-                  {activeDeal.isSigned ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-white/[0.03] border border-white/[0.06] text-emerald-400 flex items-center gap-1.5 tabular-nums">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      {tr(
-                        `Active (${activeDeal.yearsRemaining} Yr${activeDeal.yearsRemaining === 1 ? '' : 's'} Left)`,
-                        `Aktiv (${activeDeal.yearsRemaining} J. übrig)`
-                      )}
-                    </span>
-                  ) : activeDeal.isFailed ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-white/[0.03] border border-white/[0.06] text-rose-400 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                      {tr('Negotiations Ended', 'Gescheitert')}
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-white/[0.03] border border-white/[0.06] text-zinc-300 tabular-nums">
-                      {activeDeal.oddsText}
+                  <span className="text-[11px] text-zinc-500">
+                    {tr('Select corporate bidder', 'Partner wählen')}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {namingOffers.map((offer, idx) => {
+                    const isPicked = namingOfferIdx === idx;
+                    const offerPreviewAnnual = Math.max(
+                      namingRoundStep,
+                      Math.round((offer.annualPayout * namingTermMult) / namingRoundStep) * namingRoundStep
+                    );
+                    return (
+                      <button
+                        key={offer.id}
+                        type="button"
+                        onClick={() => {
+                          setNamingOfferIdx(idx as 0 | 1 | 2);
+                          if (offer.defaultSuffix) {
+                            setNamingSuffix(offer.defaultSuffix as 'Arena' | 'Halle' | 'Dome' | 'Park');
+                          }
+                        }}
+                        className={`p-3 rounded-xl border text-left transition flex flex-col gap-1.5 cursor-pointer active:scale-[0.99] ${
+                          isPicked
+                            ? 'bg-[#181924] border-purple-500/35 text-white'
+                            : 'bg-[#14151e] border-white/[0.04] text-zinc-400 hover:border-white/[0.08] hover:text-zinc-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <SponsorBrandLogo brand={offer.brand} isModActive={isMod} size="sm" />
+                          <span className="text-xs font-semibold text-white truncate">
+                            {offer.brand.name}
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono text-emerald-400 tabular-nums">
+                          +{formatMoney(offerPreviewAnnual, country)}/yr
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Venue Suffix & Contract Term Selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 space-y-2.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block">
+                  {tr('STADIUM SUFFIX', 'NAMENSZUSATZ')}
+                </span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(['Arena', 'Halle', 'Dome', 'Park'] as const).map((sfx) => {
+                    const isPicked = (activeNamingDeal ? activeNamingDeal.suffix : namingSuffix) === sfx;
+                    return (
+                      <button
+                        key={sfx}
+                        type="button"
+                        disabled={Boolean(activeNamingDeal)}
+                        onClick={() => setNamingSuffix(sfx)}
+                        className={`py-2 px-2.5 rounded-xl border text-xs font-medium transition whitespace-nowrap ${
+                          isPicked
+                            ? 'bg-[#181924] border-purple-500/35 text-white'
+                            : 'bg-[#14151e] border-white/[0.04] text-zinc-400 hover:text-zinc-200'
+                        } ${activeNamingDeal ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
+                      >
+                        {sfx}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 space-y-2.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block">
+                  {tr('CONTRACT TERM', 'LAUFZEIT')}
+                </span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(
+                    [
+                      { yrs: 2 as const, label: '2 Yrs', rate: '-6%' },
+                      { yrs: 3 as const, label: '3 Yrs', rate: 'Base' },
+                      { yrs: 5 as const, label: '5 Yrs', rate: '+12%' },
+                    ]
+                  ).map((t) => {
+                    const isPicked = effectiveNamingYears === t.yrs;
+                    return (
+                      <button
+                        key={t.yrs}
+                        type="button"
+                        disabled={Boolean(activeNamingDeal)}
+                        onClick={() => setNamingYears(t.yrs)}
+                        className={`py-2 px-2 rounded-xl border text-center transition flex flex-col items-center gap-0.5 whitespace-nowrap ${
+                          isPicked
+                            ? 'bg-[#181924] border-purple-500/35 text-white'
+                            : 'bg-[#14151e] border-white/[0.04] text-zinc-400 hover:text-zinc-200'
+                        } ${activeNamingDeal ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
+                      >
+                        <span className="text-xs font-semibold tabular-nums">{t.label}</span>
+                        <span className="text-[10px] font-mono text-emerald-400 tabular-nums">
+                          {t.rate}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Naming Rights Financial Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-3.5 flex flex-col justify-between gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  {tr('ANNUAL FEE', 'JÄHRLICHE PRÄMIE')}
+                </span>
+                <span className="text-base sm:text-lg font-semibold tracking-tight tabular-nums text-emerald-400">
+                  +{formatMoney(previewNamingAnnual, country)}/yr
+                </span>
+              </div>
+              <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-3.5 flex flex-col justify-between gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  {tr(`${effectiveNamingYears}-YEAR TOTAL`, `GESAMTVOLUMEN (${effectiveNamingYears} J.)`)}
+                </span>
+                <span className="text-base sm:text-lg font-semibold tracking-tight tabular-nums text-white">
+                  +{formatMoney(previewNamingAnnual * effectiveNamingYears, country)}
+                </span>
+              </div>
+              <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-3.5 flex flex-col justify-between gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  {tr('COURT STENCIL', 'SPIELFELD-NAME')}
+                </span>
+                <span className="text-sm sm:text-base font-semibold tracking-tight text-sky-300 truncate">
+                  {previewArenaTitle}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-5 space-y-3.5 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+            {/* Sponsor Identity Bento Card */}
+            <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 sm:p-5 flex flex-col gap-3.5">
+              <div className="flex items-start sm:items-center gap-4">
+                <SponsorBrandLogo brand={activeDeal.brand} isModActive={isMod} size="lg" />
+
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-400 flex-wrap">
+                    <span>{activeDeal.brand.tag || activeDeal.subtitle}</span>
+                    <span aria-hidden="true">·</span>
+                    {activeDeal.isSigned ? (
+                      <span className="text-emerald-400 font-medium tabular-nums">
+                        {tr(
+                          `Active (${activeDeal.yearsRemaining} Yr${activeDeal.yearsRemaining === 1 ? '' : 's'} Left)`,
+                          `Aktiv (${activeDeal.yearsRemaining} J. übrig)`
+                        )}
+                      </span>
+                    ) : activeDeal.isFailed ? (
+                      <span className="text-rose-400 font-medium">
+                        {tr('Negotiations Ended', 'Gescheitert')}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-300 font-medium tabular-nums">
+                        {activeDeal.oddsText}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tight truncate">
+                    {activeDeal.isEmpty
+                      ? tr('Offer Unavailable This Season', 'Kein Angebot verfügbar')
+                      : activeDeal.brand.name}
+                  </h3>
+
+                  {!activeDeal.isEmpty && (
+                    <div className="text-xs text-zinc-500 truncate">
+                      {activeDeal.brand.fullName}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-xs text-zinc-400 leading-relaxed border-t border-white/[0.04] pt-3">
+                {activeDeal.termsDescription}
+              </p>
+            </div>
+
+            {/* Contract Length Negotiation Selector */}
+            <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                  {tr('CONTRACT LENGTH', 'VERTRAGSLAUFZEIT')}
+                </span>
+                <span className="text-[11px] text-zinc-500">
+                  {activeDeal.isSigned
+                    ? tr(`Locked (${activeDeal.years} Yr)`, `Fixiert (${activeDeal.years} J.)`)
+                    : tr('Longer term increases annual payout', 'Längere Laufzeit erhöht Jahresprämie')}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {durationOptions.map((opt) => {
+                  const isSelected = activeYears === opt.years;
+                  const isDisabled = activeDeal.isSigned || activeDeal.isFailed || activeDeal.isEmpty;
+                  return (
+                    <button
+                      key={opt.years}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() =>
+                        setDealLengths((prev) => ({
+                          ...prev,
+                          [selectedStandardIdx]: opt.years,
+                        }))
+                      }
+                      className={`p-3 rounded-xl border text-left transition flex flex-col gap-1 ${
+                        isSelected
+                          ? 'bg-[#181924] border-purple-500/35 text-white'
+                          : 'bg-[#14151e] border-white/[0.04] text-zinc-400 hover:border-white/[0.08] hover:text-zinc-200'
+                      } ${isDisabled ? 'opacity-60 cursor-default' : 'cursor-pointer active:scale-[0.99]'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white tabular-nums">
+                          {opt.label}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums ${
+                            opt.years > 1
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : 'bg-white/[0.03] text-zinc-400 border border-white/[0.06]'
+                          }`}
+                        >
+                          {opt.bonusText}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-zinc-500 truncate tabular-nums">
+                        {opt.subText}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Contract Financial Breakdown Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {activeDeal.clauses.map((clause, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-3.5 flex flex-col justify-between gap-1.5"
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    {clause.label}
+                  </span>
+                  <span className={`text-base sm:text-lg font-semibold tracking-tight tabular-nums ${clause.highlight}`}>
+                    {clause.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Valuation Modifiers (Market Appeal) */}
+            {sponsorTerms.activeDrivers && sponsorTerms.activeDrivers.length > 0 && (
+              <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-3.5 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                    {tr('VALUATION MODIFIERS', 'MARKTWERT-FAKTOREN')}
+                  </span>
+                  {hasSalesmaster && (
+                    <span className="text-[10px] font-mono text-amber-400">
+                      {tr('Negotiator +10%', 'Unterhändler +10%')}
                     </span>
                   )}
                 </div>
-
-                <h3 className="text-xl sm:text-2xl font-semibold text-white tracking-tight truncate">
-                  {activeDeal.isEmpty
-                    ? tr('Offer Unavailable This Season', 'Kein Angebot verfügbar')
-                    : activeDeal.brand.name}
-                </h3>
-
-                {!activeDeal.isEmpty && (
-                  <div className="text-xs text-zinc-500 truncate">
-                    {activeDeal.brand.fullName}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <p className="text-xs text-zinc-400 leading-relaxed border-t border-white/[0.04] pt-3">
-              {activeDeal.termsDescription}
-            </p>
-          </div>
-
-          {/* Contract Length Negotiation Selector */}
-          <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-4 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                {tr('CONTRACT LENGTH', 'VERTRAGSLAUFZEIT')}
-              </span>
-              <span className="text-[11px] text-zinc-500">
-                {activeDeal.isSigned
-                  ? tr(`Locked (${activeDeal.years} Yr)`, `Fixiert (${activeDeal.years} J.)`)
-                  : tr('Longer term increases annual payout', 'Längere Laufzeit erhöht Jahresprämie')}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              {durationOptions.map((opt) => {
-                const isSelected = activeYears === opt.years;
-                const isDisabled = activeDeal.isSigned || activeDeal.isFailed || activeDeal.isEmpty;
-                return (
-                  <button
-                    key={opt.years}
-                    type="button"
-                    disabled={isDisabled}
-                    onClick={() =>
-                      setDealLengths((prev) => ({
-                        ...prev,
-                        [selectedDeal]: opt.years,
-                      }))
-                    }
-                    className={`p-3 rounded-xl border text-left transition flex flex-col gap-1 ${
-                      isSelected
-                        ? 'bg-[#181924] border-purple-500/35 text-white'
-                        : 'bg-[#14151e] border-white/[0.04] text-zinc-400 hover:border-white/[0.08] hover:text-zinc-200'
-                    } ${isDisabled ? 'opacity-60 cursor-default' : 'cursor-pointer active:scale-[0.99]'}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-white tabular-nums">
-                        {opt.label}
-                      </span>
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums ${
-                          opt.years > 1
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-white/[0.03] text-zinc-400 border border-white/[0.06]'
-                        }`}
-                      >
-                        {opt.bonusText}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-zinc-500 truncate tabular-nums">
-                      {opt.subText}
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-zinc-300 tabular-nums">
+                  {sponsorTerms.activeDrivers.map((drv, idx) => (
+                    <span key={idx} className={drv.positive ? 'text-emerald-300' : 'text-amber-300'}>
+                      {lang === 'de' ? drv.labelDe : drv.labelEn} {drv.pct}
                     </span>
-                  </button>
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* Contract Financial Breakdown Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {activeDeal.clauses.map((clause, idx) => (
-              <div
-                key={idx}
-                className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-3.5 flex flex-col justify-between gap-1.5"
-              >
-                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                  {clause.label}
-                </span>
-                <span className={`text-base sm:text-lg font-semibold tracking-tight tabular-nums ${clause.highlight}`}>
-                  {clause.value}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Valuation Modifiers (Market Appeal) */}
-          {sponsorTerms.activeDrivers && sponsorTerms.activeDrivers.length > 0 && (
-            <div className="rounded-2xl bg-[#10121a] border border-white/[0.04] p-3.5 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-                  {tr('VALUATION MODIFIERS', 'MARKTWERT-FAKTOREN')}
-                </span>
-                {hasSalesmaster && (
-                  <span className="text-[10px] font-mono text-amber-400">
-                    {tr('Negotiator +10%', 'Unterhändler +10%')}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {sponsorTerms.activeDrivers.map((drv, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2 py-0.5 rounded text-[10px] font-medium bg-white/[0.03] border border-white/[0.06] text-zinc-300 flex items-center gap-1.5 tabular-nums"
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        drv.positive ? 'bg-emerald-400' : 'bg-amber-400'
-                      }`}
-                    />
-                    {lang === 'de' ? drv.labelDe : drv.labelEn} {drv.pct}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Modal Action Footer */}
-        <div className="p-4 border-t border-white/[0.04] bg-[#10121a] flex items-center justify-between gap-3 shrink-0">
+        <div className="p-4 border-t border-white/[0.04] bg-[#10121a] flex items-center justify-between gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-xs font-medium text-zinc-300 hover:text-white transition cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-xs font-medium text-zinc-300 hover:text-white transition cursor-pointer whitespace-nowrap"
           >
             {tr('Close', 'Schließen')}
           </button>
 
-          <button
-            type="button"
-            disabled={!canPitchActive}
-            onClick={() => {
-              stateStore.pitchSponsor(activeDeal.index, activeYears);
-            }}
-            className={`flex-1 py-2.5 px-4 rounded-xl font-medium text-xs sm:text-sm transition flex items-center justify-center gap-2 tabular-nums ${
-              activeDeal.isSigned
-                ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-default'
-                : activeDeal.isFailed
-                ? 'bg-rose-500/10 border border-rose-500/25 text-rose-400 cursor-not-allowed'
-                : !canPitchActive
-                ? 'bg-white/[0.03] border border-white/[0.04] text-zinc-500 cursor-not-allowed'
-                : 'bg-[#181924] hover:bg-white/[0.08] text-white border border-white/[0.1] cursor-pointer active:scale-[0.99]'
-            }`}
-          >
-            {activeDeal.isSigned ? (
-              <>
-                <i className="fas fa-check text-xs text-emerald-400" />
-                <span>
+          {selectedDeal === 3 ? (
+            <>
+              {activeNamingDeal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    stateStore.restoreHeritageArenaName();
+                  }}
+                  className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-xs font-medium text-amber-300 transition cursor-pointer whitespace-nowrap tabular-nums"
+                >
                   {tr(
-                    `Signed (${activeDeal.years}-Year Deal Active)`,
-                    `Unterschrieben (${activeDeal.years}-J.-Vertrag aktiv)`
+                    `Restore "${heritageArenaName}" (-${formatMoney(namingBuyoutCost, country)})`,
+                    `Traditionsname (-${formatMoney(namingBuyoutCost, country)})`
                   )}
-                </span>
-              </>
-            ) : activeDeal.isFailed ? (
-              <>
-                <i className="fas fa-xmark text-xs text-rose-400" />
-                <span>{tr('Negotiations Collapsed', 'Verhandlung gescheitert')}</span>
-              </>
-            ) : isQuotaFull ? (
-              <span>{tr('Commercial Limit Reached (3/3)', 'Sponsoren-Limit erreicht (3/3)')}</span>
-            ) : activeDeal.index === 0 ? (
-              <>
-                <i className="fas fa-signature text-xs text-emerald-400" />
-                <span>
-                  {tr(
-                    `Sign ${activeYears}-Yr Deal with ${activeDeal.brand.name}`,
-                    `${activeYears}-J.-Vertrag mit ${activeDeal.brand.name}`
-                  )}
-                </span>
-                <span className="font-mono text-emerald-400">+{formatMoney(stdAnnual)}/yr</span>
-              </>
-            ) : activeDeal.index === 1 ? (
-              <>
-                <i className="fas fa-dice text-xs text-purple-400" />
-                <span>
-                  {tr(
-                    `Pitch ${activeYears}-Yr Deal to ${activeDeal.brand.name} (${megaOdds}%)`,
-                    `${activeYears}-J.-Pitch bei ${activeDeal.brand.name} (${megaOdds}%)`
-                  )}
-                </span>
-                <span className="font-mono text-emerald-400">+{formatMoney(megaAnnual)}/yr</span>
-              </>
-            ) : (
-              <>
-                <i className="fas fa-signature text-xs text-sky-400" />
-                <span>
-                  {tr(
-                    `Sign ${activeYears}-Yr Deal with ${activeDeal.brand.name}`,
-                    `${activeYears}-J.-Vertrag mit ${activeDeal.brand.name}`
-                  )}
-                </span>
-                <span className="font-mono text-emerald-400">+{formatMoney(perfAnnualUpfront)}/yr</span>
-              </>
-            )}
-          </button>
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={Boolean(activeNamingDeal) || !chosenNamingOffer}
+                onClick={() => {
+                  if (!chosenNamingOffer) return;
+                  stateStore.signNamingRights({
+                    brandName: chosenNamingOffer.brand.name,
+                    brandLogo: chosenNamingOffer.brand.logo || '',
+                    arenaName: previewArenaTitle,
+                    suffix: namingSuffix,
+                    annualPayout: baseNamingOfferAnnual,
+                    contractYears: namingYears,
+                  });
+                }}
+                className={`flex-1 py-2.5 px-4 rounded-xl font-medium text-xs sm:text-sm transition flex items-center justify-center gap-2 tabular-nums whitespace-nowrap truncate ${
+                  activeNamingDeal
+                    ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-default'
+                    : 'bg-[#181924] hover:bg-white/[0.08] text-white border border-white/[0.1] cursor-pointer active:scale-[0.99]'
+                }`}
+              >
+                {activeNamingDeal ? (
+                  <>
+                    <i className="fas fa-check text-xs text-emerald-400" />
+                    <span className="truncate">
+                      {tr(
+                        `Active: ${activeNamingDeal.arenaName} (+${formatMoney(activeNamingDeal.annualPayout, country)}/yr)`,
+                        `Aktiv: ${activeNamingDeal.arenaName} (+${formatMoney(activeNamingDeal.annualPayout, country)}/J.)`
+                      )}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-signature text-xs text-emerald-400" />
+                    <span className="truncate">
+                      {tr(
+                        `Sign ${namingYears}-Yr Naming: "${previewArenaTitle}"`,
+                        `${namingYears}-J.-Namensrecht: "${previewArenaTitle}"`
+                      )}
+                    </span>
+                    <span className="font-mono text-emerald-400">
+                      +{formatMoney(previewNamingAnnual, country)}/yr
+                    </span>
+                  </>
+                )}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={!canPitchActive}
+              onClick={() => {
+                stateStore.pitchSponsor(activeDeal.index, activeYears);
+              }}
+              className={`flex-1 py-2.5 px-4 rounded-xl font-medium text-xs sm:text-sm transition flex items-center justify-center gap-2 tabular-nums whitespace-nowrap truncate ${
+                activeDeal.isSigned
+                  ? 'bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 cursor-default'
+                  : activeDeal.isFailed
+                  ? 'bg-rose-500/10 border border-rose-500/25 text-rose-400 cursor-not-allowed'
+                  : !canPitchActive
+                  ? 'bg-white/[0.03] border border-white/[0.04] text-zinc-500 cursor-not-allowed'
+                  : 'bg-[#181924] hover:bg-white/[0.08] text-white border border-white/[0.1] cursor-pointer active:scale-[0.99]'
+              }`}
+            >
+              {activeDeal.isSigned ? (
+                <>
+                  <i className="fas fa-check text-xs text-emerald-400" />
+                  <span>
+                    {tr(
+                      `Signed (${activeDeal.years}-Year Deal Active)`,
+                      `Unterschrieben (${activeDeal.years}-J.-Vertrag aktiv)`
+                    )}
+                  </span>
+                </>
+              ) : activeDeal.isFailed ? (
+                <>
+                  <i className="fas fa-xmark text-xs text-rose-400" />
+                  <span>{tr('Negotiations Collapsed', 'Verhandlung gescheitert')}</span>
+                </>
+              ) : isQuotaFull ? (
+                <span>{tr('Commercial Limit Reached (3/3)', 'Sponsoren-Limit erreicht (3/3)')}</span>
+              ) : activeDeal.index === 0 ? (
+                <>
+                  <i className="fas fa-signature text-xs text-emerald-400" />
+                  <span className="truncate">
+                    {tr(
+                      `Sign ${activeYears}-Yr Deal with ${activeDeal.brand.name}`,
+                      `${activeYears}-J.-Vertrag mit ${activeDeal.brand.name}`
+                    )}
+                  </span>
+                  <span className="font-mono text-emerald-400">+{formatMoney(stdAnnual, country)}/yr</span>
+                </>
+              ) : activeDeal.index === 1 ? (
+                <>
+                  <i className="fas fa-dice text-xs text-purple-400" />
+                  <span className="truncate">
+                    {tr(
+                      `Pitch ${activeYears}-Yr Deal to ${activeDeal.brand.name} (${megaOdds}%)`,
+                      `${activeYears}-J.-Pitch bei ${activeDeal.brand.name} (${megaOdds}%)`
+                    )}
+                  </span>
+                  <span className="font-mono text-emerald-400">+{formatMoney(megaAnnual, country)}/yr</span>
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-signature text-xs text-sky-400" />
+                  <span className="truncate">
+                    {tr(
+                      `Sign ${activeYears}-Yr Deal with ${activeDeal.brand.name}`,
+                      `${activeYears}-J.-Vertrag mit ${activeDeal.brand.name}`
+                    )}
+                  </span>
+                  <span className="font-mono text-emerald-400">+{formatMoney(perfAnnualUpfront, country)}/yr</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </motion.div>
     </div>

@@ -57,6 +57,9 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
 }) => {
   useModalDismiss(onClose);
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+  React.useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
   const [isCatchmentOpen, setIsCatchmentOpen] = useState<boolean>(true);
   const [recentExpansionMessage, setRecentExpansionMessage] = useState<string | null>(null);
 
@@ -220,17 +223,18 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
 
   const isPinnacleArena = cap >= pinnacleCap;
   const isGiant = catchment.isMegaClub || ['Magdeburg', 'Kiel', 'Flensburg', 'Füchse Berlin', 'Barcelona', 'Veszprém', 'Veszprem', 'Kielce', 'Montpellier', 'Nantes', 'Aalborg', 'Pick Szeged'].some(n => state.club.name.includes(n));
-  const perfMod = Math.max(-0.20, Math.min(0.25, ((state.club.baseOvr || 70) - (tier === 1 ? 80 : tier === 2 ? 69 : 60)) * 0.02));
-  const megaMod = isGiant ? 1.15 : 1.0;
+  const originOvr = baseClub?.baseOvr ?? (tier === 1 ? 80 : tier === 2 ? 69 : 60);
+  const perfMod = Math.max(-0.20, Math.min(0.25, ((state.club.baseOvr || 70) - originOvr) * 0.02));
+  const megaMod = (isGiant && (currentUtil >= 95 || cap > baseStadium)) ? 1.15 : 1.0;
 
   // Matchday ticket demand: At minimum, equal to verified spectators inside the arena!
   // If the arena is at or near sellout (>= 95% utilization), excess demand turns fans away.
   const excessDemandRate = currentUtil >= 98 ? (0.12 + (isGiant ? 0.08 : 0.04)) : currentUtil >= 94 ? 0.04 : 0;
-  const theoreticalFanDemand = Math.round(fans * (0.35 + demandRate * 1.5) * (1 + perfMod) * megaMod);
+  const theoreticalFanDemand = Math.round(fans * demandRate * (1 + perfMod) * megaMod);
   const matchdayDemand = Math.max(
     currentYearAtt,
     Math.round(currentYearAtt * (1 + excessDemandRate)),
-    Math.min(cap + Math.round(fans * 0.15), theoreticalFanDemand)
+    currentUtil >= 92 ? Math.min(cap + Math.round(fans * 0.15), theoreticalFanDemand) : 0
   );
   const lockedOutFans = Math.max(0, matchdayDemand - cap);
   const effectiveDemandRatePct = Math.round((matchdayDemand / Math.max(1, fans)) * 100);
@@ -607,7 +611,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                           Market & Supporter Base
                         </h3>
                         <span className="text-[10px] font-semibold text-sky-300 bg-sky-500/[0.08] border border-sky-400/20 px-2 py-0.5 rounded-md font-mono flex items-center gap-1">
-                          <i className="fas fa-location-dot text-[9px]" /> {catchment.cityName}
+                          <i className="fas fa-location-dot text-[10px]" /> {catchment.cityName}
                         </span>
                         <span className="text-[10px] font-semibold text-amber-300 bg-amber-500/[0.08] border border-amber-500/20 px-2 py-0.5 rounded-md font-mono flex items-center gap-1">
                           {marketTypeLabel}
@@ -626,7 +630,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                   {/* Market Saturation Meter Badge */}
                   <div className="flex items-center gap-2.5 shrink-0">
                     <div className="text-left sm:text-right">
-                      <span className="text-[9px] uppercase font-semibold text-zinc-400 tracking-wider block">
+                      <span className="text-[10px] uppercase font-semibold text-zinc-400 tracking-wider block">
                         Market Penetration
                       </span>
                       <span className={`text-xs sm:text-sm font-semibold tabular-nums ${
@@ -661,20 +665,6 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                   <p className="text-xs text-zinc-200 leading-relaxed font-normal">
                     {marketNarrative}
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-white/[0.04] text-[11px]">
-                    <div className="flex items-center gap-1.5 text-zinc-300">
-                      <i className="fas fa-city text-sky-400 text-xs shrink-0" />
-                      <span>City Population: <strong className="text-white font-medium">~{formatNum(catchment.populationEstimate)}</strong></span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-zinc-300">
-                      <i className="fas fa-users text-emerald-400 text-xs shrink-0" />
-                      <span>Active Supporters: <strong className="text-white font-medium tabular-nums">{fans.toLocaleString()}</strong></span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-zinc-300">
-                      <i className="fas fa-ticket text-amber-400 text-xs shrink-0" />
-                      <span>Matchday Crowd: <strong className="text-white font-medium tabular-nums">{currentYearAtt.toLocaleString()}</strong> ({currentUtil}%)</span>
-                    </div>
-                  </div>
                 </div>
 
                 {/* 4-Stage Visual Market-to-Matchday Conversion Funnel */}
@@ -694,7 +684,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                     <div className="bg-[#10121a] p-3 rounded-2xl border border-white/[0.04] flex flex-col justify-between relative overflow-hidden group hover:border-white/[0.1] transition">
                       <div className="flex items-center justify-between text-[10px] text-zinc-400 mb-1">
                         <span className="font-medium text-zinc-300 flex items-center gap-1">
-                          <span className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-semibold text-white">1</span>
+                          <span className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-semibold text-white">1</span>
                           <span>Metro Population</span>
                         </span>
                         <i className="fas fa-city text-zinc-500" />
@@ -716,7 +706,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                     <div className="bg-[#10121a] p-3 rounded-2xl border border-white/[0.04] flex flex-col justify-between relative overflow-hidden group hover:border-sky-500/30 transition">
                       <div className="flex items-center justify-between text-[10px] text-sky-300 mb-1">
                         <span className="font-medium text-sky-200 flex items-center gap-1">
-                          <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-[9px] font-semibold">2</span>
+                          <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-[10px] font-semibold">2</span>
                           <span>Fan Catchment</span>
                         </span>
                         <i className="fas fa-users-rays text-sky-400" />
@@ -741,7 +731,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                     <div className="bg-[#10121a] p-3 rounded-2xl border border-white/[0.04] flex flex-col justify-between relative overflow-hidden group hover:border-emerald-500/30 transition">
                       <div className="flex items-center justify-between text-[10px] text-emerald-400 mb-1">
                         <span className="font-medium text-emerald-300 flex items-center gap-1">
-                          <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[9px] font-semibold">3</span>
+                          <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-semibold">3</span>
                           <span>Club Fanbase</span>
                         </span>
                         <i className="fas fa-users text-emerald-400" />
@@ -766,7 +756,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                     <div className="bg-[#10121a] p-3 rounded-2xl border border-white/[0.04] flex flex-col justify-between relative overflow-hidden group hover:border-amber-500/30 transition">
                       <div className="flex items-center justify-between text-[10px] text-amber-300 mb-1">
                         <span className="font-medium text-amber-200 flex items-center gap-1">
-                          <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center text-[9px] font-semibold">4</span>
+                          <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center text-[10px] font-semibold">4</span>
                           <span>Matchday Gate</span>
                         </span>
                         <i className="fas fa-ticket text-amber-400" />
@@ -919,7 +909,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                         </span>
                       </div>
                       <span className="text-[11px] text-zinc-400 mt-0.5 font-normal">
-                        {catchment.saturation}% Supporter Saturation · Metro Population: ~{formatNum(catchment.populationEstimate)}
+                        Click to inspect regional core, commuter & prestige fan pools
                       </span>
                     </div>
                   </div>
@@ -984,24 +974,24 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                       <div className="bg-[#10121a] p-2.5 rounded-2xl border border-white/[0.04]">
                         <span className="text-[10px] text-zinc-400 block font-medium">City Core Base</span>
                         <span className="font-semibold text-white tabular-nums text-sm">{catchment.cityCoreFans.toLocaleString()}</span>
-                        <span className="text-[9px] text-zinc-500 block mt-0.5">{catchment.cityName} municipal core</span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">{catchment.cityName} municipal core</span>
                       </div>
                       <div className="bg-[#10121a] p-2.5 rounded-2xl border border-white/[0.04]">
                         <span className="text-[10px] text-zinc-400 block font-medium">Regional Perimeter</span>
                         <span className="font-semibold text-sky-300 tabular-nums text-sm">+{catchment.regionalPerimeterFans.toLocaleString()}</span>
-                        <span className="text-[9px] text-zinc-500 block mt-0.5">Commuter belt & transit reach</span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">Commuter belt & transit reach</span>
                       </div>
                       <div className="bg-[#10121a] p-2.5 rounded-2xl border border-white/[0.04]">
                         <span className="text-[10px] text-zinc-400 block font-medium">Mega Club Status</span>
                         <span className={`font-semibold tabular-nums text-sm ${catchment.isMegaClub ? 'text-amber-300' : 'text-zinc-500'}`}>
                           {catchment.isMegaClub ? `+${catchment.megaStatusFans.toLocaleString()}` : 'Standard'}
                         </span>
-                        <span className="text-[9px] text-zinc-500 block mt-0.5">{catchment.isMegaClub ? 'Silverware prestige reach' : 'Requires elite silverware'}</span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">{catchment.isMegaClub ? 'Silverware prestige reach' : 'Requires elite silverware'}</span>
                       </div>
                       <div className="bg-[#10121a] p-2.5 rounded-2xl border border-white/[0.04]">
                         <span className="text-[10px] text-zinc-400 block font-medium">Absolute Fan Ceiling</span>
                         <span className="font-semibold text-emerald-400 tabular-nums text-sm">{catchment.maxCeiling.toLocaleString()}</span>
-                        <span className="text-[9px] text-zinc-500 block mt-0.5">Max addressable fan pool</span>
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">Max addressable fan pool</span>
                       </div>
                     </div>
 
@@ -1232,7 +1222,7 @@ export const ArenaOverviewModal: React.FC<ArenaOverviewModalProps> = ({
                         <span className="text-[11px] font-semibold text-white tabular-nums tracking-tight mt-0.5">
                           {rec.attendance.toLocaleString()}
                         </span>
-                        <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded-full mt-1 ${
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded-full mt-1 ${
                           rec.utilization >= 90
                             ? 'text-amber-300 bg-amber-500/15'
                             : rec.utilization >= 75

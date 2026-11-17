@@ -9,16 +9,24 @@ import { getBroadcastingPackage } from '../data/broadcastingPackages';
 import { useGameStore } from '../store/useGameStore';
 import { TvCupTieModal } from './TvCupTieModal';
 import { calculateProbabilisticSeason } from '../engine/engine';
+import type { LiveSeasonProgress } from '../utils/courtsideStats';
 
-interface SimulatingOverlayProps {
+export interface SimulatingOverlayProps {
   phase?: "first_half" | "second_half" | "full";
   lang: Language;
   totalMatchdays: number;
   onComplete: () => void;
   state?: GameState;
+  inlineOverCourt?: boolean;
+  onLiveFixtureChange?: (
+    fixture: SimulatedFixture,
+    matchday: number,
+    targetEnd: number,
+    liveProgress: LiveSeasonProgress
+  ) => void;
 }
 
-interface SimulatedFixture {
+export interface SimulatedFixture {
   matchday: number;
   opponent: {
     id?: number | string;
@@ -177,6 +185,8 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
   onComplete,
   phase = "full",
   state,
+  inlineOverCourt = false,
+  onLiveFixtureChange,
 }) => {
   const targetEnd = phase === "first_half" ? Math.floor(totalMatchdays / 2) : totalMatchdays;
   const startDay = phase === "second_half" ? Math.floor(totalMatchdays / 2) + 1 : 1;
@@ -351,25 +361,37 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
     const prevPending = state?.pendingSeasonState as any;
     const meta = prevPending?._meta;
 
-    // When 2nd half starts, keep 1st half locked and recalculate 2nd half if OVR/morale/tactic changed
+    // When 2nd half starts, keep 1st half locked and recalculate 2nd half if OVR/morale/tactic/pressure stance changed
     if (phase === 'second_half' && prevPending && meta?.firstHalfOutcomes) {
+      const activePressureMod =
+        state?.pressureSecondHalfMod?.year === state?.year ? state.pressureSecondHalfMod : null;
       const hasMidSeasonChanges =
         playerOvr !== meta.initialOvr ||
         morale !== meta.initialMorale ||
-        tactic !== meta.initialTactic;
-      const currentSecondHalfKey = `${playerOvr}_${morale}_${tactic}`;
+        tactic !== meta.initialTactic ||
+        Boolean(activePressureMod);
+      const currentSecondHalfKey = `${playerOvr}_${morale}_${tactic}_${activePressureMod?.stanceLabel || 'none'}`;
 
       if (!hasMidSeasonChanges || meta.secondHalfAppliedKey === currentSecondHalfKey) {
         return prevPending;
       }
 
+      const secondHalfEffectiveOvr = Math.max(
+        30,
+        Math.min(100, playerOvr + (activePressureMod?.ovrEffect || 0))
+      );
+      const secondHalfEffectiveMorale = Math.max(
+        0,
+        Math.min(100, morale + moraleMod + (activePressureMod?.moraleDelta || 0))
+      );
+
       const updatedStats = calculateProbabilisticSeason(
-        { ...state?.club, baseOvr: playerOvr } as any,
+        { ...state?.club, baseOvr: secondHalfEffectiveOvr } as any,
         tierBenchmarkOvr,
         tier,
         tactic,
         leagueSize,
-        (morale + moraleMod),
+        secondHalfEffectiveMorale,
         {
           isUserClub: true,
           consecutiveTitles: state?.consecutiveTitles || 0,
@@ -698,6 +720,9 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
     let draws = 0;
     let losses = 0;
     let pts = 0;
+    let gf = 0;
+    let ga = 0;
+    const outcomes: ('W' | 'D' | 'L')[] = [];
 
     for (let i = 0; i <= currentFixtureIndex; i++) {
       const f = fixtures[i];
@@ -706,10 +731,44 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
       else if (f.outcome === 'D') draws++;
       else losses++;
       pts += f.pts;
+      gf += f.userGoals;
+      ga += f.oppGoals;
+      outcomes.push(f.outcome);
     }
 
-    return { wins, draws, losses, pts };
+    return { wins, draws, losses, pts, gf, ga, lastFive: outcomes.slice(-5) };
   }, [fixtures, currentFixtureIndex]);
+
+  const onLiveFixtureChangeRef = useRef(onLiveFixtureChange);
+  useEffect(() => {
+    onLiveFixtureChangeRef.current = onLiveFixtureChange;
+  }, [onLiveFixtureChange]);
+
+  useEffect(() => {
+    if (currentFixture && onLiveFixtureChangeRef.current) {
+      onLiveFixtureChangeRef.current(currentFixture, matchday, targetEnd, {
+        matchday,
+        targetEnd,
+        wins: cumulativeStats.wins,
+        draws: cumulativeStats.draws,
+        losses: cumulativeStats.losses,
+        gf: cumulativeStats.gf,
+        ga: cumulativeStats.ga,
+        lastFive: cumulativeStats.lastFive,
+        latestFixture: {
+          opponentId: currentFixture.opponent.id,
+          opponentName: currentFixture.opponent.name,
+          opponentColor: currentFixture.opponent.color,
+          opponentColor2: currentFixture.opponent.color2,
+          opponentLogo: currentFixture.opponent.logo,
+          opponentFallbackLogo: currentFixture.opponent.fallbackLogo,
+          opponentOvr: currentFixture.opponent.baseOvr,
+          userGoals: currentFixture.userGoals,
+          oppGoals: currentFixture.oppGoals,
+        },
+      });
+    }
+  }, [currentFixture, matchday, targetEnd, cumulativeStats]);
 
   const progressFraction = Math.min(1, Math.max(0, (matchday - startDay) / Math.max(1, targetEnd - startDay)));
 
@@ -1012,7 +1071,282 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
 
   return (
     <AnimatePresence>
-      {!isFadingOut && (
+      {!isFadingOut && inlineOverCourt && currentFixture && (
+        <motion.div
+          key="inline-courtside-match-center"
+          data-testid="inline-court-simulation"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+          className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-2.5 sm:p-3.5 select-none"
+        >
+          {/* MOBILE (< 640px) COMPACT LIVE MATCHDAY + SCOREBOARD STRIP */}
+          <div className="flex sm:hidden flex-col gap-1.5">
+            <div className="pointer-events-auto bg-white/95 rounded-[18px] px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.16)] border border-black/[0.06]">
+              <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#686D7B] mb-1.5 tabular-nums">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide text-white ${
+                      isMatchWin
+                        ? 'bg-emerald-600'
+                        : isMatchDraw
+                        ? 'bg-amber-600'
+                        : 'bg-rose-600'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    <span>LIVE</span>
+                  </span>
+                  <span className="font-bold text-[#14161D]">
+                    MD {matchday}/{targetEnd}
+                  </span>
+                </div>
+                <span>
+                  {cumulativeStats.wins}W–{cumulativeStats.draws}D–{cumulativeStats.losses}L ·{' '}
+                  <strong className="text-emerald-700">{cumulativeStats.pts}P</strong>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <ClubLogo
+                    club={state?.club}
+                    name={clubName}
+                    clubId={state?.club?.id}
+                    color={state?.club?.color}
+                    color2={state?.club?.color2}
+                    logo={state?.club?.logo}
+                    fallbackLogo={state?.club?.fallbackLogo}
+                    className="w-6 h-6 rounded-md object-contain shrink-0"
+                  />
+                  <span className="text-xs font-bold text-[#14161D] truncate">
+                    {clubName} vs {currentFixture.opponent.name}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 tabular-nums">
+                  <span
+                    className={`text-[17px] font-extrabold ${
+                      isMatchWin
+                        ? 'text-emerald-700'
+                        : isMatchLoss
+                        ? 'text-rose-700'
+                        : 'text-[#14161D]'
+                    }`}
+                  >
+                    {currentFixture.userGoals}
+                  </span>
+                  <span className="text-xs font-bold text-[#5C6270]">–</span>
+                  <span className="text-[17px] font-bold text-[#686D7B]">
+                    {currentFixture.oppGoals}
+                  </span>
+                  <ClubLogo
+                    club={currentFixture.opponent as any}
+                    name={currentFixture.opponent.name}
+                    clubId={currentFixture.opponent.id}
+                    color={currentFixture.opponent.color}
+                    color2={currentFixture.opponent.color2}
+                    logo={currentFixture.opponent.logo}
+                    fallbackLogo={currentFixture.opponent.fallbackLogo}
+                    className="w-6 h-6 rounded-md object-contain shrink-0"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-2 w-full h-1.5 rounded-full bg-[#ECEAE4] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[#18191F] transition-all duration-150"
+                  style={{ width: `${Math.max(6, Math.round(progressFraction * 100))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* TABLET & DESKTOP (>= 640px) TWO FLOATING WHITE APPLE COURTSIDE LIVE MATCHDAY CARDS */}
+          <div className="hidden sm:flex items-start justify-between gap-2.5">
+            {/* Top-Left Live Matchday & Campaign Progress Card */}
+            <div className="pointer-events-auto bg-white/95 rounded-[22px] px-3.5 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.16)] border border-black/[0.06] min-w-0 sm:max-w-[275px] xl:max-w-[335px]">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide text-white shrink-0 ${
+                      isMatchWin
+                        ? 'bg-emerald-600'
+                        : isMatchDraw
+                        ? 'bg-amber-600'
+                        : 'bg-rose-600'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    <span>LIVE</span>
+                  </span>
+                  <span className="text-[11px] font-bold text-[#14161D] tabular-nums shrink-0">
+                    MD {matchday}/{targetEnd}
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-[#686D7B] truncate">
+                  {tactic}
+                </span>
+              </div>
+
+              <div className="mt-1.5 flex items-center gap-2 min-w-0">
+                <ClubLogo
+                  club={state?.club}
+                  name={clubName}
+                  clubId={state?.club?.id}
+                  color={state?.club?.color}
+                  color2={state?.club?.color2}
+                  logo={state?.club?.logo}
+                  fallbackLogo={state?.club?.fallbackLogo}
+                  className="w-6 h-6 rounded-md object-contain shrink-0"
+                />
+                <h3 className="text-[14px] xl:text-[15px] font-bold tracking-tight text-[#14161D] leading-tight truncate">
+                  {clubName} vs {currentFixture.opponent.name}
+                </h3>
+              </div>
+
+              <div className="mt-2.5">
+                <div className="flex items-center justify-between text-[10px] font-semibold text-[#686D7B] mb-1 tabular-nums">
+                  <span className="truncate max-w-[180px]">{phaseLabel}</span>
+                  <span className="text-[#14161D] font-bold">
+                    {Math.round(progressFraction * 100)}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-[#ECEAE4] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[#18191F] transition-all duration-150"
+                    style={{ width: `${Math.max(6, Math.round(progressFraction * 100))}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Top-Right Live Matchday Scoreboard Card */}
+            <div className="pointer-events-auto bg-white/95 rounded-[22px] px-3.5 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.16)] border border-black/[0.06] sm:min-w-[198px] xl:min-w-[228px] shrink-0">
+              <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#686D7B] mb-2 tabular-nums">
+                <span>
+                  {cumulativeStats.wins}W–{cumulativeStats.draws}D–{cumulativeStats.losses}L
+                </span>
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                  {cumulativeStats.pts} PTS
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ClubLogo
+                      club={state?.club}
+                      name={clubName}
+                      clubId={state?.club?.id}
+                      color={state?.club?.color}
+                      color2={state?.club?.color2}
+                      logo={state?.club?.logo}
+                      fallbackLogo={state?.club?.fallbackLogo}
+                      className="w-7 h-7 rounded-[8px] object-contain shrink-0"
+                    />
+                    <div className="flex flex-col min-w-0 leading-tight">
+                      <span className="text-[12px] font-semibold text-[#14161D] truncate max-w-[104px]">
+                        {clubName}
+                      </span>
+                      <span className="text-[10px] text-[#525866] tabular-nums">
+                        OVR {playerOvr} · {currentFixture.isHome ? 'Home' : 'Away'}
+                      </span>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-[20px] xl:text-[22px] font-bold tracking-tight tabular-nums leading-none shrink-0 ${
+                      isMatchWin
+                        ? 'text-emerald-700'
+                        : isMatchLoss
+                        ? 'text-rose-700'
+                        : 'text-[#14161D]'
+                    }`}
+                  >
+                    {currentFixture.userGoals}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ClubLogo
+                      club={currentFixture.opponent as any}
+                      name={currentFixture.opponent.name}
+                      clubId={currentFixture.opponent.id}
+                      color={currentFixture.opponent.color}
+                      color2={currentFixture.opponent.color2}
+                      logo={currentFixture.opponent.logo}
+                      fallbackLogo={currentFixture.opponent.fallbackLogo}
+                      className="w-7 h-7 rounded-[8px] object-contain shrink-0"
+                    />
+                    <div className="flex flex-col min-w-0 leading-tight">
+                      <span className="text-[12px] font-semibold text-[#14161D] truncate max-w-[104px]">
+                        {currentFixture.opponent.name}
+                      </span>
+                      <span className="text-[10px] text-[#525866] tabular-nums">
+                        OVR {currentFixture.opponent.baseOvr}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[20px] xl:text-[22px] font-bold text-[#686D7B] tracking-tight tabular-nums leading-none shrink-0">
+                    {currentFixture.oppGoals}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* BOTTOM-RIGHT COMPACT MOMENTUM & OUTCOME STRIP (Leaves Bottom-Left Camera Switcher Interactive!) */}
+          <div className="flex items-end justify-end">
+            <div className="pointer-events-auto bg-white/95 rounded-[16px] sm:rounded-[18px] px-3 sm:px-3.5 py-1.5 sm:py-2 shadow-[0_10px_26px_rgba(15,23,42,0.15)] border border-black/[0.06] flex items-center gap-2.5 sm:gap-3 max-w-[58%] sm:max-w-full">
+              <div className="flex flex-col min-w-[104px] sm:min-w-[140px]">
+                <div className="flex items-center justify-between text-[10px] font-semibold text-[#525866] mb-1">
+                  <span>Momentum</span>
+                  <span
+                    className={`font-bold tabular-nums ${
+                      isMatchWin
+                        ? 'text-emerald-700'
+                        : isMatchDraw
+                        ? 'text-amber-700'
+                        : 'text-rose-700'
+                    }`}
+                  >
+                    {isFinishing
+                      ? 'Full Time'
+                      : isMatchWin
+                      ? 'WIN +2P'
+                      : isMatchDraw
+                      ? 'DRAW +1P'
+                      : 'LOSS'}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 sm:h-2 bg-[#ECEAE4] rounded-full relative overflow-hidden">
+                  <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-black/15 z-10" />
+                  {liveMomentumPercent >= 0 ? (
+                    <div
+                      className="absolute left-1/2 top-0 bottom-0 bg-emerald-600 rounded-r-full transition-all duration-150"
+                      style={{ width: `${Math.min(50, liveMomentumPercent / 2)}%` }}
+                    />
+                  ) : (
+                    <div
+                      className="absolute top-0 bottom-0 bg-rose-600 rounded-l-full transition-all duration-150"
+                      style={{
+                        right: '50%',
+                        width: `${Math.min(50, Math.abs(liveMomentumPercent) / 2)}%`,
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold text-[#14161D] whitespace-nowrap hidden sm:inline">
+                {formLabel}
+              </span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {!isFadingOut && !inlineOverCourt && (
         <motion.div
           key="apple-sports-match-center"
           initial={{ opacity: 0 }}
@@ -1083,7 +1417,7 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
                     {currentFixture.oppGoals}
                   </span>
                 </div>
-                <span className={`text-[9px] uppercase tracking-wider mt-1 font-bold px-2 py-0.5 rounded-full border ${
+                <span className={`text-[10px] uppercase tracking-wider mt-1 font-bold px-2 py-0.5 rounded-full border ${
                   isMatchWin
                     ? 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30'
                     : isMatchDraw

@@ -525,10 +525,10 @@ console.log('--- RUNNING DECISION DAY, PROMOTION, PLAYOFF & RELEGATION MODES TES
 {
   console.log('\nRunning Test 11: Standings Promotion Integrity (No Phantom Promotion of Mid-Table Clubs)...');
 
-  // Verify ActionPanel accordion header is "Squad & Transfers"
-  const actionPanelPath = path.resolve('src/components/ActionPanel.tsx');
-  const actionPanelContent = fs.readFileSync(actionPanelPath, 'utf8');
-  assert(actionPanelContent.includes("tr('Squad & Transfers', 'Kader & Transfers')"), 'ActionPanel accordion must be named Squad & Transfers');
+  // Verify CourtsideWorkspace exposes Squad Overview & Transfer Market modules
+  const workspacePath = path.resolve('src/components/CourtsideWorkspace.tsx');
+  const workspaceContent = fs.readFileSync(workspacePath, 'utf8');
+  assert(workspaceContent.includes('Squad Overview') && workspaceContent.includes('Transfer Market'), 'CourtsideWorkspace must include Squad Overview & Transfer Market');
 
   // Verify simulateGlobalLeagues respects HBL 2 standings
   const potsdam = ALL_CLUBS.find(c => c.name.includes('Potsdam')) || { id: 117, name: '1. VfL Potsdam', tier: 2, country: 'GER', baseOvr: 74, color: '#0055a4' };

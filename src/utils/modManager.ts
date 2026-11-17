@@ -1,6 +1,7 @@
 import { Club } from '../types';
 import { ALL_CLUBS } from '../data/clubsData';
 import realDataJson from '../mod-data/handball_base_database.json';
+import { coerceCountryString } from './crashResilience';
 
 export const REALDATA_MOD_ID = 'handball_base_database';
 export const REALDATA_MOD_NAME = 'Handball Manager Database';
@@ -80,11 +81,11 @@ const getActiveCareerCountry = (): string | null => {
   return null;
 };
 
-export const getDefaultClubs = (includeCountry?: string): Club[] => {
-  const preserveCountry = (includeCountry || '').trim().toUpperCase();
+export const getDefaultClubs = (includeCountry?: unknown): Club[] => {
+  const preserveCountry = typeof includeCountry === 'string' ? coerceCountryString(includeCountry, '') : '';
   return ALL_CLUBS
     .filter(c => {
-      const ctry = (c.country || '').trim().toUpperCase();
+      const ctry = coerceCountryString(c.country, 'GER');
       if (preserveCountry && ctry === preserveCountry) return true;
       return !['POL', 'AUT', 'SUI'].includes(ctry);
     })
@@ -117,15 +118,21 @@ export const fetchModDataDatabase = async (): Promise<Club[]> => {
   return getRealDataClubs();
 };
 
-export const getActiveClubs = (includeCountry?: string): Club[] => {
+export const getActiveClubs = (includeCountry?: unknown): Club[] => {
   const custom = getCustomDb();
-  if (custom) return custom.map(c => ({ ...c }));
+  if (custom) {
+    return custom.map(c => ({
+      ...c,
+      country: coerceCountryString(c.country, 'GER'),
+    }));
+  }
 
   if (isRealDataModActive()) {
     return getRealDataClubs();
   }
 
-  const activeCareerCountry = includeCountry || getActiveCareerCountry() || undefined;
+  const safeInclude = typeof includeCountry === 'string' && includeCountry.trim().length > 0 ? includeCountry : undefined;
+  const activeCareerCountry = safeInclude || getActiveCareerCountry() || undefined;
   return getDefaultClubs(activeCareerCountry);
 };
 
@@ -147,7 +154,7 @@ export const mergeClubWithWorldState = (baseClub: Club, worldClub?: Partial<Club
     ...baseClub,
     ...worldClub,
     name: baseClub.name || worldClub.name || 'Club',
-    country: baseClub.country || worldClub.country,
+    country: coerceCountryString(baseClub.country ?? worldClub.country, 'GER'),
     color: baseClub.color || worldClub.color || '1e3a8a',
     color2: baseClub.color2 ?? worldClub.color2,
     logo: modActive ? (baseClub.logo ?? worldClub.logo) : undefined,

@@ -11,9 +11,10 @@ import {
   Filler,
 } from 'chart.js';
 import { GameState } from '../types';
-import { formatMoney, getCountryMult, isReserveClub, getCurrencyForCountry, getCorporateEntityInfo } from '../data/gameConstants';
+import { formatMoney, getCountryMult, getCurrencyForCountry, getCorporateEntityInfo } from '../data/gameConstants';
 import { useModalDismiss } from '../utils/modalUtils';
 import { useGameStore } from '../store/useGameStore';
+import { evaluateIPOEligibility } from '../utils/ipoEligibility';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
 
@@ -26,7 +27,7 @@ interface IPOModalProps {
 export const IPOModal: React.FC<IPOModalProps> = ({ isOpen, state, onClose }) => {
   useModalDismiss(onClose, isOpen);
 
-  const isReserve = isReserveClub(state.club.name);
+  const eligibility = evaluateIPOEligibility(state);
   const currencySymbol = getCurrencyForCountry(state.club.country).symbol;
   const corpInfo = getCorporateEntityInfo(state.club.country);
 
@@ -229,15 +230,90 @@ export const IPOModal: React.FC<IPOModalProps> = ({ isOpen, state, onClose }) =>
 
         {/* Modal Body */}
         <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4 text-xs sm:text-sm text-zinc-300 flex-1 min-h-0 bg-[#14151e]">
-          {isReserve ? (
-            <div className="bg-rose-500/10 border border-rose-500/20 p-5 rounded-2xl flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
-                <i className="fas fa-ban" />
-                Ineligible for IPO
+          {!isPublic && !eligibility.eligible ? (
+            <div className="flex flex-col gap-4">
+              <div className="bg-rose-500/10 border border-rose-500/20 p-4 sm:p-5 rounded-2xl flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+                    <i className="fas fa-lock" />
+                    Ineligible for IPO
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/25">
+                    {eligibility.primaryBlocker}
+                  </span>
+                </div>
+                <p className="text-zinc-300 text-xs leading-relaxed">
+                  {eligibility.summary}
+                </p>
               </div>
-              <p className="text-zinc-400 text-xs leading-relaxed">
-                Reserve teams and secondary squads operate as non-independent corporate subsidiaries and cannot issue equity on public stock exchanges.
-              </p>
+
+              <div className="bg-[#10121a] border border-white/[0.04] p-4 sm:p-5 rounded-2xl flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    Stock Exchange Listing Requirements
+                  </span>
+                  <span className="text-[11px] font-semibold text-zinc-400 tabular-nums">
+                    {eligibility.checks.filter((c) => c.passed).length} / {eligibility.checks.length} Met
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  {eligibility.checks.map((chk) => (
+                    <div
+                      key={chk.key}
+                      className={`p-3 rounded-xl border flex items-start justify-between gap-3 ${
+                        chk.passed
+                          ? 'bg-emerald-500/[0.05] border-emerald-500/20'
+                          : 'bg-rose-500/[0.05] border-rose-500/20'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div
+                          className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0 mt-0.5 ${
+                            chk.passed
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : 'bg-rose-500/20 text-rose-400'
+                          }`}
+                        >
+                          <i className={`fas ${chk.passed ? 'fa-check' : 'fa-xmark'}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-white">{chk.label}</div>
+                          <div className="text-[11px] text-zinc-400 leading-snug mt-0.5">
+                            {chk.detail}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div
+                          className={`text-[11px] font-bold tabular-nums ${
+                            chk.passed ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
+                          {chk.currentText}
+                        </div>
+                        <div className="text-[10px] text-zinc-500 tabular-nums">
+                          Req: {chk.requiredText}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-[#10121a] border border-white/[0.04] p-4 rounded-2xl flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] uppercase font-semibold tracking-wider text-zinc-500 block">
+                    Indicative Future Valuation
+                  </span>
+                  <span className="text-xs text-zinc-400">
+                    Unlocked once all 4 exchange requirements pass
+                  </span>
+                </div>
+                <span className="text-lg font-semibold text-amber-400 tabular-nums">
+                  {formatMoney(trueValuation, state.club.country)}
+                </span>
+              </div>
             </div>
           ) : isPublic ? (
             /* ========================================================================= */
@@ -362,10 +438,10 @@ export const IPOModal: React.FC<IPOModalProps> = ({ isOpen, state, onClose }) =>
               <div className="bg-[#10121a] border border-amber-500/20 rounded-2xl p-4 text-xs text-amber-200/90 leading-relaxed flex flex-col gap-1.5">
                 <div className="font-semibold text-amber-300 flex items-center gap-1.5">
                   <i className="fas fa-building-columns text-amber-400" />
-                  <span>Go Public (IPO)</span>
+                  <span>1,000,000 Share Public Float</span>
                 </div>
                 <p className="text-zinc-400 font-normal">
-                  Issue 1,000,000 shares to raise upfront capital. Beware shareholder dividend traps!
+                  List club equity on the exchange to raise upfront capital based on your selected offering price per share.
                 </p>
               </div>
 
@@ -382,15 +458,15 @@ export const IPOModal: React.FC<IPOModalProps> = ({ isOpen, state, onClose }) =>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
                   <div className="bg-black/30 p-3 rounded-xl border border-white/[0.04]">
-                    <span className="text-zinc-500 block font-medium uppercase tracking-wider mb-1 text-[9px]">Treasury Cash</span>
+                    <span className="text-zinc-500 block font-medium uppercase tracking-wider mb-1 text-[10px]">Treasury Cash</span>
                     <span className="text-white font-semibold tabular-nums text-[13px]">{formatMoney(cashValuation, state.club.country)}</span>
                   </div>
                   <div className="bg-black/30 p-3 rounded-xl border border-white/[0.04]">
-                    <span className="text-zinc-500 block font-medium uppercase tracking-wider mb-1 text-[9px]">Supporter Value</span>
+                    <span className="text-zinc-500 block font-medium uppercase tracking-wider mb-1 text-[10px]">Supporter Value</span>
                     <span className="text-white font-semibold tabular-nums text-[13px]">{formatMoney(fanValuation, state.club.country)}</span>
                   </div>
                   <div className="col-span-2 sm:col-span-1 bg-black/30 p-3 rounded-xl border border-white/[0.04]">
-                    <span className="text-zinc-500 block font-medium uppercase tracking-wider mb-1 text-[9px]">Squad Appraisal</span>
+                    <span className="text-zinc-500 block font-medium uppercase tracking-wider mb-1 text-[10px]">Squad Appraisal</span>
                     <span className="text-white font-semibold tabular-nums text-[13px]">{formatMoney(squadValuation, state.club.country)}</span>
                   </div>
                 </div>
@@ -553,7 +629,7 @@ export const IPOModal: React.FC<IPOModalProps> = ({ isOpen, state, onClose }) =>
             Close
           </button>
 
-          {!isReserve && !isPublic && (
+          {eligibility.eligible && !isPublic && (
             <button
               onClick={handleLaunch}
               className={`flex-1 py-2.5 px-5 rounded-xl font-semibold text-xs transition border active:scale-[0.99] cursor-pointer shadow-sm flex items-center justify-center gap-2 ${

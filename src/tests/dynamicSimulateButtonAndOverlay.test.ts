@@ -5,49 +5,43 @@ import path from 'path';
 console.log('--- RUNNING DYNAMIC SIMULATE BUTTON & OVERLAY AUDIT ---');
 
 // -----------------------------------------------------------------------------
-// TEST 1: Mobile-Only Dock Clearance Padding Audit
+// TEST 1: Clean Courtside Bottom Spacing & Legacy Mobile Dock Removal Audit
 // -----------------------------------------------------------------------------
-console.log('Running Test 1: Mobile-Only Dock Clearance Padding Audit...');
+console.log('Running Test 1: Clean Courtside Bottom Spacing & Legacy Dock Removal...');
 
 const dashboardPath = path.resolve(process.cwd(), 'src/components/Dashboard.tsx');
 const dashboardContent = fs.readFileSync(dashboardPath, 'utf8');
 assert(
-  dashboardContent.includes('pb-36 sm:pb-0') || dashboardContent.includes('pb-32 sm:pb-0'),
-  'Dashboard must enforce pb-36 or pb-32 on mobile to prevent fixed dock overlap'
-);
-assert(
-  dashboardContent.includes('sm:hidden shrink-0 pointer-events-none'),
-  'Dashboard must include dedicated mobile dock clearance spacer to prevent content overlap'
+  !dashboardContent.includes('MatchdayActionDock') && !dashboardContent.includes('pb-36 sm:pb-0'),
+  'Dashboard must not mount retired MatchdayActionDock or legacy pb-36 dock clearance padding'
 );
 
 const appPath = path.resolve(process.cwd(), 'src/App.tsx');
 const appContent = fs.readFileSync(appPath, 'utf8');
 assert(
-  appContent.includes('pb-36 sm:pb-4') || appContent.includes('pb-32 sm:pb-4'),
-  'App main container must enforce pb-36 or pb-32 on mobile to guarantee clearance'
+  appContent.includes("isCourtsideActive ? 'pb-6 sm:pb-6'"),
+  'App main container must enforce clean pb-6 sm:pb-6 Courtside spacing'
 );
 
-console.log('  ✓ Verified Dashboard container enforces pb-36 sm:pb-0 and mobile spacer.');
-console.log('  ✓ Verified App main container enforces pb-36 sm:pb-4.');
-console.log('✓ Test 1 Passed: Mobile viewports have ≥128px-144px bottom clearance past fixed dock.\n');
+console.log('  ✓ Verified Dashboard cleanly dropped legacy pb-36 dock spacer.');
+console.log('  ✓ Verified App main container enforces clean pb-6 sm:pb-6 Courtside padding.');
+console.log('✓ Test 1 Passed: Viewports have clean bottom framing without legacy dock bloat.\n');
 
 // -----------------------------------------------------------------------------
-// TEST 2: Dynamic Red Relegation Button & Pulse Indicator in MatchdayActionDock
+// TEST 2: Dynamic Red Relegation Button & Badge in CourtSimulationCard
 // -----------------------------------------------------------------------------
 console.log('Running Test 2: Dynamic Relegation Button & Indicator Audit...');
 
-const dockPath = path.resolve(process.cwd(), 'src/components/MatchdayActionDock.tsx');
-const dockContent = fs.readFileSync(dockPath, 'utf8');
+const courtCardPath = path.resolve(process.cwd(), 'src/components/CourtSimulationCard.tsx');
+const courtCardContent = fs.readFileSync(courtCardPath, 'utf8');
 
-assert(dockContent.includes('isRelegationFight'), 'MatchdayActionDock must detect relegation fights dynamically');
-assert(dockContent.includes('from-rose-600 via-red-600 to-rose-700'), 'MatchdayActionDock must include rose/red gradient for relegation season');
-assert(dockContent.includes('bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.9)]'), 'MatchdayActionDock must include red pulsing status dot in relegation fight');
-assert(dockContent.includes('- Form'), 'MatchdayActionDock must display dynamic - Form indicator in relegation fight');
+assert(courtCardContent.includes('isRelegationFight'), 'CourtSimulationCard must accept and render isRelegationFight dynamically');
+assert(courtCardContent.includes('bg-rose-600'), 'CourtSimulationCard must style relegation-danger simulation CTA and status badge in rose/red');
+assert(dashboardContent.includes('isRelegationDanger'), 'Dashboard must compute isRelegationDanger dynamically for CourtSimulationCard');
 
-console.log('  ✓ Verified dynamic relegation detection in MatchdayActionDock.');
-console.log('  ✓ Verified red/rose simulation button and red pulsing status indicator.');
-console.log('  ✓ Verified dynamic - Form pill rendered in center capsule.');
-console.log('✓ Test 2 Passed: Simulating button dynamically shifts to red with - form for relegation seasons.\n');
+console.log('  ✓ Verified dynamic relegation detection passed from Dashboard to CourtSimulationCard.');
+console.log('  ✓ Verified red/rose simulation CTA and status badge in CourtSimulationCard.');
+console.log('✓ Test 2 Passed: Simulating CTA dynamically shifts to red/rose for relegation seasons.\n');
 
 // -----------------------------------------------------------------------------
 // TEST 3: Dynamic Red Relegation Struggle in SimulatingOverlay
@@ -73,13 +67,13 @@ console.log('✓ Test 3 Passed: SimulatingOverlay dynamically renders red form a
 console.log('Running Test 4: Top-Half & Above-Benchmark Protection Audit...');
 
 assert(
-  dockContent.includes('isProvenTopHalf') && overlayContent.includes('isProvenTopHalf'),
-  'Both dock and overlay must recognise proven top-half finishes (e.g. 5th of 12) to prevent false relegation state'
+  dashboardContent.includes('isProvenTopHalf') && overlayContent.includes('isProvenTopHalf'),
+  'Both Dashboard CTA state and SimulatingOverlay must recognise proven top-half finishes (e.g. 5th of 12) to prevent false relegation state'
 );
 
 assert(
-  dockContent.includes('relegationLine') && overlayContent.includes('relegationLine'),
-  'Both dock and overlay must calculate authentic relegation lines according to league size'
+  dashboardContent.includes('relegationLine') && overlayContent.includes('relegationLine'),
+  'Both Dashboard and SimulatingOverlay must calculate authentic relegation lines according to league size'
 );
 
 console.log('  ✓ Verified isProvenTopHalf protection ensures 5th place / top-half finishes never display red relegation form.');

@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { calculateProbabilisticSeason, generateYouthProspect, processAging, getLeagueSize } from '../engine/engine';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
+import { calculateProbabilisticSeason, generateYouthProspect, getLeagueSize } from '../engine/engine';
 import { simulateGlobalLeagues } from '../engine/leagueSimulation';
-import { calculateClubFinancials, getLeagueScaledVal, getStartingBudget, getCreditLimit, formatMoney, isReserveClub, getMaxTier, calculateInitialReputation, getLeagueInfo, getRegionalTourCost, getClubHistoricContext, getLeagueMaxAttendance, normalizeCountry, getRequiredAcademyLevelForYouthPull, getMaxYouthPullsPerSeason, getClubCatchmentCeiling, getCalibratedStartingFanbase, getCountryEconomicProfile, MAX_ARENA_CAPACITY, getCountryMult, getPinnacleArenaCapacity, formatOrganicAttendance, getFAInfo, setActiveCountryCode, MANAGER_SKILLS, getDynamicSponsorPitchTerms, getSponsorBrandForClub } from '../data/gameConstants';
+import { calculateClubFinancials, getLeagueScaledVal, getStartingBudget, getCreditLimit, formatMoney, isReserveClub, getMaxTier, calculateInitialReputation, getLeagueInfo, getRegionalTourCost, getClubHistoricContext, normalizeCountry, getRequiredAcademyLevelForYouthPull, getMaxYouthPullsPerSeason, getClubCatchmentCeiling, getCalibratedStartingFanbase, getCountryEconomicProfile, getCountryMult, getPinnacleArenaCapacity, formatOrganicAttendance, setActiveCountryCode, MANAGER_SKILLS, getDynamicSponsorPitchTerms, getSponsorBrandForClub } from '../data/gameConstants';
 import { generateLeagueTable } from '../utils/leagueTableGenerator';
 import { ALL_CLUBS } from '../data/clubsData';
 import { getActiveClubs, mergeClubWithWorldState } from '../utils/modManager';
 import { saveHighscore, calculateLiveScore } from '../utils/leaderboard';
-import { GameState, Club, YouthProspect, SeasonHistory, getAcademySlotLimit } from '../types';
-import { trackEvent } from '../utils/analytics';
+import { GameState, Club, SeasonHistory, StadiumNamingDeal, getAcademySlotLimit } from '../types';
+import { trackEvent, setAnalyticsUserProperties } from '../utils/analytics';
 import { generateBoardRoadmap, evaluateRoadmapProgress, getOrGenerateRoadmap, isEuropeanPowerhouseClub } from '../utils/roadmapManager';
 import { createClubLoan, getBaseLoanPrincipal } from '../utils/loanManager';
 import { getLocalAssetPath } from '../data/teams';
+import { evaluatePostSeasonPressure, generatePressureMoment } from '../engine/pressureEngine';
+import { mergeNotificationsIntoHistory } from '../utils/notificationFeed';
+import { evaluateIPOEligibility } from '../utils/ipoEligibility';
 
 export const getInitialBoardExpectations = (club?: Club, worldClubsArg: Record<string, Club> = {}) => {
     const cClub = club || defaultFallbackClub;
@@ -148,6 +151,7 @@ const initialState: GameState = {
     worldClubs: {},
     universeMovements: [],
     notifications: [],
+    notificationHistory: [],
     isSacked: false,
     youthPipeline: [],
     boardExpectation: '',
@@ -224,6 +228,18 @@ const initialState: GameState = {
     boardGracePeriod: 0,
     boardUltimatum: false,
     seasonsInDebt: 0,
+    mediaPressure: 15,
+    coachHeat: 15,
+    gmHeat: 15,
+    pressureContext: 'steady',
+    pressureHeadline: '',
+    pressureMomentYear: undefined,
+    pressureMomentResolvedYear: undefined,
+    consecutivePressureSeasons: 0,
+    activePressureMoment: null,
+    pendingPostSeasonPressureMoment: null,
+    pressureSecondHalfMod: null,
+    namingRightsDeal: null,
     lang: 'en'
 };
 
@@ -252,6 +268,15 @@ interface GameStore extends GameState {
     recruitYouth: (cost: number, customProspect?: any) => { success: boolean; message: string; prospect?: any };
     protectYouth: (id: string, cost: number) => void;
     pitchSponsor: (type: 0 | 1 | 2, contractYears?: 1 | 2 | 3) => void;
+    signNamingRights: (params: {
+        brandName: string;
+        brandLogo: string;
+        arenaName: string;
+        suffix: 'Arena' | 'Dome' | 'Park' | 'Halle';
+        annualPayout: number;
+        contractYears: 2 | 3 | 5;
+    }) => { success: boolean; message: string };
+    restoreHeritageArenaName: () => { success: boolean; message: string };
     conductRegionalTour: () => any;
     launchBrandCampaign: (campaignType?: 1 | 2 | 3) => any;
     launchIPO: (offeringPrice: number) => void;
@@ -262,6 +287,7 @@ interface GameStore extends GameState {
     resetGame: () => void;
     endCareer: () => void;
     dismissNotification: (id: string) => void;
+    markBellNotificationsSeen: () => void;
     unlockManagerSkill: (skillId: string) => void;
     upgradeFacility: (type: "academy" | "medical", cost: number) => void;
     logOvrChange: (change: number, reason: string, reasonDe: string) => void;
@@ -285,9 +311,17 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         if (updatedClub && updatedClub.baseOvr !== undefined) {
             updatedClub.baseOvr = Math.min(100, Math.max(30, updatedClub.baseOvr));
         }
+        const nextHistory = updates.notifications
+            ? mergeNotificationsIntoHistory(
+                  updates.notificationHistory ?? state.notificationHistory,
+                  updates.notifications,
+                  updates.year ?? state.year
+              )
+            : updates.notificationHistory;
         return {
             ...state,
             ...updates,
+            ...(nextHistory !== undefined ? { notificationHistory: nextHistory } : {}),
             ...(updatedClub ? { club: updatedClub } : {})
         };
     }),
@@ -301,12 +335,11 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         const rivalClubName = possibleRivals.length > 0 ? possibleRivals[Math.floor(Math.random() * possibleRivals.length)].name : "City Rivals";
 
         const resolvedContext = baseClub.historicContext || baseClub.context || getClubHistoricContext(baseClub.name, baseClub.tier, false, baseClub.country || 'GER', baseClub);
-        const initEconProfile = getCountryEconomicProfile(baseClub.country || 'GER');
         const initCalibratedFans = getCalibratedStartingFanbase(baseClub);
         const rawInitFans = baseClub.fanBase || initCalibratedFans;
-        const normalizedInitFans = (initEconProfile.tier === 4 && rawInitFans > initCalibratedFans * 2.5)
+        const normalizedInitFans = (rawInitFans > initCalibratedFans * 1.5 || rawInitFans < initCalibratedFans * 0.5)
             ? initCalibratedFans
-            : baseClub.fanBase;
+            : rawInitFans;
         let initAcademyLevel = baseClub.academyLevel || 1;
         let initMedicalLevel = baseClub.medicalLevel || 1;
         const initOvr = baseClub.baseOvr || 50;
@@ -340,6 +373,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             originalStartLeague: baseClub.tier,
             stadium: baseClub.stadium || 2000,
             fanBase: normalizedInitFans,
+            fanCalibrated: true,
             historicContext: resolvedContext,
             context: resolvedContext,
             academyLevel: initAcademyLevel,
@@ -388,6 +422,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             history: [],
             ovrHistory: [],
             youthPipeline: [],
+            notifications: [],
+            notificationHistory: [],
             stadiumExpandedThisSeason: 0,
             infraActionsThisSeason: 0,
             facilitySpend: 0,
@@ -442,8 +478,33 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             activeEuroTournament: undefined,
             cupQualifiedForSf: null,
             euroQualifiedForSf: null,
+            mediaPressure: 15,
+            coachHeat: 15,
+            gmHeat: 15,
+            pressureContext: 'steady',
+            pressureHeadline: '',
+            pressureMomentYear: undefined,
+            pressureMomentResolvedYear: undefined,
+            consecutivePressureSeasons: 0,
+            activePressureMoment: null,
+            pendingPostSeasonPressureMoment: null,
+            pressureSecondHalfMod: null,
             boardRoadmap: generateBoardRoadmap(freshClub, startYear, []),
             ...getInitialBoardExpectations(freshClub, {})
+        });
+        trackEvent('career_started', {
+            club_name: freshClub.name,
+            tier: freshClub.tier,
+            country: freshClub.country || 'GER',
+            start_year: startYear,
+            tactic: philosophy,
+            mode,
+        });
+        setAnalyticsUserProperties({
+            club_name: freshClub.name,
+            club_country: freshClub.country || 'GER',
+            tier: freshClub.tier,
+            career_mode: mode,
         });
     },
     setPhilosophy: (n) => set((r) => {
@@ -556,14 +617,15 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             highestHistoricalCapacity,
             worldClubEntry?.stadium || 0
         );
-        const jobEconProfile = getCountryEconomicProfile(a.country || 'GER');
         const jobCalibratedFans = getCalibratedStartingFanbase(a);
         const rawJobDbFans = a.fanBase || matchedDbClub?.fanBase || jobCalibratedFans;
-        const normalizedJobDbFans = (jobEconProfile.tier === 4 && rawJobDbFans > jobCalibratedFans * 2.5)
+        const jobDbStad = matchedDbClub?.stadium || preservedStadium;
+        const isJobVenueExpanded = preservedStadium > jobDbStad;
+        const normalizedJobDbFans = (!isJobVenueExpanded && !(a as any).fanCalibrated && matchedDbClub?.fanBase && matchedDbClub.fanBase > jobCalibratedFans * 1.5 && rawJobDbFans >= matchedDbClub.fanBase * 0.85)
             ? jobCalibratedFans
             : rawJobDbFans;
         const rawWorldFans = worldClubEntry?.fanBase || 0;
-        const normalizedWorldFans = (jobEconProfile.tier === 4 && matchedDbClub?.fanBase && matchedDbClub.fanBase > jobCalibratedFans * 2.5 && rawWorldFans >= matchedDbClub.fanBase * 0.6)
+        const normalizedWorldFans = (!isJobVenueExpanded && !(worldClubEntry as any)?.fanCalibrated && matchedDbClub?.fanBase && matchedDbClub.fanBase > jobCalibratedFans * 1.5 && rawWorldFans >= matchedDbClub.fanBase * 0.85)
             ? jobCalibratedFans + Math.max(0, rawWorldFans - matchedDbClub.fanBase)
             : rawWorldFans;
         const preservedFans = Math.max(
@@ -686,6 +748,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             context: resolvedContext,
             temporaryOvrBoost: 0,
             activeLoansCount: 0,
+            customArenaName: undefined,
             currentBudget: o
         };
         const expectations = getInitialBoardExpectations(finalClub, r.worldClubs || {});
@@ -795,6 +858,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             activePerformanceDeal: false,
             seasonSponsorDeals: {},
             seasonSponsorDealsYear: r.year,
+            namingRightsDeal: null,
             pendingSupercupTrophies: undefined,
             stadiumExpandedThisSeason: 0,
             infraActionsThisSeason: 0,
@@ -836,6 +900,17 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             cupQualifiedForSf: null,
             cupRunResults: (r.postSeasonPending ? (r.cupRunResults || []) : []),
             midSeasonCrisisTriggered: false,
+            mediaPressure: 15,
+            coachHeat: 15,
+            gmHeat: 15,
+            pressureContext: 'steady',
+            pressureHeadline: '',
+            pressureMomentYear: undefined,
+            pressureMomentResolvedYear: undefined,
+            consecutivePressureSeasons: 0,
+            activePressureMoment: null,
+            pendingPostSeasonPressureMoment: null,
+            pressureSecondHalfMod: null,
             resolvedMatchContext: undefined,
             playoffVictoryOverride: undefined,
             pendingSeasonState: null,
@@ -1538,8 +1613,142 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             seasonSponsorDealsYear: n.year
         };
     }),
+    signNamingRights: (params) => {
+        const state = get();
+        const currentDeal = state.namingRightsDeal;
+        if (currentDeal && currentDeal.yearsRemaining > 0) {
+            return {
+                success: false,
+                message: `Stadium naming rights are already locked with ${currentDeal.brandName} (${currentDeal.arenaName}, ${currentDeal.yearsRemaining} season${currentDeal.yearsRemaining === 1 ? '' : 's'} remaining).`
+            };
+        }
+        const cleanArena = String(params.arenaName || '').trim();
+        if (!cleanArena || cleanArena.length < 3) {
+            return {
+                success: false,
+                message: 'Please provide a valid stadium naming title.'
+            };
+        }
+        const years: 2 | 3 | 5 = params.contractYears === 5 ? 5 : params.contractYears === 2 ? 2 : 3;
+        const termRateMult = years === 5 ? 1.12 : years === 2 ? 0.94 : 1.0;
+        const roundStep = (state.club.tier || 1) <= 2 ? 500 : (state.club.tier || 1) === 3 ? 250 : 50;
+        const annualPayout = Math.max(roundStep, Math.round((params.annualPayout * termRateMult) / roundStep) * roundStep);
+        const deal: StadiumNamingDeal = {
+            brandName: params.brandName,
+            brandLogo: params.brandLogo || '',
+            arenaName: cleanArena,
+            suffix: (params.suffix || 'Arena') as StadiumNamingDeal['suffix'],
+            annualPayout,
+            contractYears: years,
+            yearsRemaining: years,
+            signedYear: state.year
+        };
+        const updatedClub: Club = {
+            ...state.club,
+            customArenaName: cleanArena,
+            currentBudget: state.budget + annualPayout
+        };
+        const updatedWorldClubs = {
+            ...(state.worldClubs || {}),
+            [state.club.id]: {
+                ...(state.worldClubs?.[state.club.id] || state.club),
+                customArenaName: cleanArena
+            }
+        };
+        const msg = `🏟️ Stadium Naming Rights Signed: Home venue officially renamed "${cleanArena}" in a ${years}-year partnership with ${params.brandName} (+${formatMoney(annualPayout)}/yr · ${formatMoney(annualPayout * years)} total).`;
+        trackEvent('naming_rights_signed', {
+            brand_name: params.brandName,
+            arena_name: cleanArena,
+            contract_years: years,
+            annual_payout: annualPayout,
+            club_name: state.club.name,
+            season_year: state.year
+        });
+        set({
+            namingRightsDeal: deal,
+            club: updatedClub,
+            worldClubs: updatedWorldClubs,
+            budget: state.budget + annualPayout,
+            sponsorIncome: (state.sponsorIncome || 0) + annualPayout,
+            notifications: [
+                ...(state.notifications || []),
+                {
+                    id: Math.random().toString(36).substring(7),
+                    type: 'celebration',
+                    category: 'commercial',
+                    title: 'STADIUM NAMING RIGHTS SIGNED',
+                    message: msg,
+                    read: false
+                }
+            ]
+        });
+        return { success: true, message: msg };
+    },
+    restoreHeritageArenaName: () => {
+        const state = get();
+        const activeDeal = state.namingRightsDeal;
+        const buyoutCost = activeDeal && activeDeal.yearsRemaining > 0
+            ? Math.round(activeDeal.annualPayout * 0.35 * activeDeal.yearsRemaining)
+            : 0;
+        const creditLimit = getCreditLimit(state.club.tier || 1, state.club.country || 'GER');
+        if (buyoutCost > 0 && state.budget + creditLimit < buyoutCost) {
+            return {
+                success: false,
+                message: `Insufficient funds to buy out remaining naming rights contract (${formatMoney(buyoutCost)} required).`
+            };
+        }
+        const updatedClub: Club = {
+            ...state.club,
+            customArenaName: undefined,
+            currentBudget: state.budget - buyoutCost
+        };
+        const updatedWorldClubs = {
+            ...(state.worldClubs || {}),
+            [state.club.id]: {
+                ...(state.worldClubs?.[state.club.id] || state.club),
+                customArenaName: undefined
+            }
+        };
+        const msg = buyoutCost > 0
+            ? `🏛️ Heritage Arena Name Restored: Bought out remaining naming rights with ${activeDeal?.brandName} (-${formatMoney(buyoutCost)}). Traditional home venue identity restored.`
+            : '🏛️ Heritage Arena Name Restored: Traditional home venue identity is active.';
+        set({
+            namingRightsDeal: null,
+            club: updatedClub,
+            worldClubs: updatedWorldClubs,
+            budget: state.budget - buyoutCost,
+            notifications: [
+                ...(state.notifications || []),
+                {
+                    id: Math.random().toString(36).substring(7),
+                    type: 'info',
+                    category: 'commercial',
+                    title: 'HERITAGE VENUE RESTORED',
+                    message: msg,
+                    read: false
+                }
+            ]
+        });
+        return { success: true, message: msg };
+    },
     launchIPO: (offeringPrice: number) => set((state) => {
         if (state.club.isPublic) return state;
+
+        const eligibility = evaluateIPOEligibility(state);
+        if (!eligibility.eligible) {
+            return {
+                notifications: [
+                    ...(state.notifications || []),
+                    {
+                        id: Math.random().toString(),
+                        type: 'error',
+                        title: '🏦 IPO ELIGIBILITY REQUIRED',
+                        message: eligibility.summary,
+                        read: false
+                    }
+                ]
+            };
+        }
 
         // Calculate the authentic "Fair Market Value" of the club's stock (assuming 1M shares issued)
         // Hardened valuation formula nerfed by 40% to curb early IPO snowballing
@@ -2491,9 +2700,13 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
           ? leagueClubs.reduce((sum, c) => sum + c.baseOvr, 0) / leagueClubs.length
           : 60;
         
-        const simulationClub = { ...club, baseOvr: state.club.baseOvr };
+        const activePressureMod = state.pressureSecondHalfMod?.year === state.year ? state.pressureSecondHalfMod : null;
+        const simulationClub = {
+          ...club,
+          baseOvr: Math.max(30, Math.min(state.maxOvrCap || 100, club.baseOvr + (activePressureMod?.ovrEffect || 0)))
+        };
         
-        let mBonus = 0;
+        let mBonus = activePressureMod?.moraleDelta || 0;
         let rivalClubName = state.rivalClubName;
         let rivalClub = rivalClubName 
           ? mergedAllClubsSim.find(c => c.name.trim().toLowerCase() === rivalClubName.trim().toLowerCase() && normalizeCountry(c.country || 'GER') === normClubCountry)
@@ -2713,8 +2926,9 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         let seasonsInDebt = state.seasonsInDebt || 0;
         let bankruptcyPending = state.bankruptcyPending || false;
         const isOperatingSurplus = financials.net >= 0;
+        const overdraftGrace = Math.round(getCreditLimit(tier, club.country || 'GER') * 0.15);
         
-        if (budget < 0) {
+        if (budget < -overdraftGrace) {
             if (isOperatingSurplus) {
                 seasonsInDebt = Math.max(0, seasonsInDebt - 1);
                 extraNotifications.push({
@@ -2727,6 +2941,8 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             } else {
                 seasonsInDebt = Math.min(3, seasonsInDebt + 1);
             }
+        } else if (budget < 0) {
+            seasonsInDebt = Math.max(0, seasonsInDebt);
         } else {
             seasonsInDebt = 0;
 
@@ -2789,7 +3005,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
 
         let debtPenaltyText = "";
         let pointsDeducted = 0;
-        if (budget < 0 && !isOperatingSurplus) {
+        if (budget < -overdraftGrace && !isOperatingSurplus) {
             if (seasonsInDebt === 1) {
                 pointsDeducted = 2;
                 debtPenaltyText = " (2 Pts Deducted for Expanding Deficit)";
@@ -3456,6 +3672,55 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         if (seasonStats.pos <= oldTarget) rep += 2;
         else if (seasonStats.pos > oldTarget + 2) rep -= 3;
 
+        const postSeasonPressure = evaluatePostSeasonPressure({
+            clubName: club.name,
+            country: club.country || 'GER',
+            year: state.year,
+            playedTier,
+            maxTier: getMaxTier(club.country || 'GER'),
+            numTeams: w,
+            finalPos: seasonStats.pos,
+            targetPos: oldTarget,
+            boardExpectsSuccess: oldExpectsSuccess,
+            isGiant,
+            wonLeague,
+            wonAnyTrophy,
+            relegated,
+            promoted,
+            trophyDrought: (wonAnyTrophy ? 0 : (state.trophyDrought || 0) + 1),
+            tenureYears: tenure,
+            isReserve,
+            currentMediaPressure: state.mediaPressure,
+            currentCoachHeat: state.coachHeat,
+            currentGmHeat: state.gmHeat,
+            consecutivePressureSeasons: state.consecutivePressureSeasons,
+        });
+
+        if (postSeasonPressure.impactDelta !== 0) {
+            clubImpact = Math.round(Math.max(0, Math.min(100, clubImpact + postSeasonPressure.impactDelta)));
+        }
+        if (postSeasonPressure.moraleDelta !== 0) {
+            club.morale = Math.round(Math.max(5, Math.min(100, (club.morale ?? 75) + postSeasonPressure.moraleDelta)));
+        }
+        rep += postSeasonPressure.repDelta;
+
+        const nextBoardWarning = postSeasonPressure.issueBoardWarning || (seasonStats.pos > oldTarget + 3);
+        const nextBoardUltimatum = postSeasonPressure.issueBoardUltimatum;
+
+        const localizedPostHeadline = state.lang === 'de' ? postSeasonPressure.headlineDe : postSeasonPressure.headline;
+        const localizedPostSummary = state.lang === 'de' ? postSeasonPressure.summaryDe : postSeasonPressure.summary;
+        const localizedPostTier = state.lang === 'de' ? postSeasonPressure.tierInfo.labelDe : postSeasonPressure.tierInfo.label;
+
+        if (postSeasonPressure.shouldTriggerMoment || postSeasonPressure.delta >= 18) {
+            extraNotifications.push({
+                id: Math.random().toString(),
+                type: postSeasonPressure.mediaPressure >= 75 ? 'danger' : 'warning',
+                title: localizedPostTier.toUpperCase(),
+                message: `🎙️ ${localizedPostHeadline} — ${localizedPostSummary}`,
+                read: false,
+            });
+        }
+
         let isSacked = _wasSacked;
         if (managerSkills.includes('untouchable') && !finishedInBottomTierRelegationZone && !bankruptInBottomTier) {
             isSacked = false;
@@ -3471,6 +3736,29 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         }
 
         rep = Math.max(1, Math.min(100, rep));
+
+        const nextPendingPostSeasonPressureMoment =
+            postSeasonPressure.shouldTriggerMoment && !isSacked && !bankruptcyPending
+                ? generatePressureMoment({
+                    clubName: club.name,
+                    country: club.country || 'GER',
+                    year: state.year,
+                    tier: playedTier,
+                    phase: 'postseason',
+                    context: postSeasonPressure.context,
+                    mediaPressure: postSeasonPressure.mediaPressure,
+                    coachHeat: postSeasonPressure.coachHeat,
+                    gmHeat: postSeasonPressure.gmHeat,
+                    targetPos: oldTarget,
+                    currentPos: seasonStats.pos,
+                    numTeams: w,
+                    coachName: state.currentCoach?.name || `${club.name} Head Coach`,
+                    gmName: state.managerName || 'Sporting Director',
+                    tactic: state.tactic,
+                    relegated,
+                    trophyDrought: wonAnyTrophy ? 0 : (state.trophyDrought || 0) + 1,
+                })
+                : null;
 
         let euroStatus: 'CL' | 'EL' | 'ECL' | null = null;
         if (tier === 1 && club.tier === 1 && !isReserveClub(club.name)) {
@@ -3704,6 +3992,27 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             }
         });
 
+        let nextNamingRightsDeal: StadiumNamingDeal | null = state.namingRightsDeal || null;
+        if (nextNamingRightsDeal) {
+            if (nextNamingRightsDeal.yearsRemaining > 1) {
+                nextNamingRightsDeal = {
+                    ...nextNamingRightsDeal,
+                    yearsRemaining: nextNamingRightsDeal.yearsRemaining - 1
+                };
+                recurringSponsorPayout += nextNamingRightsDeal.annualPayout || 0;
+            } else {
+                extraNotifications.push({
+                    id: Math.random().toString(),
+                    type: 'info',
+                    title: 'STADIUM NAMING RIGHTS EXPIRED',
+                    message: `🏟️ Your stadium naming rights agreement with ${nextNamingRightsDeal.brandName} ("${nextNamingRightsDeal.arenaName}") has concluded. You can negotiate a new naming deal or keep your traditional venue name.`,
+                    read: false
+                });
+                nextNamingRightsDeal = null;
+                club.customArenaName = undefined;
+            }
+        }
+
         if (recurringSponsorPayout > 0) {
             budget += recurringSponsorPayout;
             extraNotifications.push({
@@ -3774,7 +4083,18 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             rivalH2HWins: (rivalChanged ? 0 : (state.rivalH2HWins || 0)) + rivalWins,
             rivalH2HLosses: (rivalChanged ? 0 : (state.rivalH2HLosses || 0)) + rivalLosses,
             rivalH2HDraws: (rivalChanged ? 0 : (state.rivalH2HDraws || 0)) + rivalDraws,
-            midSeasonCrisisTriggered: false, 
+            midSeasonCrisisTriggered: false,
+            mediaPressure: postSeasonPressure.mediaPressure,
+            coachHeat: postSeasonPressure.coachHeat,
+            gmHeat: postSeasonPressure.gmHeat,
+            pressureContext: postSeasonPressure.context,
+            pressureHeadline: localizedPostHeadline,
+            consecutivePressureSeasons: postSeasonPressure.consecutivePressureSeasons,
+            boardWarning: nextBoardWarning,
+            boardUltimatum: nextBoardUltimatum,
+            activePressureMoment: null,
+            pendingPostSeasonPressureMoment: nextPendingPostSeasonPressureMoment,
+            pressureSecondHalfMod: null,
             infraActionsThisSeason: 0,
             stadiumExpandedThisSeason: 0,
             academyUpgradedThisSeason: 0,
@@ -3804,6 +4124,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             failedSponsorTargetNextSeason: false,
             seasonSponsorDeals: nextSeasonSponsorDeals,
             seasonSponsorDealsYear: state.year + 1,
+            namingRightsDeal: nextNamingRightsDeal,
             pendingSupercupTrophies: undefined,
             regionalToursThisSeason: 0,
             brandCampaignsThisSeason: 0,
@@ -3860,8 +4181,13 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             !(state.playoffVictoryOverride as any).year || (state.playoffVictoryOverride as any).year === state.year
         ) ? state.playoffVictoryOverride : undefined;
 
+        const worldClubsForSim =
+            !club.customArenaName && state.worldClubs?.[club.id]?.customArenaName
+                ? { ...state.worldClubs, [club.id]: { ...state.worldClubs[club.id], customArenaName: undefined } }
+                : (state.worldClubs || {});
+
         const simGlobalResult = simulateGlobalLeagues(
-            state.worldClubs || {},
+            worldClubsForSim,
             club,
             playedTier,
             state.year,
@@ -4392,9 +4718,30 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             winterBreakTournamentName: '',
             winterBreakTournamentStory: '',
             winterBreakPlayersInvolved: 0,
+            mediaPressure: 15,
+            coachHeat: 15,
+            gmHeat: 15,
+            pressureContext: 'steady',
+            pressureHeadline: '',
+            pressureMomentYear: undefined,
+            pressureMomentResolvedYear: undefined,
+            consecutivePressureSeasons: 0,
+            activePressureMoment: null,
+            pendingPostSeasonPressureMoment: null,
+            pressureSecondHalfMod: null,
         });
     },
-    dismissNotification: (n) => set((r) => ({ notifications: (r.notifications || []).filter(i => i.id !== n) })),
+    dismissNotification: (n) => set((r) => ({
+        notificationHistory: mergeNotificationsIntoHistory(r.notificationHistory, r.notifications, r.year),
+        notifications: (r.notifications || []).filter(i => i.id !== n),
+    })),
+    markBellNotificationsSeen: () => set((r) => {
+        const merged = mergeNotificationsIntoHistory(r.notificationHistory, r.notifications, r.year);
+        return {
+            notifications: [],
+            notificationHistory: merged.map((entry) => ({ ...entry, seenInBell: true })),
+        };
+    }),
     unlockManagerSkill: (n) => set((r) => {
         if ((r.managerSkills || []).includes(n)) return r;
         const count = (r.managerSkills || []).length;
@@ -4968,7 +5315,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
             return { success: false, fee: 0, message: 'Prospect is currently out on affiliate loan until next season.' };
         }
 
-        const cleanCountry = (state.club.country || 'GER').trim().toUpperCase();
+        const cleanCountry = normalizeCountry(state.club?.country || 'GER');
         const isExportPowerhouse = ['ARG', 'BRA', 'COL', 'URU', 'CHI', 'ECU'].includes(cleanCountry);
         const isMature = (prospect.timer || 0) <= 0;
         const tier = state.club.tier || 1;
@@ -5317,6 +5664,58 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
     })
 }), {
     name: 'handball-manager-storage',
+    storage: createJSONStorage(() => {
+        const memoryFallback = new Map<string, string>();
+        const safeStorage: StateStorage = {
+            getItem: (key: string): string | null => {
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        return window.localStorage.getItem(key);
+                    }
+                } catch {
+                    // Fallback to in-memory store when iframe blocks storage
+                }
+                return memoryFallback.get(key) ?? null;
+            },
+            setItem: (key: string, value: string): void => {
+                memoryFallback.set(key, value);
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.setItem(key, value);
+                    }
+                } catch {
+                    try {
+                        // On QuotaExceededError, compact historic divisionTables & retry
+                        const parsed = JSON.parse(value);
+                        if (parsed?.state) {
+                            if (Array.isArray(parsed.state.history)) {
+                                parsed.state.history = parsed.state.history.map((h: any, idx: number, arr: any[]) =>
+                                    idx < arr.length - 3 ? { ...h, divisionTables: undefined, finalTable: undefined } : h
+                                );
+                            }
+                            if (Array.isArray(parsed.state.universeMovements) && parsed.state.universeMovements.length > 100) {
+                                parsed.state.universeMovements = parsed.state.universeMovements.slice(0, 100);
+                            }
+                            window.localStorage.setItem(key, JSON.stringify(parsed));
+                        }
+                    } catch {
+                        // Keep running smoothly from memoryFallback
+                    }
+                }
+            },
+            removeItem: (key: string): void => {
+                memoryFallback.delete(key);
+                try {
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                        window.localStorage.removeItem(key);
+                    }
+                } catch {
+                    // Ignore blocked storage removal
+                }
+            },
+        };
+        return safeStorage;
+    }),
     version: 5,
     migrate: (persistedState: any, version: number) => {
         if (!persistedState || typeof persistedState !== 'object') {

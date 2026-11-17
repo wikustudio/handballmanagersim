@@ -27,8 +27,8 @@ export default defineConfig(() => {
           scope: '/',
           display: 'standalone',
           orientation: 'any',
-          background_color: '#090a0f',
-          theme_color: '#090a0f',
+          background_color: '#ECEAE4',
+          theme_color: '#ECEAE4',
           categories: ['games', 'sports', 'entertainment'],
           icons: [
             {

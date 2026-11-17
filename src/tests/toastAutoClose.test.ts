@@ -1,6 +1,7 @@
 import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
+import { mergeNotificationsIntoHistory } from '../utils/notificationFeed';
 
 console.log('Running Toast & Popup Auto-Close Audit...\n');
 
@@ -69,6 +70,36 @@ assert(
   'Active notification must always resolve to the single latest incoming notification'
 );
 console.log('✓ Test 4 passed: Instant popup cancellation and backlog clearance strictly validated.\n');
+
+// -----------------------------------------------------------------------------
+// TEST 5: Infinite Update Depth Regression Prevention
+// -----------------------------------------------------------------------------
+console.log('Test 5: Verifying ToastContainer & notificationHistory loop prevention...');
+
+assert(
+  !toastContent.includes('[state.notifications, state.notificationHistory, state.year]'),
+  'ToastContainer useEffect must NOT depend on state.notificationHistory (prevents Maximum update depth exceeded)'
+);
+assert(
+  toastContent.includes('recordedIdsRef'),
+  'ToastContainer must guard processed notification IDs with recordedIdsRef'
+);
+
+const initialHist = mergeNotificationsIntoHistory([], [
+  { id: 'n-1', type: 'success', title: 'Dispatch', message: 'Sponsor contract signed' },
+], 2026);
+assert.strictEqual(initialHist.length, 1);
+
+// Consecutive duplicate message with a brand-new ID must preserve exact array reference so store update can be skipped
+const nextHist = mergeNotificationsIntoHistory(initialHist, [
+  { id: 'n-2', type: 'success', title: 'Dispatch', message: 'Sponsor contract signed' },
+], 2026);
+assert.strictEqual(
+  nextHist,
+  initialHist,
+  'mergeNotificationsIntoHistory must return existing reference unchanged when duplicate message is skipped'
+);
+console.log('✓ Test 5 passed: Infinite loop regression checks verified.\n');
 
 console.log('=============================================');
 console.log('All Toast Auto-Close Tests Passed Successfully!');

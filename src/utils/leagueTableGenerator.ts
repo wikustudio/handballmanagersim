@@ -1,7 +1,6 @@
 import { Club, GameState, SeasonHistory } from '../types';
 import { getLeagueInfo, isReserveClub, getMaxTier, normalizeCountry } from '../data/gameConstants';
 import { getLeagueSize } from '../engine/engine';
-import { ALL_CLUBS } from '../data/clubsData';
 import { mergeClubWithWorldState } from './modManager';
 
 const seededRandom = (seed: number) => {

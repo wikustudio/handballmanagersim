@@ -12,7 +12,6 @@ import { BroadcastLogo } from './BroadcastLogo';
 import { ClubLogo } from './ClubLogo';
 import { LeagueTableModal } from './LeagueTableModal';
 import { CountUp } from './CountUp';
-import { t as tr } from '../data/translations';
 import { Club } from "../types";
 import { ALL_CLUBS } from '../data/clubsData';
 import { getOrGenerateRoadmap } from '../utils/roadmapManager';
@@ -962,17 +961,17 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
         exit={{ scale: 0.95, y: 16, opacity: 0 }} 
         transition={{ type: "spring", damping: 28, stiffness: 350 }} 
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-4xl lg:max-w-5xl flex flex-col h-auto max-h-[92vh] my-auto cursor-default transition-all duration-150`}
+        className={`w-full max-w-4xl lg:max-w-5xl flex flex-col ${activeTab === 'table' ? 'h-[94dvh] sm:h-[90vh]' : 'h-auto'} max-h-[94dvh] sm:max-h-[92vh] my-auto cursor-default transition-all duration-150`}
       >
         <div 
           ref={cardRef} 
-          className="bg-[#14151e] text-white rounded-2xl w-full h-auto max-h-[92vh] shadow-[0_25px_70px_rgba(0,0,0,0.85)] border border-white/[0.04] flex flex-col m-0 overflow-hidden relative"
+          className={`bg-[#14151e] text-white rounded-2xl w-full ${activeTab === 'table' ? 'h-full' : 'h-auto'} max-h-[94dvh] sm:max-h-[92vh] shadow-[0_25px_70px_rgba(0,0,0,0.85)] border border-white/[0.04] flex flex-col m-0 overflow-hidden relative`}
         >
           {/* Top Ambient Highlight */}
           <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/30 to-transparent pointer-events-none" />
 
           {/* Redesigned Compact Top Header */}
-          <div className="relative shrink-0 border-b border-white/[0.04] px-3.5 py-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 bg-transparent">
+          <div className={`relative shrink-0 border-b border-white/[0.04] px-3.5 ${activeTab === 'table' ? 'py-2 sm:py-3' : 'py-3'} sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-transparent`}>
             {/* Left side: Club crest, "SEASON WRAP-UP - [YEAR] • [LEAGUE TAG]", Club Name, FINISH #[POS] badge */}
             <div className="flex items-start sm:items-center gap-3 min-w-0 w-full sm:w-auto">
               <ClubLogo
@@ -997,7 +996,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                   </span>
                 </div>
                 {(hasBl || hasLower || hasCl || hasEl || hasEcl || hasCwc || hasDfb || hasSc || hasReg) && (
-                  <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                  <div className={`${activeTab === 'table' ? 'hidden sm:flex' : 'flex'} items-center gap-1.5 flex-wrap mt-1.5`}>
                     {(hasBl || hasLower) && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 max-w-full">
                         <span className="truncate">🏆 {hasBl ? t1League.name : league.name} Champions</span>
@@ -1044,16 +1043,16 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
             </div>
 
             {/* Right side: Three compact data blocks for PTS, W-D-L, and GD */}
-            <div className="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-2 sm:gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.05] shrink-0">
+            <div className={`w-full sm:w-auto ${activeTab === 'table' ? 'hidden sm:flex' : 'grid grid-cols-3 sm:flex'} items-center gap-2 sm:gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.05] shrink-0`}>
               <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
-                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">PTS</span>
+                <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">PTS</span>
                 <span className="text-base sm:text-lg font-semibold text-zinc-200 leading-tight tabular-nums mt-0.5 sm:mt-0">
                   <CountUp value={displayPts} duration={850} />
                 </span>
               </div>
               <div className="hidden sm:block h-6 w-[1px] bg-white/[0.06]" />
               <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
-                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">W-D-L</span>
+                <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">W-D-L</span>
                 <div className="text-base sm:text-lg font-semibold leading-tight tabular-nums flex items-center gap-0.5 text-zinc-200 mt-0.5 sm:mt-0">
                   <span>{seasonData.wins}</span>
                   <span className="text-zinc-500 font-normal">-</span>
@@ -1064,7 +1063,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
               </div>
               <div className="hidden sm:block h-6 w-[1px] bg-white/[0.06]" />
               <div className="flex flex-col items-center sm:items-end bg-white/[0.02] sm:bg-transparent rounded-lg py-1 px-2 sm:p-0 border border-white/[0.04] sm:border-0">
-                <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">GD</span>
+                <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 leading-none">GD</span>
                 <span className="text-base sm:text-lg font-semibold leading-tight tabular-nums text-zinc-200 mt-0.5 sm:mt-0">
                   {goalDiff > 0 ? `+${goalDiff}` : goalDiff}
                 </span>
@@ -1082,13 +1081,17 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
               { id: 'coach', label: 'Coach', badge: isCriticallyStale ? t(`Stale: Yr ${tacticTenure}`, `Abnutzung ${tacticTenure}. J.`) : isTacticStale ? t(`Stale: Yr ${tacticTenure}`, `Abnutzung ${tacticTenure}. J.`) : null, badgeColor: isCriticallyStale ? 'bg-rose-500/10 text-rose-300 border-rose-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20' },
               { id: 'board', label: 'Board', badge: consecutiveTitles > 0 ? t(`Tax: -${effectiveDynastyTax.toFixed(1)}`, `Steuer: -${effectiveDynastyTax.toFixed(1)}`) : null, badgeColor: 'bg-rose-500/10 text-rose-300 border-rose-500/20' },
               { id: 'universe', label: 'Universe & World', badge: isNemesisActive ? t('Rival Takeover', 'Rivalen-Übernahme') : null, badgeColor: 'bg-purple-500/10 text-purple-200 border-purple-500/20' },
+              { id: 'table', label: 'League Table' },
             ].map((tab) => {
               const isActive = activeTab === tab.id || (tab.id === 'finances' && activeTab === 'finance');
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  onClick={() => {
+                    if (tab.id === 'table') setSelectedYearForTable(seasonData.year);
+                    setActiveTab(tab.id as any);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
                     isActive
                       ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm'
                       : 'text-zinc-400 hover:text-white hover:bg-white/[0.03] border border-transparent'
@@ -1096,7 +1099,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                 >
                   <span>{tab.label}</span>
                   {tab.badge && (
-                    <span className={`px-1.5 py-0.5 text-[9px] font-mono font-medium rounded border ${tab.badgeColor}`}>
+                    <span className={`px-1.5 py-0.5 text-[10px] font-mono font-medium rounded border ${tab.badgeColor}`}>
                       {tab.badge}
                     </span>
                   )}
@@ -1106,7 +1109,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
           </div>
 
           {/* Scrollable Content Body */}
-          <div ref={contentBodyRef} className={`min-h-0 ${activeTab === 'table' ? 'p-2 sm:p-3 overflow-hidden h-[580px]' : 'p-4 sm:p-5 overflow-y-auto custom-scrollbar'} flex flex-col gap-3.5`}>
+          <div ref={contentBodyRef} className={`flex-1 min-h-0 ${activeTab === 'table' ? 'p-1.5 sm:p-3 overflow-hidden' : 'p-3.5 sm:p-5 overflow-y-auto custom-scrollbar'} flex flex-col gap-3.5`}>
             <AnimatePresence mode="wait">
               {activeTab === 'summary' ? (
                 <motion.div
@@ -1273,7 +1276,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
 
                           {/* Text Content */}
                           <div className="flex flex-col min-w-0 flex-1">
-                            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-amber-300/90 mb-0.5 leading-snug break-words">
+                            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-amber-400 mb-0.5 leading-snug break-words">
                               {bannerSuperTitle}
                             </span>
                             <h3 className="text-lg sm:text-2xl font-bold text-white tracking-tight leading-tight uppercase mb-1 break-words">
@@ -1345,7 +1348,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                     <div className="flex items-center justify-between gap-2 border-b border-white/[0.04] pb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="w-5 h-5 rounded-md bg-white/[0.03] border border-white/[0.06] text-zinc-400 flex items-center justify-center shrink-0">
-                          <i className="fas fa-satellite-dish text-[9px]" />
+                          <i className="fas fa-satellite-dish text-[10px]" />
                         </div>
                         <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500 truncate">
                           MEDIA & BROADCASTER VERDICT
@@ -1380,6 +1383,35 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                         "{broadcasterVerdict.text}"
                       </p>
                     </div>
+
+                    {(() => {
+                      const pressVal = Math.round(state.mediaPressure ?? 15);
+                      const labelTone =
+                        pressVal >= 70 ? 'text-rose-300' : pressVal >= 35 ? 'text-amber-300' : 'text-zinc-300';
+                      const defaultLine =
+                        pressVal >= 35
+                          ? isDe
+                            ? 'Kritische Begleitung der sportlichen Führung.'
+                            : 'Heightened scrutiny on tactical and front-office decisions.'
+                          : isDe
+                          ? 'Ruhiges Medienklima rund um die Vereinsführung.'
+                          : 'Composed media climate around club leadership.';
+                      return (
+                        <div className="mt-1 pt-2.5 border-t border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
+                          <div className="min-w-0">
+                            <span className={`font-semibold uppercase tracking-wider mr-2 ${labelTone}`}>
+                              {isDe ? 'PRESSE-BAROMETER:' : 'PRESS SCRUTINY:'}
+                            </span>
+                            <span className="text-zinc-300">
+                              {state.pressureHeadline || defaultLine}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2.5 font-mono text-[11px] text-zinc-300 shrink-0 tabular-nums">
+                            <span>Press <strong className={labelTone}>{pressVal}/100</strong></span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Season Narrative Executive Summary */}
@@ -1516,7 +1548,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                         >
                           <i className="fas fa-chess-rook text-[10px]" />
                           <span>{t(`Tactic Stale (${isCriticallyStale ? '-1.0' : '-0.5'} OVR)`, `Taktik abgenutzt (${isCriticallyStale ? '-1,0' : '-0,5'} GES)`)}</span>
-                          <i className="fas fa-arrow-right text-[9px] opacity-60 ml-0.5" />
+                          <i className="fas fa-arrow-right text-[10px] opacity-60 ml-0.5" />
                         </button>
                       )}
 
@@ -1529,7 +1561,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                         >
                           <i className="fas fa-crosshairs text-[10px]" />
                           <span>{t(`Dynasty Tax (-${effectiveDynastyTax.toFixed(1)} OVR)`, `Dynastie-Steuer (-${effectiveDynastyTax.toFixed(1)} GES)`)}</span>
-                          <i className="fas fa-arrow-right text-[9px] opacity-60 ml-0.5" />
+                          <i className="fas fa-arrow-right text-[10px] opacity-60 ml-0.5" />
                         </button>
                       )}
 
@@ -1542,7 +1574,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                         >
                           <i className="fas fa-bolt text-[10px]" />
                           <span>{t(`Takeover: ${nemesisClub?.name || 'Rival'}`, `Übernahme: ${nemesisClub?.name || 'Rival'}`)}</span>
-                          <i className="fas fa-arrow-right text-[9px] opacity-60 ml-0.5" />
+                          <i className="fas fa-arrow-right text-[10px] opacity-60 ml-0.5" />
                         </button>
                       )}
                     </div>
@@ -1813,7 +1845,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                               return (
                                 <span
                                   key={item.k}
-                                  className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${
+                                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
                                     item.d?.status === 'signed'
                                       ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
                                       : item.d?.status === 'failed'
@@ -1887,16 +1919,6 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                         <span className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
                           CLUB INFRASTRUCTURE
                         </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                            <i className="fas fa-graduation-cap text-[9px] text-zinc-400" />
-                            <span>Lvl {state.club.academyLevel ?? state.club.youthAcademy ?? 1}/5</span>
-                          </span>
-                          <span className="text-[10px] font-medium text-zinc-300 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.5 rounded flex items-center gap-1">
-                            <i className="fas fa-kit-medical text-[9px] text-zinc-400" />
-                            <span>Lvl {state.club.medicalLevel ?? 1}/5</span>
-                          </span>
-                        </div>
                       </div>
                       <div className="text-base font-semibold text-white tracking-tight mb-1">
                         Youth Academy & Medical
@@ -2015,7 +2037,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                       {seasonData.departedYouths && seasonData.departedYouths.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-white/[0.06]">
                           <div className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                            <i className="fas fa-handshake-angle text-[9px]" />
+                            <i className="fas fa-handshake-angle text-[10px]" />
                             <span>Signed by Top-Flight Rival (Compensated)</span>
                           </div>
                           {seasonData.departedYouths.map((dep, dIdx) => (
@@ -2079,17 +2101,17 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                       </div>
                       {/* Visual tenure tracker */}
                       <div className="grid grid-cols-3 gap-1.5 my-1">
-                        <div className={`p-1 rounded text-center text-[9px] font-mono border ${
+                        <div className={`p-1 rounded text-center text-[10px] font-mono border ${
                           tacticTenure === 1 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
                         }`}>
                           Yr 1: Fresh
                         </div>
-                        <div className={`p-1 rounded text-center text-[9px] font-mono border ${
+                        <div className={`p-1 rounded text-center text-[10px] font-mono border ${
                           tacticTenure === 2 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
                         }`}>
                           Yr 2: -0.5 Drag
                         </div>
-                        <div className={`p-1 rounded text-center text-[9px] font-mono border ${
+                        <div className={`p-1 rounded text-center text-[10px] font-mono border ${
                           tacticTenure >= 3 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
                         }`}>
                           Yr 3+: -1.0 Drag
@@ -2242,19 +2264,19 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                           <div className={`p-1.5 rounded-lg border text-center flex flex-col items-center justify-center ${
                             consecutiveTitles === 0 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
                           }`}>
-                            <span className="text-[9px] font-mono leading-none">CHALLENGER</span>
+                            <span className="text-[10px] font-mono leading-none">CHALLENGER</span>
                             <span className="text-[10px] mt-0.5">No Tax (0.0)</span>
                           </div>
                           <div className={`p-1.5 rounded-lg border text-center flex flex-col items-center justify-center ${
                             consecutiveTitles === 1 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
                           }`}>
-                            <span className="text-[9px] font-mono leading-none">CHAMPION</span>
+                            <span className="text-[10px] font-mono leading-none">CHAMPION</span>
                             <span className="text-[10px] mt-0.5">1 Crown (-{(hasInfrastructureImmunity ? 0 : hasMoraleImmunity ? 0.25 : 0.5).toFixed(1)})</span>
                           </div>
                           <div className={`p-1.5 rounded-lg border text-center flex flex-col items-center justify-center ${
                             consecutiveTitles > 1 ? 'bg-white/[0.06] border-white/[0.1] text-zinc-200 font-medium' : 'bg-black/30 border-white/[0.04] text-zinc-500'
                           }`}>
-                            <span className="text-[9px] font-mono leading-none">DYNASTY</span>
+                            <span className="text-[10px] font-mono leading-none">DYNASTY</span>
                             <span className="text-[10px] mt-0.5">{consecutiveTitles} Titles (-{effectiveDynastyTax.toFixed(1)})</span>
                           </div>
                         </div>
@@ -2284,8 +2306,20 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                       </div>
                       <div className="flex justify-between items-center text-[11px]">
                         <span className="text-zinc-400">{t('Boardroom Scrutiny:', 'Vorstandsdruck:')}</span>
-                        <span className="font-medium text-zinc-300">
-                          {consecutiveTitles > 0 ? t('Zero tolerance for dropped points', 'Keine Toleranz für Ausrutscher') : (state.tenureYears || 1) >= 4 ? t('Silverware expectation elevated', 'Hohe Titelerwartung') : t('Standard confidence', 'Stabiles Vertrauen')}
+                        <span className="font-medium text-zinc-300 tabular-nums">
+                          {(state.mediaPressure ?? 15) >= 70
+                            ? t(`Under Siege (${Math.round(state.mediaPressure ?? 15)}/100 Press)`, `Unter Beschuss (${Math.round(state.mediaPressure ?? 15)}/100 Presse)`)
+                            : consecutiveTitles > 0
+                            ? t('Zero tolerance for dropped points', 'Keine Toleranz für Ausrutscher')
+                            : (state.tenureYears || 1) >= 4
+                            ? t('Silverware expectation elevated', 'Hohe Titelerwartung')
+                            : t('Standard confidence', 'Stabiles Vertrauen')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-zinc-400">{t('Media Pressure:', 'Medien-Druck:')}</span>
+                        <span className="font-mono font-medium text-zinc-200 tabular-nums">
+                          {Math.round(state.mediaPressure ?? 15)}/100
                         </span>
                       </div>
                     </div>
@@ -2395,7 +2429,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                                     </span>
                                   </div>
                                 </div>
-                                <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded border shrink-0 ${
+                                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border shrink-0 ${
                                   isUserWinner
                                     ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
                                     : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
@@ -2490,7 +2524,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                                     </span>
                                   </div>
                                 </div>
-                                <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded border shrink-0 ${badgeClass}`}>
+                                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded border shrink-0 ${badgeClass}`}>
                                   {badgeLabel}
                                 </span>
                               </div>
@@ -2523,7 +2557,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="flex flex-col items-center justify-center w-12 py-1 px-2 rounded-lg bg-black/40 border border-white/10 shrink-0">
-                              <span className="text-[8px] text-zinc-400 font-mono uppercase">Season</span>
+                              <span className="text-[10px] text-zinc-400 font-mono uppercase">Season</span>
                               <span className="text-xs font-semibold text-white tabular-nums">{h.year}</span>
                             </div>
 
@@ -2533,7 +2567,7 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                                   {h.clubName}
                                 </span>
                                 {isCurrentReview && (
-                                  <span className="px-1.5 py-0.2 rounded bg-white/[0.04] text-zinc-300 border border-white/[0.08] text-[9px] font-medium uppercase">
+                                  <span className="px-1.5 py-0.2 rounded bg-white/[0.04] text-zinc-300 border border-white/[0.08] text-[10px] font-medium uppercase">
                                     Current
                                   </span>
                                 )}
@@ -2586,19 +2620,17 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.15 }}
-                  className="flex-1 h-full min-h-[460px] rounded-xl overflow-hidden border border-white/[0.05] bg-black/40 relative flex flex-col"
+                  className="flex-1 min-h-0 w-full rounded-xl overflow-hidden border border-white/[0.05] bg-black/40 flex flex-col"
                 >
-                  <div className="absolute inset-0 w-full h-full overflow-hidden flex flex-col">
-                    <LeagueTableModal 
-                      state={state} 
-                      targetTier={(state.history || []).find(h => h.year === selectedYearForTable)?.tier || seasonData.tier} 
-                      targetYear={selectedYearForTable}
-                      clubsDb={clubsDb} 
-                      lang={lang} 
-                      onClose={() => {}} 
-                      embedded={true} 
-                    />
-                  </div>
+                  <LeagueTableModal 
+                    state={state} 
+                    targetTier={(state.history || []).find(h => h.year === selectedYearForTable)?.tier || seasonData.tier} 
+                    targetYear={selectedYearForTable}
+                    clubsDb={clubsDb} 
+                    lang={lang} 
+                    onClose={() => {}} 
+                    embedded={true} 
+                  />
                 </motion.div>
               ) : null}
             </AnimatePresence>
@@ -2658,10 +2690,10 @@ export const SeasonFinishModal: React.FC<SeasonFinishModalProps> = React.memo(({
             }
 
             return (
-              <div className="shrink-0 px-3.5 sm:px-5 py-2.5 bg-[#0e0f16] border-t border-white/[0.05] flex items-center justify-between gap-3 text-xs">
+              <div className={`shrink-0 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-[#0e0f16] border-t border-white/[0.05] ${activeTab === 'table' ? 'hidden sm:flex' : 'flex'} items-center justify-between gap-3 text-xs`}>
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className={`px-2 py-0.5 rounded-md border text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5 shrink-0 ${hookBadgeColor}`}>
-                    <i className={`fas ${hookIcon} text-[9px]`} />
+                    <i className={`fas ${hookIcon} text-[10px]`} />
                     <span>{hookTitle}</span>
                   </div>
                   <span className="text-zinc-300 text-[11px] sm:text-xs font-normal truncate">

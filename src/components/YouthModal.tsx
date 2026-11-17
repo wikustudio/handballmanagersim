@@ -324,7 +324,7 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                 <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 leading-none">
                   {t(`ACADEMY LEVEL ${academyLvl}/5`, `AKADEMIE STUFE ${academyLvl}/5`)}
                 </span>
-                <div className="flex items-center gap-0.5 text-[9px] text-amber-400">
+                <div className="flex items-center gap-0.5 text-[10px] text-amber-400">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <i key={`star-${i}`} className={`fas fa-star ${i < academyLvl ? 'text-amber-400' : 'text-white/10'}`} />
                   ))}
@@ -525,9 +525,8 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                   <div className="flex items-center justify-between gap-3">
                     {/* Left: Position Avatar + Name + 1-line status */}
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-10 h-10 rounded-xl border flex flex-col items-center justify-center shrink-0 font-mono ${badgeColors}`}>
-                        <span className="text-[10px] font-bold leading-none">{p.position || 'U19'}</span>
-                        <span className="text-[10px] font-semibold leading-none mt-1">+{rawBoost}</span>
+                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 font-mono ${badgeColors}`}>
+                        <span className="text-[11px] font-bold leading-none">{p.position || 'U19'}</span>
                       </div>
 
                       <div className="min-w-0">
@@ -535,7 +534,7 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                           <span className="font-semibold text-white text-xs sm:text-sm truncate">
                             {p.name || `Talent #${idx + 1}`}
                           </span>
-                          <span className="px-2 py-0.5 rounded text-[9px] font-medium uppercase bg-white/[0.03] border border-white/[0.06] text-zinc-300">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-white/[0.03] border border-white/[0.06] text-zinc-300">
                             {tierLabel}
                           </span>
                           {p.isForeignImport && (
@@ -550,7 +549,7 @@ export const YouthModal: React.FC<YouthModalProps> = ({
                           <span className="text-zinc-600">·</span>
                           {p.isLoanedOut ? (
                             <span className="text-sky-400 font-medium flex items-center gap-1">
-                              <i className="fas fa-repeat text-[9px]" />
+                              <i className="fas fa-repeat text-[10px]" />
                               <span>{t('On Loan (+1 OVR next season)', 'Ausgeliehen (+1 GES)')}</span>
                             </span>
                           ) : isMature ? (

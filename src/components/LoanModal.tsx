@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { GameState, Language } from '../types';
 import { formatMoney } from '../data/gameConstants';
-import { t as tr } from '../data/translations';
 import { getBaseLoanPrincipal, calculateLoanTerms } from '../utils/loanManager';
 import { useGameStore } from '../store/useGameStore';
 import { useModalDismiss } from '../utils/modalUtils';
@@ -360,7 +359,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
                                 : 'bg-black/30 border-white/5 text-zinc-300 hover:bg-white/5'
                             }`}
                           >
-                            <span className="block text-[9px] text-zinc-400">{t('1 Year Rate', '1 Jahresrate')}</span>
+                            <span className="block text-[10px] text-zinc-400">{t('1 Year Rate', '1 Jahresrate')}</span>
                             <span className="font-semibold tabular-nums">{formatMoney(activeLoan.annualPayment)}</span>
                           </button>
                           <button
@@ -372,7 +371,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
                                 : 'bg-[#10121a] border-white/[0.04] text-zinc-300 hover:bg-white/[0.04]'
                             }`}
                           >
-                            <span className="block text-[9px] text-zinc-400">25% {t('Debt', 'Schuld')}</span>
+                            <span className="block text-[10px] text-zinc-400">25% {t('Debt', 'Schuld')}</span>
                             <span className="font-semibold tabular-nums">{formatMoney(Math.round(activeLoan.remainingBalance * 0.25))}</span>
                           </button>
                           <button
@@ -384,7 +383,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
                                 : 'bg-[#10121a] border-white/[0.04] text-zinc-300 hover:bg-white/[0.04]'
                             }`}
                           >
-                            <span className="block text-[9px] text-zinc-400">50% {t('Debt', 'Schuld')}</span>
+                            <span className="block text-[10px] text-zinc-400">50% {t('Debt', 'Schuld')}</span>
                             <span className="font-semibold tabular-nums">{formatMoney(Math.round(activeLoan.remainingBalance * 0.50))}</span>
                           </button>
                           <button
@@ -397,7 +396,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
                                 : 'bg-[#10121a] border-white/[0.04] text-zinc-300 hover:bg-white/[0.04]'
                             }`}
                           >
-                            <span className="block text-[9px] text-zinc-400">{t('Max Affordable', 'Max. leistbar')}</span>
+                            <span className="block text-[10px] text-zinc-400">{t('Max Affordable', 'Max. leistbar')}</span>
                             <span className="font-semibold tabular-nums">{formatMoney(maxAffordable)}</span>
                           </button>
                         </div>
@@ -532,7 +531,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
                 <div className="bg-[#10121a] border border-purple-500/20 rounded-2xl p-4 text-xs text-purple-200/90 leading-relaxed flex flex-col gap-1.5">
                   <div className="font-semibold text-purple-300 flex items-center gap-1.5">
                     <i className="fas fa-landmark text-purple-400" />
-                    <span>Commercial Bank Loan</span>
+                    <span>Debt Consolidation &amp; Credit Line</span>
                   </div>
                   <p className="text-zinc-400 font-normal">
                     Contract an institutional bank loan over 10, 15, or 25 years. Immediate liquidity to overcome debt crises and prevent 3-year insolvency.
@@ -636,7 +635,7 @@ export const LoanModal: React.FC<LoanModalProps> = ({
                           </div>
                           <div className="text-[11px] font-semibold text-zinc-200 tabular-nums">
                             {formatMoney(opt.annualPayment)}
-                            <span className="text-[9px] text-zinc-400 font-normal">/yr</span>
+                            <span className="text-[10px] text-zinc-400 font-normal">/yr</span>
                           </div>
                           <div className="text-[10px] text-zinc-500 mt-0.5 tabular-nums font-normal">
                             {(opt.interestRate * 100).toFixed(1)}% APR

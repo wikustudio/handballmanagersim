@@ -5,21 +5,23 @@ import { Dashboard } from './components/Dashboard';
 import { CareerSummary } from './components/CareerSummary';
 import { Header } from './components/Header';
 import { AboutPage } from './components/AboutPage';
-import { motion, AnimatePresence } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { ALL_CLUBS } from './data/clubsData';
-import { MAX_SEASONS, getLeagueInfo, getMaxTier, getDomesticCupInfo, getStartingBudget, isReserveClub } from './data/gameConstants';
+import { MAX_SEASONS, getLeagueInfo, getMaxTier, getStartingBudget, isReserveClub } from './data/gameConstants';
 import { getLeagueSize } from './engine/engine';
 import { Language, ViewMode, UniverseMovement } from './types';
 import { syncOfflineScores, fetchHighscores, calculateLiveScore, getReconciledTrophies } from './utils/leaderboard';
+import { trackEvent } from './utils/analytics';
 import { ToastContainer } from './components/ToastContainer';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { ModSelectionModal } from './components/ModSelectionModal';
 import { ConsentBanner } from './components/ConsentBanner';
-import { Trophy, Globe } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import { getActiveClubs, isRealDataModActive, getCustomDb, mergeClubWithWorldState } from './utils/modManager';
 import { preloadClubAssets } from './utils/assetPreloader';
-import { initCrashReporter, openFeedbackModal } from './utils/crashReporter';
+import { initCrashReporter } from './utils/crashReporter';
 import { SEO } from './components/SEO';
+import { CourtsideNavTab } from './components/CourtsideWorkspace';
 
 const serializeTrophiesKey = (t?: any): string => {
   if (!t || typeof t !== 'object') return '';
@@ -34,6 +36,7 @@ export default function App() {
   const state = useGameStore();
   const [lang, setLang] = useState<Language>('en');
   const [viewMode, setViewMode] = useState<ViewMode>('game');
+  const [courtsideTab, setCourtsideTab] = useState<CourtsideNavTab>('overview');
   const [clubsDb, setClubsDb] = useState<any[]>(() => getActiveClubs());
   
   const [showHighscoresModal, setShowHighscoresModal] = useState(false);
@@ -666,8 +669,11 @@ export default function App() {
       if (matched) {
         const desiredLogo = isModActiveNow ? (matched.logo || state.club.logo) : undefined;
         const desiredFallbackLogo = isModActiveNow ? (matched.fallbackLogo || state.club.fallbackLogo) : undefined;
+        const sameLogo = Array.isArray(state.club.logo) || Array.isArray(desiredLogo)
+          ? JSON.stringify(state.club.logo ?? null) === JSON.stringify(desiredLogo ?? null)
+          : state.club.logo === desiredLogo;
         if (
-          state.club.logo !== desiredLogo ||
+          !sameLogo ||
           state.club.fallbackLogo !== desiredFallbackLogo ||
           (!state.club.historicContext && (matched.historicContext || matched.context))
         ) {
@@ -687,12 +693,13 @@ export default function App() {
     return () => {
       window.removeEventListener('mod-state-change', handleModChange);
     };
-  }, [state.club?.id, state.club?.name, state.club?.logo, state.updateState]);
+  }, [state.club?.id, state.club?.name, state.updateState]);
 
   const handleReset = () => {
     setInitialHydrationDone(true);
     state.resetGame();
     setViewMode('game');
+    setCourtsideTab('overview');
     setResetKey(prev => prev + 1);
   };
 
@@ -701,6 +708,7 @@ export default function App() {
   };
 
     const fetchGlobalHighscores = async () => {
+    trackEvent('leaderboard_opened');
     setLoadingHighscores(true);
     setShowHighscoresModal(true);
     
@@ -796,28 +804,55 @@ export default function App() {
     seoType = 'game';
   }
 
-  // Ensure document.title always stays in sync with the active career or onboarding state
+  const isCareerSummaryScreen = Boolean(
+    state.isCareerEnded || (!state.endlessModeActive && !state.postSeasonPending && (state.history?.length || 0) >= MAX_SEASONS)
+  );
+  const isCourtsideActive = Boolean(
+    isReadyToRender &&
+      (viewMode === 'game' || viewMode === 'about') &&
+      !isCareerSummaryScreen
+  );
+
+  // Ensure document.title and Courtside warm-light Apple canvas stay in sync
   React.useEffect(() => {
     if (typeof document === 'undefined') return;
     document.title = seoTitle;
-  }, [seoTitle, hasActiveCareer, state.club?.name, state.year]);
+    document.documentElement.classList.toggle('courtside-theme', isCourtsideActive);
+  }, [seoTitle, hasActiveCareer, state.club?.name, state.year, isCourtsideActive]);
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden text-neutral-200 font-sans selection:bg-blue-500/30 pt-12 sm:pt-16 flex flex-col">
+    <div
+      className={`min-h-screen w-full max-w-full overflow-x-hidden font-sans pt-14 sm:pt-16 flex flex-col ${
+        isCourtsideActive
+          ? 'bg-[#ECEAE4] text-[#14161D] selection:bg-[#DF642A]/20'
+          : 'text-neutral-200 selection:bg-blue-500/30'
+      }`}
+    >
       <SEO title={seoTitle} description={seoDesc} canonical={seoCanonical} type={seoType} />
       <ToastContainer state={state} />
       <Header 
-         lang={lang} 
-         viewMode={viewMode} 
-         onToggleViewMode={setViewMode} 
-         onResetGame={handleReset} 
-         hasActiveGame={!!(state.managerName && state.club && state.club.name)}
+        lang={lang} 
+        viewMode={viewMode} 
+        onToggleViewMode={setViewMode} 
+        onResetGame={handleReset} 
+        hasActiveGame={!!(state.managerName && state.club && state.club.name)}
         onShowLeaderboard={fetchGlobalHighscores}
         onOpenMods={() => setShowModSelectionModal(true)}
+        isCourtside={isCourtsideActive}
+        activeTab={courtsideTab}
+        onSelectTab={(tab) => {
+          setCourtsideTab(tab);
+          trackEvent('workspace_tab_viewed', { tab });
+        }}
       />
       
       {viewMode === 'about' ? (
-        <AboutPage lang={lang} clubsDb={clubsDb} onStartCareer={() => setViewMode('game')} />
+        <AboutPage
+          lang={lang}
+          clubsDb={clubsDb}
+          isCourtside={isCourtsideActive}
+          onStartCareer={() => setViewMode('game')}
+        />
       ) : (
         <>
           {!isReadyToRender ? (
@@ -833,7 +868,7 @@ export default function App() {
                  onShowLeaderboard={fetchGlobalHighscores} 
                />
             </div>
-          ) : (state.isCareerEnded || (!state.endlessModeActive && !state.postSeasonPending && (state.history?.length || 0) >= MAX_SEASONS)) ? (
+          ) : isCareerSummaryScreen ? (
             <CareerSummary 
                state={state} 
                lang={lang} 
@@ -842,20 +877,28 @@ export default function App() {
               onShowLeaderboard={fetchGlobalHighscores}
             />
           ) : (
-            <main className="px-3 sm:px-6 pt-2.5 sm:pt-4 pb-36 sm:pb-4 w-full max-w-[1380px] mx-auto overflow-x-hidden">
-              <Dashboard state={state} lang={lang} />
+            <main
+              className={`px-2.5 sm:px-6 pt-2 sm:pt-4 ${
+                isCourtsideActive ? 'pb-6 sm:pb-6' : 'pb-36 sm:pb-4'
+              } w-full max-w-[1440px] mx-auto overflow-x-hidden`}
+            >
+              <Dashboard
+                state={state}
+                lang={lang}
+                activeTab={courtsideTab}
+                onSelectTab={(tab) => {
+                  setCourtsideTab(tab);
+                  trackEvent('workspace_tab_viewed', { tab });
+                }}
+              />
             </main>
           )}
         </>
       )}
 
       <ConsentBanner
-        hasBottomDock={Boolean(
-          isReadyToRender &&
-            hasActiveCareer &&
-            viewMode !== 'about' &&
-            !(state.isCareerEnded || (!state.endlessModeActive && !state.postSeasonPending && (state.history?.length || 0) >= MAX_SEASONS))
-        )}
+        isCourtside={isCourtsideActive}
+        hasBottomDock={false}
       />
 
       {/* HighscoreModal */}
@@ -864,6 +907,8 @@ export default function App() {
           <LeaderboardModal
             state={state}
             lang={lang}
+            isCourtside={isCourtsideActive}
+            initialTab="leaderboard"
             onReset={() => {
               setShowHighscoresModal(false);
               handleReset();

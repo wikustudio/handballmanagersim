@@ -418,7 +418,7 @@ export const PhilosophyModal: React.FC<PhilosophyModalProps> = ({
                         {/* Tactical Advantage */}
                         <div className="bg-white/[0.02] rounded-xl p-3 border border-white/[0.04] mb-3">
                           <div className="text-[10px] text-zinc-400 font-medium flex items-center gap-1.5 mb-1 uppercase tracking-wider">
-                            <i className="fas fa-bolt text-[9px] text-zinc-500" />
+                            <i className="fas fa-bolt text-[10px] text-zinc-400" />
                             <span>Tactical Advantage</span>
                           </div>
                           <p className="text-xs text-zinc-300 font-normal leading-relaxed">
@@ -491,129 +491,7 @@ export const PhilosophyModal: React.FC<PhilosophyModalProps> = ({
                   </div>
                 )}
 
-                {/* ============================================================== */}
-                {/* MINIMALIST 4-STEP REBUILD DIRECTIVES NAV & STATUS STRIP        */}
-                {/* ============================================================== */}
-                {(() => {
-                  const clubOvr = state.club?.baseOvr || 70;
-                  const squadSize = state.club?.squadSize || 18;
-                  const isEligibleSquad = clubOvr >= 82 && squadSize >= 15 && (state.year - (state.lastGenerationalRebuildYear || 0) >= 5);
-                  const isSquadTransitionActive = (state.rebuildWageDiscountSeasons || 0) > 0;
-                  const treasury = state.budget;
-                  const activeLoan = state.activeLoan;
-                  const loanBalance = activeLoan ? (activeLoan.remainingBalance ?? (activeLoan as any).principalRemaining ?? 0) : 0;
-                  const currentCoachArchetype = state.headCoachArchetype || 'Standard';
-                  const academyLevel = state.club?.academyLevel || 1;
-                  const medicalLevel = state.club?.medicalLevel || 1;
-                  const hasImmunity = academyLevel >= 5 || medicalLevel >= 5;
-
-                  const stepCards = [
-                    {
-                      id: 'squad' as const,
-                      stepNum: '01',
-                      category: t('Squad', 'Kader'),
-                      title: t('Squad Cycle', 'Generationswechsel'),
-                      icon: 'fa-users-gear',
-                      accentText: 'text-emerald-400',
-                      dotColor: 'bg-emerald-400',
-                      status: isSquadTransitionActive
-                        ? `${state.rebuildWageDiscountSeasons}y ${t('Active', 'Aktiv')}`
-                        : `${clubOvr} OVR · ${isEligibleSquad ? t('Eligible', 'Möglich') : t('Interval', 'Intervall')}`,
-                      isPositive: isSquadTransitionActive || isEligibleSquad,
-                    },
-                    {
-                      id: 'finance' as const,
-                      stepNum: '02',
-                      category: t('Finance', 'Finanzen'),
-                      title: t('Finance & Debt', 'Finanz-Sanierung'),
-                      icon: 'fa-scale-balanced',
-                      accentText: 'text-sky-400',
-                      dotColor: 'bg-sky-400',
-                      status: `${formatMoney(treasury)} · ${(loanBalance > 0 || treasury < 0) ? t('In Debt', 'Verschuldet') : t('Debt Free', 'Schuldenfrei')}`,
-                      isPositive: treasury >= 10000000 || (loanBalance === 0 && treasury >= 0),
-                    },
-                    {
-                      id: 'staff' as const,
-                      stepNum: '03',
-                      category: t('Leadership', 'Führung'),
-                      title: t('Leadership Pivot', 'Führungsprofil'),
-                      icon: 'fa-user-gear',
-                      accentText: 'text-purple-400',
-                      dotColor: 'bg-purple-400',
-                      status: currentCoachArchetype,
-                      isPositive: currentCoachArchetype !== 'Standard',
-                    },
-                    {
-                      id: 'infra' as const,
-                      stepNum: '04',
-                      category: t('Facilities', 'Anlagen'),
-                      title: t('Infrastructure', 'Infrastruktur'),
-                      icon: 'fa-landmark-dome',
-                      accentText: 'text-amber-400',
-                      dotColor: 'bg-amber-400',
-                      status: hasImmunity
-                        ? t('Immunity Shield', 'Dynastie-Schutz')
-                        : `Lvl ${academyLevel}/${medicalLevel}`,
-                      isPositive: hasImmunity,
-                    },
-                  ];
-
-                  return (
-                    <div className="bg-[#14151e] border border-white/[0.04] rounded-2xl p-3 sm:p-4 flex flex-col gap-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4 px-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                          <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
-                            {t('4-Pillar Rebuild Protocol', '4-Säulen Rebuild-Protokoll')}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-zinc-500 font-normal">
-                          {t('Select a directive below to inspect parameters', 'Wähle eine Direktive zum Bearbeiten')}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                        {stepCards.map((card) => {
-                          const isActive = expandedRebuild === card.id;
-                          return (
-                            <button
-                              key={card.id}
-                              type="button"
-                              onClick={() => setExpandedRebuild(isActive ? null : card.id)}
-                              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
-                                isActive
-                                  ? 'bg-white/[0.04] border-white/[0.12] shadow-sm'
-                                  : 'bg-[#181924]/60 hover:bg-[#181924] border-white/[0.03] hover:border-white/[0.08]'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`text-[10px] font-semibold tabular-nums ${card.accentText}`}>
-                                    {card.stepNum}
-                                  </span>
-                                  <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
-                                    {card.category}
-                                  </span>
-                                </div>
-                                <i className={`fas ${card.icon} text-[11px] ${isActive ? card.accentText : 'text-zinc-600'}`} />
-                              </div>
-
-                              <div>
-                                <div className="text-xs font-medium text-white tracking-tight truncate">
-                                  {card.title}
-                                </div>
-                                <div className="text-[11px] text-zinc-400 font-normal tabular-nums flex items-center gap-1.5 mt-0.5 truncate">
-                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${card.dotColor}`} />
-                                  <span className="truncate">{card.status}</span>
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* 4-Pillar Collapsible Rebuild Directives */}
 
                 {/* ============================================================== */}
                 {/* PILLAR 1: GENERATIONAL SQUAD CYCLE                             */}
@@ -1100,7 +978,7 @@ export const PhilosophyModal: React.FC<PhilosophyModalProps> = ({
                               </span>
                               <div className="flex items-center gap-2">
                                 {state.lastDirectorChangeYear === state.year && (
-                                  <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-black/40 border border-white/[0.08] text-amber-300 font-medium">
+                                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/40 border border-white/[0.08] text-amber-300 font-medium">
                                     🔒 {t('Season Locked', 'Saisonsperre')}
                                   </span>
                                 )}

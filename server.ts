@@ -2,9 +2,56 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 const FEEDBACK_RECIPIENT_EMAIL = process.env.FEEDBACK_EMAIL || 'kuehnewilly@gmail.com';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://wzoalrpjjxacjcxyveln.supabase.co';
+const SUPABASE_ANON_KEY =
+  process.env.SUPABASE_ANON_KEY || 'sb_publishable_VObfts_vuIo_Dqh3Nc_UIQ_QAgotrSb';
+
+async function saveFeedbackToSupabase(report: {
+  reportId: string;
+  type: string;
+  title: string;
+  description: string;
+  stepsToReproduce?: string;
+  userContact?: string;
+  autoCaptured?: boolean;
+  crashReport?: any;
+  recentErrors?: any[];
+  gameStateSnapshot?: any;
+}): Promise<boolean> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/handball_feedback`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        report_id: report.reportId,
+        category: report.type,
+        title: report.title,
+        description: report.description,
+        steps_to_reproduce: report.stepsToReproduce || null,
+        user_contact: report.userContact || null,
+        auto_captured: Boolean(report.autoCaptured),
+        crash_message: report.crashReport?.message || null,
+        crash_stack: report.crashReport?.stack || report.crashReport?.componentStack || null,
+        game_state: {
+          snapshot: report.gameStateSnapshot || null,
+          crashReport: report.crashReport || null,
+          recentErrors: report.recentErrors || [],
+        },
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 async function dispatchFeedbackEmail(report: {
   reportId: string;
@@ -123,7 +170,7 @@ async function dispatchFeedbackEmail(report: {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: '1mb' }));
 
@@ -140,6 +187,9 @@ async function startServer() {
         crashReport = null,
         recentErrors = [],
         gameStateSnapshot = null,
+        reportId: incomingReportId,
+        submittedAt: incomingSubmittedAt,
+        skipSupabaseInsert = false,
       } = req.body || {};
 
       const cleanTitle = String(title || '').trim().slice(0, 200) || 'Untitled Report';
@@ -149,11 +199,13 @@ async function startServer() {
         return res.status(400).json({ error: 'Report title, description, or crash dump is required.' });
       }
 
-      const reportId = `HMS-${Date.now().toString(36).toUpperCase()}-${Math.random()
-        .toString(36)
-        .substring(2, 6)
-        .toUpperCase()}`;
-      const submittedAt = new Date().toISOString();
+      const reportId =
+        incomingReportId ||
+        `HMS-${Date.now().toString(36).toUpperCase()}-${Math.random()
+          .toString(36)
+          .substring(2, 6)
+          .toUpperCase()}`;
+      const submittedAt = incomingSubmittedAt || new Date().toISOString();
 
       const reportRecord = {
         reportId,
@@ -177,13 +229,20 @@ async function startServer() {
         console.warn('Could not write feedback log file:', fsErr);
       }
 
-      const dispatchResult = await dispatchFeedbackEmail(reportRecord);
+      const [supabaseSaved, dispatchResult] = await Promise.all([
+        skipSupabaseInsert ? Promise.resolve(true) : saveFeedbackToSupabase(reportRecord),
+        dispatchFeedbackEmail(reportRecord),
+      ]);
 
       return res.json({
         ok: true,
         reportId,
         submittedAt,
-        status: dispatchResult.delivered ? 'dispatched' : 'recorded',
+        status: dispatchResult.delivered
+          ? 'dispatched'
+          : supabaseSaved
+          ? 'saved_to_supabase'
+          : 'recorded',
       });
     } catch (error: any) {
       console.error('Error processing feedback report:', error);
@@ -213,8 +272,15 @@ async function startServer() {
         morale
       } = req.body;
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      
+      const ai = new GoogleGenAI({
+        apiKey: process.env.GEMINI_API_KEY,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
+
       const prompt = `You are an elite, slightly dramatic sports journalist (like Fabrizio Romano or a top pundit) writing a final career retrospective for a retiring Handball Manager named ${managerName}.
       
       Here are the manager's career stats:
@@ -237,14 +303,18 @@ async function startServer() {
       Do NOT use bullet points or markdown. Keep it to a single paragraph. Make it sound like a real sports journalist.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-4-hydrogen',
         contents: prompt,
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+        },
       });
 
-      res.json({ text: response.text });
+      res.json({ text: response.text ?? '' });
     } catch (error: any) {
       console.error('Error generating summary:', error);
-      res.status(500).json({ error: 'Failed to generate summary' });
+      const status = typeof error?.status === 'number' && error.status >= 400 && error.status < 600 ? error.status : 500;
+      res.status(status).json({ error: error?.message || 'Failed to generate summary' });
     }
   });
 

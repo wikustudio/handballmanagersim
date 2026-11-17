@@ -50,14 +50,10 @@ const isLightHex = (hex: string) => {
 
 const getShapeStyles = (hash: number, _color: string) => {
   const shapes = [
-    'rounded-full', // Circle
-    'rounded-[25%]', // Squircle
-    'rounded-[10px_20px_10px_20px]', // Alternating corners
-    'rounded-tl-3xl rounded-br-3xl rounded-tr-sm rounded-bl-sm', // Leaf/Shield
-    'rounded-t-[30%] rounded-b-md', // Shield-like
-    'rounded-sm rotate-45', // Diamond (needs inner counter-rotation)
-    'rounded-[15%_35%_50%_25%]', // Asymmetrical Abstract
-    'rounded-[50%_50%_10%_10%]', // Arch shape
+    'rounded-full', // Classic roundel
+    'rounded-xl', // Modern squircle crest
+    'rounded-t-lg rounded-b-[42%]', // Heraldic shield
+    'rounded-[28%]', // Soft stadium badge
   ];
   return shapes[hash % shapes.length];
 };
@@ -364,8 +360,9 @@ export const ClubLogo: React.FC<ClubLogoProps & { club?: any; clubName?: string;
     const isFull = displayClass.includes('w-full') || displayClass.includes('h-full');
     return (
       <div 
+        data-club-logo="true"
         className={`relative inline-flex items-center justify-center shrink-0 select-none ${isFull ? 'w-full h-full' : ''} ${
-          needsContrastContainer ? 'bg-[#0e1017]/90 rounded-lg p-0.5 border border-white/10 shadow-sm' : ''
+          needsContrastContainer ? 'bg-[#18191F] rounded-lg p-0.5 border border-black/10 shadow-xs' : ''
         }`} 
         aria-hidden={alt === '' ? true : undefined}
       >
@@ -398,8 +395,7 @@ export const ClubLogo: React.FC<ClubLogoProps & { club?: any; clubName?: string;
   if (fallbackDisplayClass.includes('w-20') || fallbackDisplayClass.includes('w-24') || fallbackDisplayClass.includes('w-32')) sizeClass = 'text-3xl';
   if (fallbackDisplayClass.includes('w-48') || fallbackDisplayClass.includes('w-64')) sizeClass = 'text-5xl';
   
-  const fontStyles = ['font-sans font-black tracking-tighter', 'font-serif font-bold tracking-widest', 'font-mono font-bold'];
-  const fontStyle = fontStyles[hash % fontStyles.length];
+  const fontStyle = 'font-sans font-extrabold tracking-tight';
   
   const resolvedColor2 = propColor2 || club?.color2 || matchedClub?.color2;
   const shapeClass = getShapeStyles(hash, finalColor);
@@ -407,22 +403,18 @@ export const ClubLogo: React.FC<ClubLogoProps & { club?: any; clubName?: string;
     ? { background: 'linear-gradient(135deg, #181922 0%, #0d0e13 100%)' }
     : { background: getPatternStyles(hash, finalColor, resolvedColor2) };
   
-  const isDiamond = shapeClass.includes('rotate-45');
-  const borderClass = isLight ? 'border border-amber-400/50 shadow-md' : 'border border-white/20';
+  const borderClass = isLight ? 'border border-amber-400/50 shadow-xs' : 'border border-black/15 shadow-xs';
 
   return (
-    <div className="relative inline-block shrink-0 select-none" aria-hidden={alt === '' ? true : undefined}>
+    <div data-club-logo="true" className="relative inline-block shrink-0 select-none" aria-hidden={alt === '' ? true : undefined}>
       <div
-        className={`flex items-center justify-center shrink-0 shadow-inner ${fallbackDisplayClass} ${shapeClass} overflow-hidden ${borderClass} relative group`}
+        className={`flex items-center justify-center shrink-0 ${fallbackDisplayClass} ${shapeClass} overflow-hidden ${borderClass} relative group`}
         style={patternStyle}
       >
-        <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/20 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/15 pointer-events-none" />
         <span 
-          className={`${fontStyle} ${sizeClass} uppercase z-10 drop-shadow-md transition-transform group-hover:scale-110`}
-          style={{ 
-            color: textColor,
-            transform: isDiamond ? 'rotate(-45deg)' : 'none' 
-          }}
+          className={`${fontStyle} ${sizeClass} uppercase z-10 drop-shadow-xs transition-transform group-hover:scale-105`}
+          style={{ color: textColor }}
         >
           {initials}
         </span>

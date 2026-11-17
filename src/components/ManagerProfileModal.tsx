@@ -80,7 +80,7 @@ export const ManagerProfileModal: React.FC<ManagerProfileModalProps> = ({ state,
               </span>
             </div>
             <p className="text-zinc-400 font-normal text-xs mt-0.5">
-              {Number.isInteger(seasons) ? seasons : seasons.toFixed(1)} seasons managed · {wins} wins · {trophies} trophies · <span className="text-amber-400 font-semibold tabular-nums">{liveScore.toLocaleString()} pts</span>
+              {state.club.name} · {trophies} {trophies === 1 ? 'Trophy' : 'Trophies'} · <span className="font-semibold tabular-nums">{winRate}%</span> Win Rate
             </p>
           </div>
 
@@ -222,11 +222,11 @@ export const ManagerProfileModal: React.FC<ManagerProfileModalProps> = ({ state,
                         </div>
                         <div className="text-lg font-semibold text-amber-400 tabular-nums">
                           <CountUp value={liveScore} formatValue={(v) => v.toLocaleString()} duration={900} />
-                          <span className="text-xs font-medium text-amber-400/70 ml-1">pts</span>
+                          <span className="text-xs font-medium text-amber-400 ml-1">pts</span>
                         </div>
                       </div>
                     </div>
-                    <span className="text-xs font-medium text-amber-300/80 group-hover:text-amber-200 flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs font-medium text-amber-300 group-hover:text-amber-200 flex items-center gap-1.5 shrink-0">
                       <span>{isDe ? 'Rangliste ansehen' : 'View Leaderboard'}</span>
                       <i className="fas fa-chevron-right text-[10px]" />
                     </span>
@@ -416,7 +416,7 @@ export const ManagerProfileModal: React.FC<ManagerProfileModalProps> = ({ state,
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className="font-semibold text-white text-base truncate">{clubName}</span>
                                   {isCurrentClub && (
-                                    <span className="text-[9px] font-medium bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.2 rounded shrink-0 uppercase tracking-wider">
+                                    <span className="text-[10px] font-medium bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider">
                                       {isDe ? 'Aktuell' : 'Current'}
                                     </span>
                                   )}
@@ -442,19 +442,19 @@ export const ManagerProfileModal: React.FC<ManagerProfileModalProps> = ({ state,
                           {/* Quick Stats Grid */}
                           <div className="grid grid-cols-4 gap-1.5 bg-black/35 rounded-xl p-2.5 border border-white/5 text-center mb-3">
                             <div>
-                              <div className="text-[9px] text-zinc-400 font-medium uppercase">{isDe ? 'Siege' : 'Wins'}</div>
+                              <div className="text-[10px] text-zinc-400 font-medium uppercase">{isDe ? 'Siege' : 'Wins'}</div>
                               <div className="text-xs sm:text-sm font-semibold text-emerald-400 tabular-nums">{clubWins}</div>
                             </div>
                             <div>
-                              <div className="text-[9px] text-zinc-400 font-medium uppercase">{isDe ? 'Remis' : 'Draws'}</div>
+                              <div className="text-[10px] text-zinc-400 font-medium uppercase">{isDe ? 'Remis' : 'Draws'}</div>
                               <div className="text-xs sm:text-sm font-semibold text-zinc-300 tabular-nums">{clubDraws}</div>
                             </div>
                             <div>
-                              <div className="text-[9px] text-zinc-400 font-medium uppercase">{isDe ? 'Niederl.' : 'Losses'}</div>
+                              <div className="text-[10px] text-zinc-400 font-medium uppercase">{isDe ? 'Niederl.' : 'Losses'}</div>
                               <div className="text-xs sm:text-sm font-semibold text-rose-400 tabular-nums">{clubLosses}</div>
                             </div>
                             <div>
-                              <div className="text-[9px] text-zinc-400 font-medium uppercase">{isDe ? 'Quote' : 'Win %'}</div>
+                              <div className="text-[10px] text-zinc-400 font-medium uppercase">{isDe ? 'Quote' : 'Win %'}</div>
                               <div className="text-xs sm:text-sm font-semibold text-sky-400 tabular-nums">{clubWinRate}%</div>
                             </div>
                           </div>
@@ -463,8 +463,8 @@ export const ManagerProfileModal: React.FC<ManagerProfileModalProps> = ({ state,
                         {/* Enhanced Trophy Cabinet with Quantities */}
                         <div className="pt-2 border-t border-white/[0.06]">
                           <div className="text-[10px] font-medium uppercase tracking-wider text-zinc-400 mb-2 flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 text-amber-400/90 font-medium">
-                              <i className="fas fa-trophy text-[9px]" />
+                            <span className="flex items-center gap-1.5 text-amber-400 font-medium">
+                              <i className="fas fa-trophy text-[10px]" />
                               <span>{isDe ? 'Trophäenschrank' : 'Trophy Cabinet'}</span>
                             </span>
                             <span className="text-[10px] font-normal text-zinc-400">

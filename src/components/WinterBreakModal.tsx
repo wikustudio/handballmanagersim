@@ -12,6 +12,7 @@ import { BroadcastLogo } from './BroadcastLogo';
 import { CountUp } from './CountUp';
 import { ClubLogo } from './ClubLogo';
 import { useModalScrollLock } from '../utils/modalUtils';
+import { getPressureTier } from '../engine/pressureEngine';
 
 interface WinterBreakModalProps {
   state: GameState;
@@ -24,6 +25,7 @@ interface WinterBreakModalProps {
   onMakeTransfers: () => void;
   onTeamBonding: () => void;
   onRevampSystem: () => void;
+  onOpenPressRoom?: () => void;
 }
 
 interface ActiveCompetition {
@@ -47,7 +49,8 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
   onReturnToDashboard,
   onMakeTransfers,
   onTeamBonding,
-  onRevampSystem
+  onRevampSystem,
+  onOpenPressRoom,
 }) => {
   useModalScrollLock(true);
   const [tournamentName, setTournamentName] = useState('');
@@ -248,19 +251,10 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
   const targetPos = state.boardTargetPos || Math.floor(numLeagueTeams / 2);
   const ovrVsAvg = (state.club.baseOvr || 60) - leagueAvg;
 
-  // Build active competitions
+  // Build active cup competitions (league standing is already shown in the top summary)
   const activeCompetitions: ActiveCompetition[] = [];
 
   const leagueInfo = getLeagueInfo(tier, country);
-  activeCompetitions.push({
-    id: 'league',
-    name: leagueInfo.name,
-    icon: 'fa-trophy',
-    logo: leagueInfo.logo,
-    status: `#${midSeasonPos} of ${numLeagueTeams}`,
-    subtext: `${t(lang, 'Target', 'Ziel')}: Top ${targetPos}`,
-    accentColor: 'text-sky-300 bg-sky-400/15 border-sky-300/30',
-  });
 
   const cupRuns = state.cupRunResults || [];
   const domesticExit = cupRuns.find(
@@ -334,6 +328,14 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
     ? seasonOvrLogs.reduce((sum, h) => sum + h.change, 0)
     : (typeof state.startOfSeasonOvr === 'number' ? state.club.baseOvr - state.startOfSeasonOvr : 0);
 
+  const handleDismissToDashboard = () => {
+    if (onReturnToDashboard) {
+      onReturnToDashboard();
+    } else {
+      onContinue();
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isSubModalOpen) return;
@@ -341,12 +343,7 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
       if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable)) {
         return;
       }
-      if (e.key === ' ' || e.code === 'Space') {
-        e.preventDefault();
-        onContinue();
-        return;
-      }
-      if (e.key === 'Escape') {
+      if (e.key === ' ' || e.code === 'Space' || e.key === 'Enter' || e.key === 'Escape') {
         e.preventDefault();
         if (onReturnToDashboard) {
           onReturnToDashboard();
@@ -393,12 +390,8 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
         {/* Media Sponsor / Broadcast Partner Suite Bar */}
         <div className="w-full px-5 py-2.5 bg-white/[0.03] border-b border-white/[0.08] backdrop-blur-2xl flex items-center justify-between gap-3 relative z-10 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-400 shadow-[0_0_8px_#38bdf8]" />
-            </span>
             <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-zinc-400 truncate">
-              {t(lang, 'Winter Break Summary by', 'Winterpausen-Bilanz von')}
+              {t(lang, 'Winter Break · Presented by', 'Winterpause · Präsentiert von')}
             </span>
           </div>
 
@@ -408,15 +401,15 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
         </div>
 
         {/* Hero Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08] shrink-0 relative z-10">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.08] shrink-0 relative z-10">
           <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-2xl bg-white/[0.06] text-sky-300 flex items-center justify-center text-base border border-white/[0.12] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-white/[0.06] text-sky-300 flex items-center justify-center text-base border border-white/[0.12] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] shrink-0">
               <i className="fas fa-snowflake" />
             </div>
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 leading-none">
-                  {t(lang, `SEASON ${state.year} · MID-SEASON REVIEW`, `SAISON ${state.year} · HALBZEIT-BILANZ`)}
+                  {t(lang, `SEASON ${state.year} · MID-SEASON`, `SAISON ${state.year} · HALBZEIT`)}
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-tight truncate">
@@ -448,8 +441,8 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
               <button
                 type="button"
                 onClick={onReturnToDashboard}
-                aria-label="Return to Club Dashboard"
-                title={t(lang, 'Return to Club Dashboard (Esc)', 'Zum Vereins-Dashboard (Esc)')}
+                aria-label="Close"
+                title={t(lang, 'Close (Esc)', 'Schließen (Esc)')}
                 className="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer active:scale-95 shrink-0"
               >
                 <i className="fas fa-xmark text-sm" />
@@ -459,7 +452,7 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
         </div>
 
         {/* Scrollable Body */}
-        <div className="p-5 space-y-3.5 overflow-y-auto custom-scrollbar flex-1 min-h-0 relative z-10">
+        <div className="p-4 sm:p-5 space-y-3 overflow-y-auto custom-scrollbar flex-1 min-h-0 relative z-10">
           {/* 1. Performance & League Context Bento (3 Frosted Columns) */}
           <div className="bg-white/[0.035] backdrop-blur-2xl border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Column 1: Standing out of Total Teams + Board Target */}
@@ -574,59 +567,59 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
             </div>
           </div>
 
-          {/* 2. Active Competitions Strip */}
-          <div className={`grid gap-2.5 ${activeCompetitions.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : activeCompetitions.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            {activeCompetitions.map((comp) => (
-              <div
-                key={comp.id}
-                className={`bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] rounded-2xl p-3 flex items-center gap-3 relative overflow-hidden ${
-                  comp.isEliminated ? 'opacity-60' : ''
-                }`}
-              >
-                <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 overflow-hidden shadow-sm ${comp.accentColor}`}>
-                  {comp.logo ? (
-                    <img
-                      src={comp.logo}
-                      alt={comp.name}
-                      className="w-5 h-5 object-contain"
-                      onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                    />
-                  ) : (
-                    <i className={`fas ${comp.icon} text-xs`} />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-white truncate">
-                    {comp.name}
+          {/* 2. Active Cup Competitions (only shown when participating) */}
+          {activeCompetitions.length > 0 && (
+            <div className={`grid gap-2.5 ${activeCompetitions.length >= 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {activeCompetitions.map((comp) => (
+                <div
+                  key={comp.id}
+                  className={`bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] rounded-2xl px-3.5 py-2.5 flex items-center gap-3 relative overflow-hidden ${
+                    comp.isEliminated ? 'opacity-60' : ''
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 overflow-hidden shadow-sm ${comp.accentColor}`}>
+                    {comp.logo ? (
+                      <img
+                        src={comp.logo}
+                        alt={comp.name}
+                        className="w-5 h-5 object-contain"
+                        onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <i className={`fas ${comp.icon} text-xs`} />
+                    )}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[11px] mt-0.5 truncate">
-                    <span className={`font-semibold tabular-nums ${comp.isEliminated ? 'text-rose-300' : 'text-zinc-200'}`}>
-                      {comp.status}
-                    </span>
-                    <span className="text-zinc-600">·</span>
-                    <span className="text-zinc-400 truncate">{comp.subtext}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold text-white truncate">
+                      {comp.name}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] mt-0.5 truncate">
+                      <span className={`font-semibold tabular-nums ${comp.isEliminated ? 'text-rose-300' : 'text-zinc-200'}`}>
+                        {comp.status}
+                      </span>
+                      <span className="text-zinc-600">·</span>
+                      <span className="text-zinc-400 truncate">{comp.subtext}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* 3. Broadcast Studio Report: International Window & Winter Break Impact */}
-          <div className="bg-white/[0.035] backdrop-blur-2xl border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] rounded-2xl p-4 flex flex-col gap-2.5 relative overflow-hidden">
+          <div className="bg-white/[0.035] backdrop-blur-2xl border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] rounded-2xl p-3.5 flex flex-col gap-2 relative overflow-hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/[0.1] text-sky-300 flex items-center justify-center text-xs shrink-0">
                   <i className={`fas ${playersInvolved > 0 ? 'fa-earth-europe' : 'fa-dumbbell'}`} />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-400">
-                      {t(lang, 'WINTER BREAK REPORT', 'WINTERPAUSEN-ANALYSE')}
-                    </span>
-                  </div>
+                  <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-zinc-400 block">
+                    {playersInvolved > 0 ? t(lang, 'INTERNATIONAL BREAK', 'LÄNDERSPIELPAUSE') : t(lang, 'WINTER TRAINING', 'WINTER-TRAINING')}
+                  </span>
                   <div className="flex items-center gap-2 flex-wrap mt-0.5">
                     <span className="text-xs sm:text-sm font-bold text-white">
-                      {tournamentName || t(lang, 'Winter Break Report', 'Winterpausen-Bericht')}
+                      {tournamentName || t(lang, 'Winter Training Block', 'Winter-Trainingsblock')}
                     </span>
                     <span className="text-[11px] font-mono text-zinc-300 bg-white/[0.05] border border-white/[0.08] px-2 py-0.5 rounded-md tabular-nums">
                       {playersInvolved > 0
@@ -661,14 +654,54 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
             )}
           </div>
 
+          {/* 3B. Unified Media Pressure Summary */}
+          {(() => {
+            const mediaVal = Math.min(100, Math.max(0, Math.round(state.mediaPressure ?? 15)));
+            const tierMeta = getPressureTier(mediaVal);
+            const toneColor =
+              tierMeta.tone === 'rose'
+                ? 'text-rose-300 border-rose-500/30 bg-rose-500/[0.06]'
+                : tierMeta.tone === 'orange'
+                ? 'text-orange-300 border-orange-500/30 bg-orange-500/[0.06]'
+                : tierMeta.tone === 'amber'
+                ? 'text-amber-300 border-amber-500/25 bg-amber-500/[0.05]'
+                : mediaVal >= 35
+                ? 'text-sky-300 border-sky-500/25 bg-sky-500/[0.05]'
+                : 'text-zinc-300 border-white/[0.08] bg-white/[0.02]';
+            return (
+              <div className={`rounded-2xl p-3.5 border ${toneColor} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
+                    <span>
+                      {t(lang, 'MEDIA PRESSURE', 'MEDIEN-DRUCK')} · {t(lang, tierMeta.label, tierMeta.labelDe)}
+                    </span>
+                    <span className="font-mono tabular-nums text-white">
+                      {mediaVal}/100
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-200 leading-snug">
+                    {state.pressureHeadline || t(lang, tierMeta.description, tierMeta.descriptionDe)}
+                  </p>
+                </div>
+                {onOpenPressRoom && (
+                  <button
+                    type="button"
+                    onClick={onOpenPressRoom}
+                    className="shrink-0 px-3.5 py-2 rounded-xl bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.12] text-xs font-semibold text-white transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <i className="fas fa-microphone-lines text-[11px]" />
+                    <span>{t(lang, 'Address Press', 'Presse-Briefing')}</span>
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
           {/* 4. Winter Preparation Actions (3-Column Frosted Cards) */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-0.5">
+            <div className="flex items-center px-0.5">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
                 {t(lang, 'WINTER PREPARATIONS', 'WINTER-VORBEREITUNG')}
-              </span>
-              <span className="text-[10px] font-mono text-zinc-400 tabular-nums">
-                {t(lang, 'Budget:', 'Budget:')} <strong className="text-zinc-200">{formatMoney(state.budget)}</strong>
               </span>
             </div>
 
@@ -755,24 +788,14 @@ export const WinterBreakModal: React.FC<WinterBreakModalProps> = ({
           </div>
         </div>
 
-        {/* Action Footer: Manage Club (Dashboard) + Start Second Half */}
-        <div className="p-4 border-t border-white/[0.08] bg-black/40 backdrop-blur-2xl shrink-0 relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-          {onReturnToDashboard && (
-            <button
-              type="button"
-              onClick={onReturnToDashboard}
-              className="py-3 sm:py-3.5 px-4 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-zinc-200 hover:text-white font-semibold text-xs sm:text-sm transition-all duration-150 active:scale-[0.99] cursor-pointer border border-white/[0.1] flex items-center justify-center gap-2 shrink-0"
-            >
-              <i className="fas fa-sliders text-xs text-zinc-400" />
-              <span>{t(lang, 'Manage Club', 'Verein verwalten')}</span>
-            </button>
-          )}
+        {/* Action Footer */}
+        <div className="p-4 border-t border-white/[0.08] bg-black/40 backdrop-blur-2xl shrink-0 relative z-10 flex items-center justify-end">
           <button
             type="button"
-            onClick={onContinue}
-            className="flex-1 py-3.5 px-5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-semibold text-xs sm:text-sm transition-all duration-150 active:scale-[0.99] cursor-pointer shadow-[0_8px_24px_rgba(14,165,233,0.25),inset_0_1px_0_rgba(255,255,255,0.22)] border border-sky-400/30 flex items-center justify-center gap-2 group"
+            onClick={handleDismissToDashboard}
+            className="w-full sm:w-auto sm:min-w-[200px] py-3 px-5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-semibold text-xs sm:text-sm transition-all duration-150 active:scale-[0.99] cursor-pointer shadow-[0_8px_24px_rgba(14,165,233,0.25),inset_0_1px_0_rgba(255,255,255,0.22)] border border-sky-400/30 flex items-center justify-center gap-2 group"
           >
-            <span>{t(lang, 'Start Second Half of Season', 'Rückrunde starten')}</span>
+            <span>{t(lang, 'Manage Club', 'Verein verwalten')}</span>
             <i className="fas fa-arrow-right text-xs transition-transform group-hover:translate-x-1" />
           </button>
         </div>

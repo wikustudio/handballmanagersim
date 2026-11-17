@@ -7,6 +7,7 @@ import {
   getRecentErrors,
   CapturedCrashEntry,
 } from '../utils/crashReporter';
+import { isTransientDomMutationError, installDomMutationResilience } from '../utils/crashResilience';
 
 interface Props {
   children: ReactNode;
@@ -20,11 +21,14 @@ interface State {
   userNotes: string;
   isSendingNotes: boolean;
   notesSentId?: string | null;
+  recoveryKey: number;
 }
 
 export class ErrorBoundary extends React.Component<Props, State> {
   declare setState: React.Component<Props, State>['setState'];
   props: Props;
+  private domRecoveryAttempts = 0;
+  private lastDomRecoveryTs = 0;
   state: State = {
     hasError: false,
     errorMsg: '',
@@ -33,6 +37,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     userNotes: '',
     isSendingNotes: false,
     notesSentId: null,
+    recoveryKey: 0,
   };
 
   constructor(props: Props) {
@@ -48,13 +53,32 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const fallback = document.getElementById('app-loading-fallback');
+    if (fallback) fallback.remove();
+
+    // Seamlessly self-heal transient DOM mutations caused by Chrome extensions / Google Translate
+    if (isTransientDomMutationError(error)) {
+      installDomMutationResilience();
+      const now = Date.now();
+      if (now - this.lastDomRecoveryTs > 15000) {
+        this.domRecoveryAttempts = 0;
+      }
+      if (this.domRecoveryAttempts < 3) {
+        this.domRecoveryAttempts += 1;
+        this.lastDomRecoveryTs = now;
+        this.setState((prev) => ({
+          hasError: false,
+          errorMsg: '',
+          recoveryKey: prev.recoveryKey + 1,
+        }));
+        return;
+      }
+    }
+
     console.error('Uncaught error in UI:', error, errorInfo);
     const dump = (error.message || 'Unknown error') + '\n' + (error.stack || '');
     (window as any).RENDER_ERROR_DUMP = dump;
     this.setState({ errorMsg: dump });
-    // Ensure any static loading fallback element is removed from DOM even on error
-    const fallback = document.getElementById('app-loading-fallback');
-    if (fallback) fallback.remove();
 
     // Automatically capture & dispatch crash report to the backend
     autoSubmitCrashReport(error, errorInfo?.componentStack)
@@ -210,6 +234,6 @@ export class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return <React.Fragment key={this.state.recoveryKey}>{this.props.children}</React.Fragment>;
   }
 }

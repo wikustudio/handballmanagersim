@@ -4,12 +4,11 @@ import { triggerRealisticConfetti } from '../utils/confettiHelper';
 import { ClubLogo } from './ClubLogo';
 import { TrophyGraphic } from './TrophyGraphic';
 import { GameState } from '../types';
-import { formatMoney, COUNTRIES, getCountryFlag, getLeagueInfo, getMaxTier } from '../data/gameConstants';
-import { ALL_CLUBS } from '../data/clubsData';
+import { getCountryFlag, getLeagueInfo, getMaxTier } from '../data/gameConstants';
 import { getActiveClubs, isAnyModActive, mergeClubWithWorldState } from '../utils/modManager';
 import { generateLeagueTable, getDecisionDayStandingsSlice } from '../utils/leagueTableGenerator';
 import { useModalDismiss } from '../utils/modalUtils';
-import { getBroadcastingPackage, cleanBroadcastBadge } from '../data/broadcastingPackages';
+import { getBroadcastingPackage } from '../data/broadcastingPackages';
 import { BroadcastLogo } from './BroadcastLogo';
 
 interface AchievementModalProps {
@@ -223,7 +222,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
                 <span>LIVE</span>
               </div>
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-rose-500/[0.08] border border-rose-400/30 text-[10px] font-mono font-semibold text-rose-300 tracking-wider uppercase shadow-sm">
-                DECISION DAY · HEARTBREAK
+                FINAL MATCHDAY · SEASON DECIDER
               </span>
             </div>
 
@@ -261,7 +260,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
                   <i className="fas fa-table-list text-rose-400 text-xs" />
                   <span>FINAL TABLE · DROP ZONE</span>
                 </span>
-                <span className="text-zinc-500 font-mono text-[10px]">DECISION DAY</span>
+                <span className="text-zinc-400 font-mono text-[10px]">{currentLeague.name}</span>
               </div>
 
               {/* Column Headers matching row alignment on mobile and desktop */}
@@ -306,7 +305,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
                           {t.pts} <span className="hidden sm:inline text-[10px] font-medium text-zinc-400">PTS</span>
                         </span>
                         <div className="w-20 sm:w-28 flex justify-end">
-                          <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md font-semibold tracking-tight shrink-0 border ${
+                          <span className={`text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md font-semibold tracking-tight shrink-0 border ${
                             isPlayer 
                               ? 'bg-rose-500/20 text-rose-300 border-rose-400/30' 
                               : 'bg-white/5 text-zinc-400 border-white/10'
@@ -484,15 +483,15 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
 
           {/* Magic Cup Run: Knockout Journey Tracker Strip */}
           {isMagicCup && (
-            <div className="w-full mt-2 mb-1 p-2 sm:p-2.5 rounded-2xl bg-[#10121a] border border-white/[0.04] flex items-center justify-around text-[9px] sm:text-xs font-mono">
+            <div className="w-full mt-2 mb-1 p-2 sm:p-2.5 rounded-2xl bg-[#10121a] border border-white/[0.04] flex items-center justify-around text-[10px] sm:text-xs font-mono">
               <div className="flex items-center gap-1 text-emerald-400 font-semibold shrink-0">
                 <span>QF</span>
-                <i className="fas fa-check text-[9px]" />
+                <i className="fas fa-check text-[10px]" />
               </div>
               <span className="text-zinc-600 shrink-0">→</span>
               <div className="flex items-center gap-1 text-emerald-400 font-semibold shrink-0">
                 <span>SEMI</span>
-                <i className="fas fa-check text-[9px]" />
+                <i className="fas fa-check text-[10px]" />
               </div>
               <span className="text-zinc-600 shrink-0">→</span>
               <div className="flex items-center gap-1 text-amber-300 font-semibold bg-amber-500/10 px-1.5 sm:px-2 py-0.5 rounded-lg border border-amber-500/20 shrink-0">
@@ -574,7 +573,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
               <div className="text-base sm:text-lg font-semibold text-white tracking-tight py-1">
                 {state?.club?.name} {isSuperGlobe ? 'World Champions' : 'European Champions'}!
               </div>
-              <div className="text-xs text-indigo-200/90 font-normal">
+              <div className="text-xs text-zinc-300 font-normal">
                 {toast.subtitle || 'Historic final victory on the international stage'}
               </div>
             </div>
@@ -591,7 +590,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
               <div className="text-base sm:text-lg font-semibold text-white tracking-tight py-1">
                 {state?.club?.name}
               </div>
-              <div className="text-xs text-amber-200/90 font-normal">
+              <div className="text-xs text-zinc-300 font-normal">
                 {toast.subtitle || 'Silverware secured in the national cup final'}
               </div>
             </div>
@@ -608,7 +607,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
               <div className="text-base sm:text-lg font-semibold text-white tracking-tight py-1">
                 {state?.club?.name} — {currentLeague.name} Champions!
               </div>
-              <div className="text-xs text-amber-200/90 font-normal">
+              <div className="text-xs text-zinc-300 font-normal">
                 {toast.subtitle || `Crowned official champions of ${currentLeague.name}`}
               </div>
             </div>
@@ -623,7 +622,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
                   <i className="fas fa-table-list text-amber-400 text-xs" />
                   <span>OFFICIAL LIVE STANDINGS · FINAL TABLE</span>
                 </span>
-                <span className="text-zinc-500 font-mono text-[10px]">DECISION DAY</span>
+                <span className="text-zinc-400 font-mono text-[10px]">{currentLeague.name}</span>
               </div>
 
               {/* Table Column Headers */}
@@ -670,7 +669,7 @@ export const AchievementModal: React.FC<AchievementModalProps> = ({ state, toast
                           {t.pts} <span className="hidden sm:inline text-[10px] font-medium text-zinc-400">PTS</span>
                         </span>
                         <div className="w-20 sm:w-28 flex justify-end">
-                          <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md font-semibold tracking-tight shrink-0 border ${
+                          <span className={`text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md font-semibold tracking-tight shrink-0 border ${
                             isPlayer 
                               ? isRunnerUp
                                 ? 'bg-slate-400/20 text-slate-200 border-slate-400/30'

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Club, Language } from '../types';
 import { ClubLogo } from './ClubLogo';
-import { formatMoney, formatNum, getCountryFlag } from '../data/gameConstants';
+import { formatNum, getCountryFlag } from '../data/gameConstants';
 import { triggerRealisticConfetti } from '../utils/confettiHelper';
 import { t as tr } from '../data/translations';
 import { useModalDismiss } from '../utils/modalUtils';

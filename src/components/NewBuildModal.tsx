@@ -6,7 +6,7 @@ import { useModalDismiss } from '../utils/modalUtils';
 
 export const getNewBuildOptions = (tier: number, country: string = 'GER') => {
   const profile = getCountryEconomicProfile(country);
-  const maxCap = profile.pinnacleArenaCap;
+  const maxCap = getPinnacleArenaCapacity(country);
 
   if (profile.tier === 1) {
     return [
@@ -27,7 +27,7 @@ export const getNewBuildOptions = (tier: number, country: string = 'GER') => {
         desc: 'Steep bowl architecture creating an intimidating cauldron for elite first-division competition.' 
       },
       { 
-        seats: Math.min(22000, Math.round(maxCap * 0.75)), 
+        seats: 22000, 
         cost: getLeagueScaledVal(tier, 38000000, country), 
         label: 'High-Tech European Complex', 
         tag: 'EHF Elite Grade',
@@ -37,8 +37,8 @@ export const getNewBuildOptions = (tier: number, country: string = 'GER') => {
       { 
         seats: maxCap, 
         cost: getLeagueScaledVal(tier, 75000000, country), 
-        label: maxCap >= 25000 ? 'Global Mega Arena' : 'National Showcase Arena', 
-        tag: maxCap >= 25000 ? 'World Record Cathedral' : 'Pinnacle Continental Arena',
+        label: 'Global Mega Arena', 
+        tag: 'World Record Cathedral',
         icon: 'fa-city', 
         desc: `The ultimate cathedral of global handball in ${country}. A monumental ${maxCap.toLocaleString()}-seat masterpiece hosting world championships.` 
       },
@@ -46,34 +46,34 @@ export const getNewBuildOptions = (tier: number, country: string = 'GER') => {
   } else if (profile.tier === 2) {
     return [
       {
-        seats: 4000,
-        cost: getLeagueScaledVal(tier, 2800000, country),
+        seats: 6000,
+        cost: getLeagueScaledVal(tier, 3500000, country),
         label: 'Regional Sports Center',
         tag: 'Tier 2-3 Standard',
         icon: 'fa-warehouse',
         desc: 'A modern regional indoor venue built for passionate supporter crowds and rapid atmospheric compounding.'
       },
       {
-        seats: 7500,
-        cost: getLeagueScaledVal(tier, 7500000, country),
+        seats: 12000,
+        cost: getLeagueScaledVal(tier, 11000000, country),
         label: 'Top-Flight Fortress',
         tag: 'Domestic Powerhouse',
         icon: 'fa-building',
         desc: 'Steep vertical grandstands maximizing home intimidation for national title showdowns.'
       },
       {
-        seats: Math.min(11000, Math.round(maxCap * 0.75)),
-        cost: getLeagueScaledVal(tier, 15000000, country),
+        seats: 20000,
+        cost: getLeagueScaledVal(tier, 28000000, country),
         label: 'Elite Benefactor Dome',
         tag: 'EHF European Bowl',
         icon: 'fa-industry',
-        desc: 'State/industrial sponsor-backed multi-level arena equipped with VIP hospitality lounges and international media facilities.'
+        desc: 'Sponsor-backed multi-level arena equipped with VIP hospitality lounges and international media facilities.'
       },
       {
         seats: maxCap,
-        cost: getLeagueScaledVal(tier, 26000000, country),
-        label: 'Continental Championship Bowl',
-        tag: 'Pinnacle Showpiece',
+        cost: getLeagueScaledVal(tier, 56000000, country),
+        label: 'Continental Championship Cathedral',
+        tag: '30K Pinnacle Showpiece',
         icon: 'fa-city',
         desc: `The ultimate pinnacle venue in ${country}. A majestic ${maxCap.toLocaleString()}-seat showpiece hosting Champions League clashes.`
       }
@@ -81,71 +81,71 @@ export const getNewBuildOptions = (tier: number, country: string = 'GER') => {
   } else if (profile.tier === 3) {
     return [
       {
-        seats: 3000,
-        cost: getLeagueScaledVal(tier, 1800000, country),
+        seats: 5000,
+        cost: getLeagueScaledVal(tier, 2800000, country),
         label: 'Community Sports Arena',
         tag: 'Organic Heritage',
         icon: 'fa-warehouse',
-        desc: 'Sustainable fan-owned community sports hall engineered for high-frequency ticket yield and low utility overhead.'
+        desc: 'Sustainable community sports hall engineered for high-frequency ticket yield and low utility overhead.'
       },
       {
-        seats: 5000,
-        cost: getLeagueScaledVal(tier, 4200000, country),
+        seats: 10000,
+        cost: getLeagueScaledVal(tier, 8500000, country),
         label: 'Pro League Hall',
         tag: 'Top-Flight Standard',
         icon: 'fa-building',
-        desc: 'A classic mid-tier European handball stadium balancing active supporter terraces with reliable operational efficiency.'
+        desc: 'A steep European handball stadium balancing active supporter terraces with reliable operational efficiency.'
       },
       {
-        seats: Math.min(6500, Math.round(maxCap * 0.85)),
-        cost: getLeagueScaledVal(tier, 7200000, country),
+        seats: 18000,
+        cost: getLeagueScaledVal(tier, 22000000, country),
         label: 'Corporate Suite Arena',
         tag: 'VIP Hospitality Complex',
         icon: 'fa-industry',
-        desc: 'Modern venue with dedicated VIP corporate suites, maximizing corporate hospitality revenue rather than excessive raw seat expansion.'
+        desc: 'Modern twin-tier venue with dedicated VIP corporate suites and continental Final4 broadcast rigging.'
       },
       {
         seats: maxCap,
-        cost: getLeagueScaledVal(tier, 11500000, country),
-        label: 'Pinnacle National Arena',
-        tag: 'National Ceiling',
+        cost: getLeagueScaledVal(tier, 48000000, country),
+        label: 'Pinnacle National Cathedral',
+        tag: '30K National Ceiling',
         icon: 'fa-city',
-        desc: `The pinnacle arena size for ${country}'s sporting landscape (${maxCap.toLocaleString()} seats), optimized for full sellouts and European cup nights.`
+        desc: `The pinnacle arena size for ${country}'s sporting landscape (${maxCap.toLocaleString()} seats), built for European cup nights.`
       }
     ];
   } else {
     return [
       {
-        seats: Math.min(2000, Math.round(maxCap * 0.40)),
-        cost: getLeagueScaledVal(tier, 1100000, country),
+        seats: 4000,
+        cost: getLeagueScaledVal(tier, 2000000, country),
         label: 'Municipal Sports Complex',
         tag: 'Grassroots Standard',
         icon: 'fa-warehouse',
         desc: 'Compact municipal hall providing solid local foundation with minimal maintenance overhead.'
       },
       {
-        seats: Math.min(3500, Math.round(maxCap * 0.65)),
-        cost: getLeagueScaledVal(tier, 2600000, country),
+        seats: 9000,
+        cost: getLeagueScaledVal(tier, 6500000, country),
         label: 'Club Center Hall',
         tag: 'League Standard',
         icon: 'fa-building',
         desc: 'Expanded multi-sport hall meeting top-division broadcast regulations and domestic cup hosting standards.'
       },
       {
-        seats: Math.min(4500, Math.round(maxCap * 0.85)),
-        cost: getLeagueScaledVal(tier, 4500000, country),
+        seats: 18000,
+        cost: getLeagueScaledVal(tier, 18000000, country),
         label: 'National League Arena',
-        tag: 'National Contender',
+        tag: 'Continental Contender',
         icon: 'fa-industry',
-        desc: 'Modern enclosed pavilion with premium seating, press gallery, and club store.'
+        desc: 'Modern enclosed twin-deck pavilion with premium seating, press gallery, and club store.'
       },
       {
         seats: maxCap,
-        cost: getLeagueScaledVal(tier, 7500000, country),
-        label: 'National Showcase Arena',
-        tag: 'Pinnacle Stadium',
+        cost: getLeagueScaledVal(tier, 40000000, country),
+        label: 'National Showcase Cathedral',
+        tag: '30K Pinnacle Stadium',
         icon: 'fa-city',
-        desc: `The pinnacle arena complex for ${country} (${maxCap.toLocaleString()} seats), hosting international tests and national cup finals.`
+        desc: `The pinnacle arena complex for ${country} (${maxCap.toLocaleString()} seats), hosting international tests and European finals.`
       }
     ];
   }
@@ -262,9 +262,7 @@ export const NewBuildModal: React.FC<NewBuildModalProps> = ({
                 {structuringOpt ? 'Structure Infrastructure Deal' : 'Arena Project'}
               </h2>
               <p className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2">
-                <span>{structuringOpt ? structuringOpt.label : 'Pinnacle Venue Project'}</span>
-                <span className="text-zinc-600">·</span>
-                <span className="text-amber-400 font-semibold tabular-nums">{formatNum(currentCap)} / {formatNum(maxCap)} Max ({profile.tierName})</span>
+                <span>{structuringOpt ? structuringOpt.label : `Commission Pinnacle Infrastructure (${country})`}</span>
               </p>
             </div>
           </div>
@@ -305,7 +303,7 @@ export const NewBuildModal: React.FC<NewBuildModalProps> = ({
                       </span>
                     </div>
                     <p className="text-[11px] text-zinc-300 leading-snug mt-0.5">
-                      Treasury Balance: <strong className="text-white font-semibold tabular-nums">{formatMoney(state.budget)}</strong>. Qualified to construct this complex in {country} with syndicate credit and long-term amortized payments.
+                      Qualified to construct this complex in {country} with syndicate credit and long-term amortized payments.
                     </p>
                   </div>
                 </div>
@@ -392,9 +390,6 @@ export const NewBuildModal: React.FC<NewBuildModalProps> = ({
                     <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
                       <i className="fas fa-calendar-alt text-sky-400 text-xs" />
                       <span>Financing Amortization Term</span>
-                    </span>
-                    <span className="text-xs font-semibold text-amber-400 tabular-nums">
-                      Financed: {formatMoney(currentFinancing.principal)}
                     </span>
                   </div>
 
@@ -530,13 +525,10 @@ export const NewBuildModal: React.FC<NewBuildModalProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-[#10121a] border border-white/[0.04] rounded-2xl p-3 flex items-center justify-between text-xs text-zinc-300">
+                  <div className="bg-[#10121a] border border-white/[0.04] rounded-2xl p-3 flex items-center text-xs text-zinc-300">
                     <span className="flex items-center gap-2">
-                      <i className="fas fa-landmark text-amber-400 text-sm" />
+                      <i className="fas fa-landmark text-amber-400 text-sm shrink-0" />
                       <span>Structured Credit Facility: 20% Down Payment + Amortized Terms available for major complexes.</span>
-                    </span>
-                    <span className={`font-semibold tabular-nums ${state.budget >= 5000000 ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                      Bank: {formatMoney(state.budget)}
                     </span>
                   </div>
                 )}
@@ -587,7 +579,7 @@ export const NewBuildModal: React.FC<NewBuildModalProps> = ({
                                 </span>
                                 {canStructure && (
                                   <span className="text-[10px] font-medium text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                    <i className="fas fa-handshake-angle text-[9px]" />
+                                    <i className="fas fa-handshake-angle text-[10px]" />
                                     <span>Credit & Monthly Payments Available</span>
                                   </span>
                                 )}
@@ -599,7 +591,7 @@ export const NewBuildModal: React.FC<NewBuildModalProps> = ({
 
                               <div className="mt-2 flex items-center gap-2 flex-wrap">
                                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md tabular-nums">
-                                  <i className="fas fa-ticket text-[9px]" />
+                                  <i className="fas fa-ticket text-[10px]" />
                                   <span>Target: {formatNum(opt.seats)} Seats</span>
                                 </span>
                                 {!isDowngradeOrSame && (

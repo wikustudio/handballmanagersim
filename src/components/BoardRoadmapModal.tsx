@@ -127,7 +127,7 @@ export const BoardRoadmapModal: React.FC<BoardRoadmapModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-zinc-400 mt-0.5 font-normal">
-                {club.name} · Season {currentYear} (Year {elapsedYears}/{roadmap.horizonYears})
+                {club.name} · Season {currentYear}
               </p>
             </div>
           </div>
@@ -159,7 +159,7 @@ export const BoardRoadmapModal: React.FC<BoardRoadmapModalProps> = ({
               {/* Board Confidence Meter */}
               <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2.5 shrink-0 ${confidenceBg}`}>
                 <div className="flex flex-col text-right">
-                  <span className="text-[9px] uppercase font-medium text-zinc-400">
+                  <span className="text-[10px] uppercase font-medium text-zinc-400">
                     Board Confidence
                   </span>
                   <span className={`text-sm font-semibold tabular-nums ${confidenceColor}`}>
@@ -244,7 +244,7 @@ export const BoardRoadmapModal: React.FC<BoardRoadmapModalProps> = ({
                               {goal.titleEn || goal.titleDe}
                             </h5>
                             {isComplete && (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-medium uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                                 <span className="w-1 h-1 rounded-full bg-emerald-400" />
                                 Completed
                               </span>

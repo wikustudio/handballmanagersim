@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { GameState, Language } from '../types';
-import { formatMoney, formatNum, getLeagueScaledVal, getPinnacleArenaCapacity, getCountryEconomicProfile } from '../data/gameConstants';
+import { formatMoney, formatNum, getLeagueScaledVal, getPinnacleArenaCapacity, getCountryEconomicProfile, isReserveClub } from '../data/gameConstants';
 import { useModalDismiss } from '../utils/modalUtils';
 
 export interface StadiumOption {
@@ -50,6 +50,14 @@ export const getIncrementalOptions = (
       label: '+2,500 Seats',
       tag: 'Arena Overhaul',
       desc: 'Major stadium expansion boosting atmosphere and gate receipts.'
+    },
+    {
+      seats: 5000,
+      cost: getLeagueScaledVal(tier, 6000000, country),
+      fanBoost: 5000,
+      label: '+5,000 Seats',
+      tag: 'Super-Dome Ring',
+      desc: 'Full upper-bowl ring expansion scaling toward the 30,000-seat pinnacle.'
     }
   ];
 };
@@ -73,7 +81,7 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({
   useModalDismiss(onClose);
   const currentCap = state.club.stadium || 2000;
   const country = state.club.country || 'GER';
-  const maxCap = getPinnacleArenaCapacity(country);
+  const maxCap = isReserveClub(state.club.name) ? 1500 : getPinnacleArenaCapacity(country);
   const profile = getCountryEconomicProfile(country);
   const options = getIncrementalOptions(state.club.tier, country, currentCap);
   const fillPercentage = Math.min(100, (currentCap / maxCap) * 100);
@@ -110,7 +118,7 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({
               <p className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2">
                 <span>Scaled Seat Expansions</span>
                 <span className="text-zinc-600">·</span>
-                <span className="text-sky-400 font-medium tabular-nums">{formatNum(currentCap)} / {formatNum(maxCap)}</span>
+                <span className="text-sky-400 font-medium">{profile.tierName}</span>
               </p>
             </div>
           </div>
@@ -130,7 +138,7 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({
             <div className="bg-[#10121a] rounded-2xl border border-white/[0.04] p-3 flex flex-col">
               <span className="text-[10px] uppercase font-medium text-zinc-500 tracking-wider">Capacity</span>
               <span className="text-lg font-semibold text-white tabular-nums mt-0.5">{formatNum(currentCap)}</span>
-              <span className="text-[10px] text-zinc-500 tabular-nums">Max: {formatNum(maxCap)}</span>
+              <span className="text-[10px] text-zinc-500">Current Seats</span>
             </div>
             <div className="bg-[#10121a] rounded-2xl border border-white/[0.04] p-3 flex flex-col">
               <span className="text-[10px] uppercase font-medium text-zinc-500 tracking-wider">Supporters</span>
@@ -138,7 +146,7 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({
               <span className="text-[10px] text-zinc-500">Fanbase</span>
             </div>
             <div className="bg-[#10121a] rounded-2xl border border-white/[0.04] p-3 flex flex-col">
-              <span className="text-[10px] uppercase font-medium text-zinc-500 tracking-wider">Fill Rate</span>
+              <span className="text-[10px] uppercase font-medium text-zinc-500 tracking-wider">Scale Share</span>
               <span className="text-lg font-semibold tabular-nums mt-0.5 text-zinc-200">
                 {Math.round(fillPercentage)}%
               </span>
@@ -151,9 +159,9 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({
             <div className="flex justify-between items-center text-xs">
               <span className="font-semibold text-zinc-300 flex items-center gap-1.5">
                 <i className="fas fa-building text-sky-400 text-xs" />
-                <span>Arena Scale</span>
+                <span>National Pinnacle Ceiling</span>
               </span>
-              <span className="text-sky-400 font-semibold tabular-nums text-[11px]">{profile.tierName}</span>
+              <span className="text-sky-400 font-semibold tabular-nums text-[11px]">{formatNum(maxCap)} Max Seats</span>
             </div>
 
             {/* Progress Bar with Gradient Glow */}
@@ -178,7 +186,7 @@ export const StadiumModal: React.FC<StadiumModalProps> = ({
                 <div className="flex flex-col">
                   <span className="text-xs font-semibold text-white tracking-tight flex items-center gap-2">
                     <span>Attendance & Market Intelligence</span>
-                    <span className="text-[9px] font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded">
                       Inspect
                     </span>
                   </span>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { GameState, Language, UniverseMovement } from '../types';
 import {
@@ -14,6 +14,8 @@ import {
   isReserveClub,
   formatOrganicAttendance,
   getClubStartingAttendance,
+  getCalibratedStartingFanbase,
+  calculateClubFinancials,
 } from '../data/gameConstants';
 import { ClubLogo } from './ClubLogo';
 import { getContinentalCupNames } from '../utils/regionHelpers';
@@ -21,9 +23,11 @@ import { normalizeHex, getFriendlyColorName } from '../data/clubs';
 import { ALL_CLUBS } from '../data/clubsData';
 import { getActiveClubs } from '../utils/modManager';
 import { useModalDismiss } from '../utils/modalUtils';
+import { buildClubHeritageTimeline, isMatchingClubIdentity } from '../utils/clubHeritageHistory';
 
 interface ClubProfileModalProps {
   state: GameState;
+  targetClub?: any;
   lang?: Language;
   onClose: () => void;
   onOpenAcademy?: () => void;
@@ -35,6 +39,7 @@ type TabType = 'overview' | 'reputation' | 'attendance' | 'history' | 'trophies'
 
 export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
   state,
+  targetClub,
   onClose,
   onOpenAcademy,
   onOpenMedical,
@@ -45,7 +50,66 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
   const [historyScope, setHistoryScope] = useState<'club' | 'career'>('club');
   const [trophyScope, setTrophyScope] = useState<'club' | 'career'>('club');
 
-  const club = state.club;
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  const resolvedClubInfo = useMemo(() => {
+    const rawTarget = targetClub || state.club;
+    const isUser = Boolean(
+      !targetClub ||
+        (state.club &&
+          ((rawTarget?.id !== undefined && String(rawTarget.id) === String(state.club.id)) ||
+            (rawTarget?.name &&
+              state.club.name &&
+              rawTarget.name.trim().toLowerCase() === state.club.name.trim().toLowerCase())))
+    );
+    if (isUser) {
+      return { club: state.club, isUserClub: true };
+    }
+
+    const allModClubs = getActiveClubs();
+    const targetNameLower = String(rawTarget?.name || '').trim().toLowerCase();
+    const worldEntry = Object.values(state.worldClubs || {}).find(
+      (wc: any) =>
+        wc &&
+        ((rawTarget?.id !== undefined && String(wc.id) === String(rawTarget.id)) ||
+          (wc.name && wc.name.trim().toLowerCase() === targetNameLower))
+    ) as any;
+    const modEntry =
+      allModClubs.find(
+        (c) =>
+          (rawTarget?.id !== undefined && String(c.id) === String(rawTarget.id)) ||
+          (c.name && c.name.trim().toLowerCase() === targetNameLower)
+      ) ||
+      ALL_CLUBS.find(
+        (c) =>
+          (rawTarget?.id !== undefined && String(c.id) === String(rawTarget.id)) ||
+          (c.name && c.name.trim().toLowerCase() === targetNameLower)
+      );
+
+    const merged = {
+      ...(modEntry || {}),
+      ...(worldEntry || {}),
+      ...(rawTarget || {}),
+      name: rawTarget?.name || worldEntry?.name || modEntry?.name || 'Handball Club',
+      country: worldEntry?.country || modEntry?.country || rawTarget?.country || state.club?.country || 'GER',
+      tier: worldEntry?.tier || modEntry?.tier || rawTarget?.tier || state.club?.tier || 1,
+      baseOvr: worldEntry?.baseOvr || modEntry?.baseOvr || rawTarget?.baseOvr || 75,
+      stadium: worldEntry?.stadium || modEntry?.stadium || rawTarget?.stadium || 4200,
+      fanBase: worldEntry?.fanBase || modEntry?.fanBase || rawTarget?.fanBase || 8500,
+      academyLevel: worldEntry?.academyLevel || modEntry?.academyLevel || 2,
+      medicalLevel: worldEntry?.medicalLevel || modEntry?.medicalLevel || 2,
+      color: rawTarget?.color || worldEntry?.color || modEntry?.color,
+      color2: rawTarget?.color2 || worldEntry?.color2 || modEntry?.color2,
+      logo: rawTarget?.logo || worldEntry?.logo || modEntry?.logo,
+      fallbackLogo: rawTarget?.fallbackLogo || worldEntry?.fallbackLogo || modEntry?.fallbackLogo,
+    };
+    return { club: merged, isUserClub: false };
+  }, [targetClub, state.club, state.worldClubs]);
+
+  const club = resolvedClubInfo.club;
+  const isUserClub = resolvedClubInfo.isUserClub;
   const countryCode = club.country || 'GER';
   const countryData = COUNTRIES[countryCode];
   const countryName = countryData?.name || countryCode;
@@ -171,22 +235,41 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
     activeClubs.find(c => c.id === club.id || (c.name && c.name.toLowerCase() === club.name.toLowerCase())) ||
     ALL_CLUBS.find(c => c.id === club.id || (c.name && c.name.toLowerCase() === club.name.toLowerCase()));
   const stadiumCap = Math.max(club.stadium || 0, baseClubMatch?.stadium || 0, 2000);
-  const fanBase = club.fanBase || 1000;
+  const calBaseFans = getCalibratedStartingFanbase({ ...club, stadium: stadiumCap });
+  const rawFanBase = club.fanBase || calBaseFans;
+  const fanBase = (
+    !(club as any).fanCalibrated &&
+    baseClubMatch?.fanBase &&
+    baseClubMatch.fanBase > calBaseFans * 1.5 &&
+    rawFanBase >= baseClubMatch.fanBase * 0.85 &&
+    stadiumCap <= (baseClubMatch.stadium || stadiumCap)
+  )
+    ? calBaseFans
+    : rawFanBase;
   const isReserve = isReserveClub(club.name);
   const leagueMaxAtt = getLeagueMaxAttendance(club.tier, isReserve, countryCode, club.name, stadiumCap, fanBase, true);
 
-  // League History for this club and full career
+  // League History for this club (including pre-arrival simulated seasons!) and full manager career
   const allHistory = useMemo(() => state.history || [], [state.history]);
+  const managedClubHistory = useMemo(() => {
+    return allHistory.filter((h) => isMatchingClubIdentity(h, club));
+  }, [allHistory, club]);
   const currentClubHistory = useMemo(() => {
-    return allHistory.filter((h) => h.clubName === club.name);
-  }, [allHistory, club.name]);
+    return buildClubHeritageTimeline(state, club);
+  }, [state, club]);
 
-  const hasCareerHistory = allHistory.some((h) => h.clubName !== club.name);
+  const hasCareerHistory =
+    allHistory.some((h) => !isMatchingClubIdentity(h, club)) ||
+    currentClubHistory.some((h) => h.isPreTenureClubArchive);
   const targetHistory = historyScope === 'career' ? allHistory : currentClubHistory;
 
-  const latestSeason = currentClubHistory.length > 0 ? currentClubHistory[currentClubHistory.length - 1] : null;
+  const latestSeason =
+    currentClubHistory.length > 0 ? currentClubHistory[currentClubHistory.length - 1] : null;
   const isCurrentSeasonHistory = latestSeason && latestSeason.year === state.year;
-  let latestAtt = isCurrentSeasonHistory ? latestSeason?.att : undefined;
+  const isUsersActiveClub = Boolean(state.club && (club.id === state.club.id || club.name === state.club.name));
+  let latestAtt = isCurrentSeasonHistory
+    ? latestSeason?.att
+    : (isUsersActiveClub ? calculateClubFinancials(state as any).expectedAtt : undefined);
   if (latestAtt && stadiumCap >= 15000 && fanBase >= 60000 && (latestAtt === 7500 || latestAtt === 14000 || latestAtt <= 8000)) {
     const demand = Math.round(fanBase * 0.16 * 1.15);
     latestAtt = Math.min(stadiumCap, Math.max(Math.round(stadiumCap * 0.90), demand));
@@ -261,10 +344,10 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
       if (h.trophiesThisYear?.reg) countedCupYears.reg.add(h.year);
     });
 
-    const currentClubYears = new Set(currentClubHistory.map(h => h.year));
+    const managedClubYears = new Set(managedClubHistory.map(h => h.year));
     // Also synchronize cup wins recorded in state.cupRunResults for seasons managed at this club
     (state.cupRunResults || []).forEach(r => {
-      if (r.won && currentClubYears.has(r.year)) {
+      if (r.won && managedClubYears.has(r.year)) {
         const yr = r.year;
         const name = (r.nameEn || '').toLowerCase();
         if (r.id === 'cwc' || name.includes('super globe') || name.includes('club world')) {
@@ -314,9 +397,11 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
     universeCups.forEach(m => {
       const title = (m.cupTitle || '').toLowerCase();
       const yr = m.year;
-      if (!currentClubYears.has(yr)) return;
       if (isSupercupMovement(m)) {
-        // Domestic Supercup is already tracked on h.trophiesThisYear.sc when won by the user
+        if (!countedCupYears.sc.has(yr)) {
+          countedCupYears.sc.add(yr);
+          extraSc++;
+        }
         return;
       } else if (title.includes('super globe')) {
         if (!countedCupYears.cwc.has(yr)) {
@@ -375,10 +460,10 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
         return sum + val;
       }, 0),
       dfb: currentClubHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.dfb || 0), 0) + extraDfb,
-      sc: currentClubHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.sc || 0), 0) + extraSc + (state.pendingSupercupTrophies?.sc || 0),
+      sc: currentClubHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.sc || 0), 0) + extraSc + (isUserClub ? (state.pendingSupercupTrophies?.sc || 0) : 0),
       reg: currentClubHistory.reduce((sum, h) => sum + (h.trophiesThisYear?.reg || 0), 0) + extraReg,
     };
-  }, [currentClubHistory, state.universeMovements, state.cupRunResults, state.history, state.pendingSupercupTrophies, club.name, club.id]);
+  }, [currentClubHistory, managedClubHistory, state.universeMovements, state.cupRunResults, state.history, state.pendingSupercupTrophies, club.name, club.id, isUserClub]);
 
   const totalTrophies = useMemo(() => {
     return (
@@ -433,7 +518,9 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
     );
   }, [careerTrophies]);
 
-  const hasCareerTrophies = careerTotalTrophies > totalTrophies;
+  const hasCareerTrophies =
+    careerTotalTrophies !== totalTrophies ||
+    allHistory.some((h) => !isMatchingClubIdentity(h, club));
   const activeTrophies = trophyScope === 'career' ? careerTrophies : clubTrophies;
   const activeTotalTrophies = trophyScope === 'career' ? careerTotalTrophies : totalTrophies;
 
@@ -619,7 +706,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
       }
     });
 
-    if ((state.pendingSupercupTrophies?.sc || 0) > 0 && state.club) {
+    if ((isUserClub || trophyScope === 'career') && (state.pendingSupercupTrophies?.sc || 0) > 0 && state.club) {
       const scName = getDomesticSupercupInfo(state.club.country || countryCode).name || 'Supercup';
       list.push({
         year: state.year,
@@ -632,7 +719,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
     }
 
     return list.sort((a, b) => b.year - a.year);
-  }, [trophyScope, currentClubHistory, allHistory, countryCode, state.universeMovements, state.cupRunResults, state.worldClubs, state.pendingSupercupTrophies, state.year, state.club]);
+  }, [trophyScope, isUserClub, currentClubHistory, allHistory, countryCode, state.universeMovements, state.cupRunResults, state.worldClubs, state.pendingSupercupTrophies, state.year, state.club, club]);
 
   // Aggregate league history stats based on active scope
   const historyStats = useMemo(() => {
@@ -888,11 +975,11 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                       <span>Club Heritage & Dossier</span>
                     </div>
                     {historicContext ? (
-                      <p className="text-xs sm:text-[13px] text-zinc-300/90 leading-relaxed italic font-normal">
+                      <p className="text-xs sm:text-[13px] text-zinc-200 leading-relaxed italic font-normal">
                         "{historicContext}"
                       </p>
                     ) : (
-                      <p className="text-xs text-zinc-400 italic font-normal">
+                      <p className="text-xs sm:text-[13px] text-zinc-300 italic font-normal">
                         Official club context and dossier active for this handball organization.
                       </p>
                     )}
@@ -1042,9 +1129,9 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div
-                    onClick={() => onOpenAcademy && onOpenAcademy()}
+                    onClick={() => isUserClub && onOpenAcademy && onOpenAcademy()}
                     className={`flex flex-col justify-between bg-[#14151e] p-3.5 rounded-xl border border-white/[0.04] transition-all ${
-                      onOpenAcademy ? 'hover:border-emerald-500/40 hover:bg-emerald-500/[0.02] cursor-pointer' : ''
+                      isUserClub && onOpenAcademy ? 'hover:border-emerald-500/40 hover:bg-emerald-500/[0.02] cursor-pointer' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -1072,7 +1159,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                           ? '★★★★★ Maximum Facility Rating'
                           : `Next ★ at Level ${academyLvl + 1} Upgrade`}
                       </span>
-                      {onOpenAcademy && academyLvl < 5 && (
+                      {isUserClub && onOpenAcademy && academyLvl < 5 && (
                         <span className="text-emerald-400 font-medium hover:underline flex items-center gap-1">
                           Upgrade Academy →
                         </span>
@@ -1081,9 +1168,9 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                   </div>
 
                   <div
-                    onClick={() => onOpenMedical && onOpenMedical()}
+                    onClick={() => isUserClub && onOpenMedical && onOpenMedical()}
                     className={`flex flex-col justify-between bg-[#14151e] p-3.5 rounded-xl border border-white/[0.04] transition-all ${
-                      onOpenMedical ? 'hover:border-rose-500/40 hover:bg-rose-500/[0.02] cursor-pointer' : ''
+                      isUserClub && onOpenMedical ? 'hover:border-rose-500/40 hover:bg-rose-500/[0.02] cursor-pointer' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -1111,7 +1198,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                           ? '★★★★★ Maximum Facility Rating'
                           : `Next ★ at Level ${medicalLvl + 1} Upgrade`}
                       </span>
-                      {onOpenMedical && medicalLvl < 5 && (
+                      {isUserClub && onOpenMedical && medicalLvl < 5 && (
                         <span className="text-rose-400 font-medium hover:underline flex items-center gap-1">
                           Upgrade Medical →
                         </span>
@@ -1278,7 +1365,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                     <span>Matchday Capacity Utilization</span>
                   </span>
                   <span className="font-semibold text-emerald-400 tabular-nums">
-                    {currentAtt.toLocaleString()} / {stadiumCap.toLocaleString()} Seats ({currentUtil}%)
+                    {currentUtil}% Filled
                   </span>
                 </div>
 
@@ -1290,7 +1377,7 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between gap-2 flex-wrap text-[11px] text-zinc-400 pt-1 font-normal">
-                  <span>Home Arena: <strong className="text-zinc-200 font-medium">{homeArena}</strong></span>
+                  <span>Open Matchday Seats: <strong className="text-zinc-200 font-medium tabular-nums">{Math.max(0, stadiumCap - currentAtt).toLocaleString()}</strong></span>
                   <span>League Max Cap: <strong className="text-zinc-200 font-medium tabular-nums">{leagueMaxAtt.toLocaleString()}</strong></span>
                 </div>
               </div>
@@ -1328,7 +1415,14 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
                             const util = h.util || Math.min(100, Math.round((att / cap) * 100));
                             return (
                               <tr key={idx} className="hover:bg-white/[0.02] transition">
-                                <td className="py-2.5 px-3 sm:px-4 font-semibold text-white tabular-nums">{h.year}</td>
+                                <td className="py-2.5 px-3 sm:px-4 font-semibold text-white tabular-nums">
+                                  <span>{h.year}</span>
+                                  {h.isPreTenureClubArchive && (
+                                    <span className="ml-1.5 text-[10px] font-normal text-zinc-400">
+                                      · Pre-Arrival
+                                    </span>
+                                  )}
+                                </td>
                                 <td className="py-2.5 px-3 sm:px-4 text-zinc-300 font-normal">
                                   Tier {h.tier} ({getLeagueInfo(h.tier, h.country || countryCode).name})
                                 </td>
@@ -1513,7 +1607,14 @@ export const ClubProfileModal: React.FC<ClubProfileModalProps> = ({
 
                             return (
                               <tr key={idx} className="hover:bg-white/[0.02] transition">
-                                <td className="py-2.5 px-3 sm:px-4 font-semibold text-white tabular-nums">{h.year}</td>
+                                <td className="py-2.5 px-3 sm:px-4 font-semibold text-white tabular-nums whitespace-nowrap">
+                                  <span>{h.year}</span>
+                                  {h.isPreTenureClubArchive && (
+                                    <span className="ml-1.5 text-[10px] font-normal text-zinc-400">
+                                      · Pre-Arrival
+                                    </span>
+                                  )}
+                                </td>
                                 {historyScope === 'career' && (
                                   <td className="py-2.5 px-3 sm:px-4 font-medium text-zinc-200 flex items-center gap-2">
                                     <ClubLogo

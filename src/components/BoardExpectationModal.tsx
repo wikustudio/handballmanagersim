@@ -108,7 +108,7 @@ export const BoardExpectationModal: React.FC<BoardExpectationModalProps> = ({ st
             {isNewAppointment ? `Welcome to ${currentClub.name}` : roadmap.titleEn}
           </h2>
           <p className="text-xs text-zinc-400 mt-1 font-normal">
-            Strategic Cycle: <span className="tabular-nums">{roadmap.startYear} – {roadmap.endYear}</span> · <span className="tabular-nums">{roadmap.boardConfidence}%</span> Confidence
+            Strategic Cycle: <span className="tabular-nums">{roadmap.startYear} – {roadmap.endYear}</span>
           </p>
         </div>
 

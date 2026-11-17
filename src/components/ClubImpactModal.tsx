@@ -5,6 +5,7 @@ import { calculateClubFinancials, getLeagueScaledVal, getCreditLimit, formatMone
 import { useGameStore } from '../store/useGameStore';
 import { getOrGenerateRoadmap } from '../utils/roadmapManager';
 import { useModalDismiss } from '../utils/modalUtils';
+import { getPressureTier } from '../engine/pressureEngine';
 
 interface ClubImpactModalProps {
   state: GameState;
@@ -12,15 +13,20 @@ interface ClubImpactModalProps {
   onClose: () => void;
   onOpenTeamBonding?: () => void;
   onOpenClubProfile?: () => void;
+  onOpenPressRoom?: () => void;
   onBack?: () => void;
 }
 
 export const ClubImpactModal: React.FC<ClubImpactModalProps> = ({
   state,
   onClose,
+  onOpenPressRoom,
   onBack,
 }) => {
   useModalDismiss(onClose);
+
+  const mediaPressure = Math.min(100, Math.max(0, Math.round(state.mediaPressure ?? 15)));
+  const pressureTier = getPressureTier(mediaPressure);
 
   const impactScore = Math.round(state.clubImpactScore ?? 50);
   const morale = state.club.morale ?? 100;
@@ -201,7 +207,7 @@ export const ClubImpactModal: React.FC<ClubImpactModalProps> = ({
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-white">Board Confidence</div>
                   <div className="text-[11px] text-zinc-500 leading-snug mt-0.5">
-                    Safe above <span className="text-zinc-300 font-mono">30</span>
+                    Approval rating out of 100
                   </div>
                 </div>
               </div>
@@ -393,6 +399,76 @@ export const ClubImpactModal: React.FC<ClubImpactModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Media Pressure & Executive Scrutiny */}
+          {(() => {
+            const pressureDotClass =
+              pressureTier.tone === 'rose'
+                ? 'bg-rose-400'
+                : pressureTier.tone === 'orange'
+                ? 'bg-orange-400'
+                : pressureTier.tone === 'amber'
+                ? 'bg-amber-400'
+                : 'bg-sky-400';
+            const pressureBarClass =
+              pressureTier.tone === 'rose'
+                ? 'bg-rose-500'
+                : pressureTier.tone === 'orange'
+                ? 'bg-orange-400'
+                : pressureTier.tone === 'amber'
+                ? 'bg-amber-400'
+                : 'bg-sky-400';
+            const pressureBorderClass =
+              pressureTier.tone === 'rose'
+                ? 'border-rose-500/25'
+                : pressureTier.tone === 'orange'
+                ? 'border-orange-500/25'
+                : pressureTier.tone === 'amber'
+                ? 'border-amber-500/20'
+                : 'border-white/[0.04]';
+
+            return (
+              <div className={`bg-[#10121a] rounded-2xl border ${pressureBorderClass} p-4 space-y-3`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                      MEDIA PRESSURE & SCRUTINY
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-medium uppercase bg-white/[0.03] border border-white/[0.06] text-zinc-300 flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${pressureDotClass}`} />
+                      {pressureTier.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xs font-mono font-semibold text-white tabular-nums">
+                      {mediaPressure} / 100
+                    </span>
+                    {onOpenPressRoom && (
+                      <button
+                        type="button"
+                        onClick={onOpenPressRoom}
+                        className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-medium text-zinc-100 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <i className="fas fa-microphone-lines text-[10px] text-amber-400" />
+                        <span>Open Press Room</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="h-1.5 w-full bg-white/[0.05] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${pressureBarClass}`}
+                    style={{ width: `${mediaPressure}%` }}
+                  />
+                </div>
+
+                <p className="text-xs text-zinc-300 leading-snug">
+                  {state.pressureHeadline || pressureTier.description}
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Board Roadmap Checklist */}
           <div className="bg-[#10121a] rounded-2xl border border-white/[0.04] p-4">

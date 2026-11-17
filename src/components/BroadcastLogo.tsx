@@ -208,11 +208,42 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
     if (key === 'DAZN') {
       return (
         <div className={`flex items-center gap-1.5 ${dims.h} select-none`}>
-          <div className="bg-white text-black font-sans font-black px-1.5 py-0.5 rounded leading-none flex flex-col items-center justify-center tracking-tighter text-[8px] sm:text-[9px] w-5 sm:w-6 h-4.5 sm:h-5 shrink-0">
-            <span className="leading-[0.8] font-black">DA</span>
-            <span className="leading-[0.8] font-black">ZN</span>
-          </div>
-          <span className="font-sans font-black text-white text-[12px] sm:text-[14px] tracking-widest leading-none">
+          <svg
+            className="shrink-0"
+            height={dims.svgH}
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <rect width="24" height="24" rx="4.5" fill="#ffffff" />
+            <rect x="2" y="2" width="20" height="20" rx="2.8" stroke="#09090b" strokeWidth="1.5" />
+            <text
+              x="12"
+              y="10.8"
+              textAnchor="middle"
+              fill="#09090b"
+              fontFamily="system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+              fontWeight="900"
+              fontSize="7.8"
+              letterSpacing="0.2"
+            >
+              DA
+            </text>
+            <text
+              x="12"
+              y="18.8"
+              textAnchor="middle"
+              fill="#09090b"
+              fontFamily="system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+              fontWeight="900"
+              fontSize="7.8"
+              letterSpacing="0.2"
+            >
+              ZN
+            </text>
+          </svg>
+          <span className="font-sans font-black text-white text-[11px] sm:text-[13px] tracking-widest leading-none">
             DAZN
           </span>
         </div>
@@ -572,7 +603,7 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
     if (key === 'DR') {
       return (
         <div className={`flex items-center gap-1.5 ${dims.h} select-none`}>
-          <div className="bg-black text-white font-sans font-black px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] tracking-wider uppercase shrink-0">
+          <div className="bg-[#DC2626] text-white font-sans font-black px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] tracking-wider uppercase shrink-0">
             DR 1
           </div>
           <span className="font-sans font-black text-white text-[11px] sm:text-[12px] tracking-tight uppercase leading-none">
@@ -662,7 +693,10 @@ export const BroadcastLogo: React.FC<BroadcastLogoProps> = ({
   };
 
   return (
-    <div className={`inline-flex items-center shrink-0 whitespace-nowrap ${className}`}>
+    <div
+      data-broadcast-logo="true"
+      className={`inline-flex items-center shrink-0 whitespace-nowrap px-2 py-0.5 rounded-lg bg-[#18191F] border border-black/10 shadow-xs ${className}`}
+    >
       {renderVectorMark()}
       {showLabel && (
         <span className="ml-2 text-xs font-mono text-zinc-300 shrink-0 whitespace-nowrap">{networkName}</span>

@@ -12,6 +12,7 @@ export interface Club {
   color2?: string;
   country?: string;
   fanBase?: number;
+  fanCalibrated?: boolean;
   morale?: number;
   logo?: string;
   fallbackLogo?: string;
@@ -42,6 +43,19 @@ export interface Club {
   isPublic?: boolean;
   ipoPrice?: number;
   stockPrice?: number;
+  arenaDesign?: 'terracotta_courtside' | 'club_heritage' | 'championship_taraflex' | 'nordic_birch';
+  customArenaName?: string;
+}
+
+export interface StadiumNamingDeal {
+  brandName: string;
+  brandLogo?: string;
+  arenaName: string;
+  suffix: 'Arena' | 'Dome' | 'Park' | 'Halle';
+  annualPayout: number;
+  contractYears: 2 | 3 | 5;
+  yearsRemaining: number;
+  signedYear: number;
 }
 
 export interface TrophiesObj {
@@ -117,6 +131,7 @@ export interface SeasonHistory {
   insolventClubs?: { clubId: string; clubName: string; tier: number; country: string }[];
   userPlayedTier?: number;
   tactic?: string;
+  isPreTenureClubArchive?: boolean;
 }
 
 export interface UniverseMovement {
@@ -315,6 +330,7 @@ export interface GameState {
   activePerformanceDeal?: boolean;
   seasonSponsorDeals?: Record<number, { status: 'signed' | 'failed' | 'available'; brandName: string; brandLogo: string; payout?: number; bonus?: number; contractYears?: 1 | 2 | 3; yearsRemaining?: number }>;
   seasonSponsorDealsYear?: number;
+  namingRightsDeal?: StadiumNamingDeal | null;
   lastPatronRescueYear?: number;
   lastInsolventGiantNotice?: { clubId: string; clubName: string; tier: number; country: string };
   settings?: { language?: string };
@@ -373,6 +389,105 @@ export interface GameState {
   midSeasonDilemmaResolvedYear?: number;
   supercupPlayedYear?: number;
   pendingSupercupTrophies?: { sc?: number; esc?: number };
+
+  // Real-World Media & Performance Pressure System
+  mediaPressure?: number;
+  coachHeat?: number;
+  gmHeat?: number;
+  pressureContext?: PressureContext;
+  pressureHeadline?: string;
+  pressureMomentYear?: number;
+  pressureMomentResolvedYear?: number;
+  consecutivePressureSeasons?: number;
+  activePressureMoment?: PressureMoment | null;
+  pendingPostSeasonPressureMoment?: PressureMoment | null;
+  pressureSecondHalfMod?: {
+    year: number;
+    moraleDelta: number;
+    ovrEffect: number;
+    stanceLabel: string;
+  } | null;
+  notificationHistory?: {
+    id: string;
+    type?: string;
+    title?: string;
+    message: string;
+    subtitle?: string;
+    category?: string;
+    seasonYear?: number;
+    createdAt?: number;
+    seenInBell?: boolean;
+  }[];
+}
+
+export type PressureContext =
+  | 'championship_collapse'
+  | 'relegation_spiral'
+  | 'title_expectations'
+  | 'relegation_dogfight'
+  | 'drought_scrutiny'
+  | 'steady';
+
+export interface PressureChoice {
+  id: 'back_coach' | 'public_ultimatum' | 'gm_accountability' | 'siege_mentality' | 'emergency_backing' | 'calm_review';
+  label: string;
+  labelDe: string;
+  stanceTag: string;
+  stanceTagDe: string;
+  description: string;
+  descriptionDe: string;
+  mediaPressureDelta: number;
+  coachHeatDelta: number;
+  gmHeatDelta: number;
+  moraleDelta: number;
+  repDelta: number;
+  impactDelta: number;
+  secondHalfMoraleMod?: number;
+  secondHalfOvrLift?: number;
+  pressReactionHeadline: string;
+  pressReactionHeadlineDe: string;
+  outcomeSummary: string;
+  outcomeSummaryDe: string;
+  coachResponseQuote: string;
+  coachResponseQuoteDe: string;
+}
+
+export interface PressureMoment {
+  id: string;
+  year: number;
+  phase: 'midseason' | 'postseason' | 'briefing';
+  context: PressureContext;
+  outletName: string;
+  headline: string;
+  headlineDe: string;
+  subheadline: string;
+  subheadlineDe: string;
+  mediaPressure: number;
+  coachHeat: number;
+  gmHeat: number;
+  targetPos: number;
+  currentPos: number;
+  numTeams: number;
+  shortfall: number;
+  coachName: string;
+  gmName: string;
+  tactic: string;
+  coachScrutiny: string;
+  coachScrutinyDe: string;
+  gmScrutiny: string;
+  gmScrutinyDe: string;
+  journalistQuestions: Array<{
+    outlet: string;
+    reporter: string;
+    targetRole: 'Coach' | 'GM' | 'Both';
+    question: string;
+    questionDe: string;
+  }>;
+  choices: PressureChoice[];
+  resolvedChoiceId?: string;
+  resolvedReactionHeadline?: string;
+  resolvedOutcomeSummary?: string;
+  resolvedCoachQuote?: string;
 }
 
 export interface Coach {
@@ -527,6 +642,8 @@ export interface BoardRoadmapGoal {
   rewardClaimed?: boolean;
 }
 
+export type CourtsideNavTab = 'overview' | 'commercial' | 'squad' | 'infrastructure' | 'board';
+
 export interface BoardRoadmap {
   clubId?: string | number;
   clubName?: string;
@@ -542,3 +659,4 @@ export interface BoardRoadmap {
   narrativeDe: string;
   tierAtStart: number;
 }
+

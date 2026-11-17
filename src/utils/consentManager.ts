@@ -89,6 +89,10 @@ export function applyGtagConsentUpdate(prefs: ConsentPreferences) {
         preferences_storage: prefs.preferences ? 'granted' : 'denied',
         marketing_storage: prefs.marketing ? 'granted' : 'denied',
       });
+      window.gtag('event', 'page_view', {
+        page_title: typeof document !== 'undefined' ? document.title : 'Handball Manager Sim',
+        page_location: window.location.href,
+      });
     }
   } else if (Array.isArray(window.dataLayer)) {
     window.dataLayer.push(['consent', 'update', consentUpdatePayload]);

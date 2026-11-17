@@ -6,6 +6,7 @@ import {
 import { LeagueInfo, PhilosophyInfo, Club } from '../types';
 import handballBaseDatabase from '../mod-data/handball_base_database.json';
 import { getActiveClubs, mergeClubWithWorldState, isAnyModActive } from '../utils/modManager';
+import { coerceCountryString } from '../utils/crashResilience';
 export { calculateLiveScore } from '../utils/leaderboard';
 
 export const MAX_SEASONS = 35;
@@ -128,9 +129,8 @@ export const COUNTRY_LEAGUES: Record<string, Record<number, LeagueInfo>> = {
 
 export const LEAGUES: Record<number, LeagueInfo> = COUNTRY_LEAGUES.GER;
 
-export const normalizeCountryCode = (country: string | undefined): string => {
-  if (!country) return 'GER';
-  const c = country.trim().toUpperCase();
+export const normalizeCountryCode = (country: unknown): string => {
+  const c = coerceCountryString(country, 'GER');
   if (c === 'GER' || c === 'GERMANY' || c === 'DEUTSCHLAND') return 'GER';
   if (c === 'POL' || c === 'POLAND' || c === 'POLSKA') return 'POL';
   if (c === 'AUT' || c === 'AUSTRIA' || c === 'ÖSTERREICH' || c === 'OESTERREICH') return 'AUT';
@@ -153,7 +153,7 @@ export const normalizeCountryCode = (country: string | undefined): string => {
   return c;
 };
 
-export function normalizeCountry(country: string | undefined): string {
+export function normalizeCountry(country: unknown): string {
   return normalizeCountryCode(country);
 }
 
@@ -364,28 +364,46 @@ export const getLeagueInfo = (tier: number, country: string = 'GER'): LeagueInfo
  */
 export const getDynamicLeagueAvgOvr = (
   state: {
-    club: { name: string; tier: number; baseOvr: number; country?: string; id?: string | number; color?: string };
+    club?: { name?: string; tier?: number; baseOvr?: number; country?: string; id?: string | number; color?: string };
     worldClubs?: Record<string, Club>;
-  },
+  } | null | undefined,
   tierOverride?: number,
-  countryOverride?: string
+  countryOverride?: unknown
 ): number => {
-  const tier = tierOverride !== undefined ? tierOverride : state.club.tier;
-  const country = countryOverride || state.club.country || 'GER';
+  const clubObj = state && typeof state === 'object' && 'club' in state ? state.club : undefined;
+  const rawTier =
+    typeof tierOverride === 'number' && Number.isFinite(tierOverride)
+      ? tierOverride
+      : typeof state === 'number' && Number.isFinite(state)
+      ? state
+      : clubObj?.tier ?? 1;
+  const tier = Math.max(1, rawTier || 1);
+
+  const safeOverrideCountry =
+    typeof countryOverride === 'string' && countryOverride.trim().length > 0
+      ? countryOverride
+      : typeof state === 'number' && typeof tierOverride === 'string'
+      ? (tierOverride as unknown as string)
+      : undefined;
+  const country = normalizeCountry(safeOverrideCountry ?? clubObj?.country ?? 'GER');
   const leagueInfo = getLeagueInfo(tier, country);
 
   // Retrieve active clubs list (respects real data mod or default db)
   const activeClubsList = getActiveClubs(country);
-  
+  const userClubNameNorm = typeof clubObj?.name === 'string' ? clubObj.name.trim().toLowerCase() : '';
+  const worldClubsMap = state && typeof state === 'object' && 'worldClubs' in state ? state.worldClubs : undefined;
+
   // Merge with live worldClubs state and ensure the user's club is properly up-to-date
   const mergedClubs = activeClubsList.map(c => {
-    const fromWorld = state.worldClubs?.[c.id];
+    const fromWorld = worldClubsMap?.[c.id];
     const base = fromWorld ? mergeClubWithWorldState(c, fromWorld) : { ...c };
+    const candNameNorm = typeof c?.name === 'string' ? c.name.trim().toLowerCase() : '';
     if (
-      (state.club.id !== undefined && c.id === state.club.id) ||
-      (c.name && state.club.name && c.name.trim().toLowerCase() === state.club.name.trim().toLowerCase())
+      clubObj &&
+      ((clubObj.id !== undefined && c.id === clubObj.id) ||
+        (candNameNorm.length > 0 && userClubNameNorm.length > 0 && candNameNorm === userClubNameNorm))
     ) {
-      return { ...base, ...state.club };
+      return { ...base, ...clubObj } as Club;
     }
     return base;
   });
@@ -397,20 +415,26 @@ export const getDynamicLeagueAvgOvr = (
   );
 
   // If the user's club is in this tier and country, make sure it is included if missing
-  const userInThisLeague = state.club.tier === tier && normalizeCountry(state.club.country || 'GER') === normTargetCountry;
-  if (userInThisLeague) {
-    const userAlreadyIncluded = leagueClubs.some(
-      c => (state.club.id !== undefined && c.id === state.club.id) ||
-           (c.name && state.club.name && c.name.trim().toLowerCase() === state.club.name.trim().toLowerCase())
-    );
+  const userInThisLeague =
+    Boolean(clubObj) &&
+    (clubObj?.tier || 1) === tier &&
+    normalizeCountry(clubObj?.country || 'GER') === normTargetCountry;
+  if (userInThisLeague && clubObj) {
+    const userAlreadyIncluded = leagueClubs.some(c => {
+      const candNameNorm = typeof c?.name === 'string' ? c.name.trim().toLowerCase() : '';
+      return (
+        (clubObj.id !== undefined && c.id === clubObj.id) ||
+        (candNameNorm.length > 0 && userClubNameNorm.length > 0 && candNameNorm === userClubNameNorm)
+      );
+    });
     if (!userAlreadyIncluded) {
       leagueClubs.push({
-        id: state.club.id ?? 'user-club',
-        name: state.club.name,
-        tier: state.club.tier,
-        baseOvr: state.club.baseOvr,
+        id: clubObj.id ?? 'user-club',
+        name: typeof clubObj.name === 'string' ? clubObj.name : 'Club',
+        tier,
+        baseOvr: clubObj.baseOvr ?? leagueInfo.avgOvr ?? 65,
         country: normTargetCountry,
-        color: state.club.color || '#3b82f6',
+        color: clubObj.color || '#3b82f6',
       } as Club);
     }
   }
@@ -985,14 +1009,15 @@ export const COUNTRIES: Record<string, { name: string; flag: string; active: boo
   'ECU': { name: 'Ecuador', flag: '🇪🇨', active: false },
 };
 
-export const getCountryFlag = (countryCode?: string): string => {
+export const getCountryFlag = (countryCode?: unknown): string => {
   if (!countryCode) return '🌐';
-  const clean = countryCode.trim().toUpperCase();
+  const clean = normalizeCountryCode(countryCode);
   return COUNTRIES[clean]?.flag || '🌐';
 };
 
-export const isCountryModOnly = (countryCode: string): boolean => {
-  return ['POL', 'AUT', 'SUI'].includes((countryCode || '').trim().toUpperCase());
+export const isCountryModOnly = (countryCode: unknown): boolean => {
+  if (!countryCode) return false;
+  return ['POL', 'AUT', 'SUI'].includes(normalizeCountryCode(countryCode));
 };
 
 export interface SponsorBrand {
@@ -1581,6 +1606,14 @@ export interface DynamicSponsorPitchTerms {
   baseMegaPayout?: number;
   basePerformanceUpfront?: number;
   basePerformanceBonus?: number;
+  namingBaseAnnual: number;
+  namingOffers: {
+    id: string;
+    brand: SponsorBrand;
+    defaultSuffix: string;
+    annualPayout: number;
+    recommendedYears: 2 | 3 | 5;
+  }[];
   performanceTargetPos: number;
   megaSuccessProb: number;
   megaSuccessPct: number;
@@ -1727,26 +1760,33 @@ export const getDynamicSponsorPitchTerms = (state: any): DynamicSponsorPitchTerm
   const roundStep = tier <= 2 ? 500 : tier === 3 ? 250 : 50;
   const cleanRound = (val: number) => Math.max(roundStep, Math.round(val / roundStep) * roundStep);
 
-  const standardPayout = cleanRound(getLeagueScaledVal(tier, 100000, country) * totalMult);
-  const megaPayout = cleanRound(getLeagueScaledVal(tier, 500000, country) * totalMult);
-  const performanceUpfront = cleanRound(getLeagueScaledVal(tier, 50000, country) * totalMult);
-  const performanceBonus = cleanRound(getLeagueScaledVal(tier, 750000, country) * totalMult);
+  // Tier-progressive sponsorship lift across all tiers so lower & mid-table clubs can build sustainable commercial lifelines
+  const tierSubBoost = tier === 1 ? 1.0 : tier === 2 ? 1.25 : tier === 3 ? 1.55 : tier === 4 ? 1.75 : 1.90;
 
-  // Dynamic Megadeal negotiation probability (32% to 72%)
+  const standardPayout = cleanRound(getLeagueScaledVal(tier, 175000, country) * tierSubBoost * totalMult);
+  const megaPayout = cleanRound(getLeagueScaledVal(tier, 800000, country) * tierSubBoost * totalMult);
+  const performanceUpfront = cleanRound(getLeagueScaledVal(tier, 110000, country) * tierSubBoost * totalMult);
+  const performanceBonus = cleanRound(getLeagueScaledVal(tier, 1100000, country) * tierSubBoost * totalMult);
+  const namingBaseAnnual = cleanRound(getLeagueScaledVal(tier, 320000, country) * tierSubBoost * totalMult * (stadium >= 8000 ? 1.18 : 1.0));
+
+  // Dynamic Megadeal negotiation probability (38% to 78%)
   const ovrProbDelta = Math.max(-0.08, Math.min(0.10, (clubOvr - leagueAvgOvr) * 0.008));
   const euroProbBonus = euroStatus === 'CL' ? 0.06 : euroStatus === 'EL' ? 0.03 : euroStatus === 'ECL' ? 0.01 : 0;
   const rep = typeof state?.reputation === 'number' ? state.reputation : 50;
-  const repProbBonus = rep >= 80 ? 0.04 : rep >= 60 ? 0.02 : rep < 30 ? -0.03 : 0;
+  const repProbBonus = rep >= 80 ? 0.04 : rep >= 60 ? 0.02 : rep < 30 ? -0.02 : 0;
   const corpProbBonus = (state?.club?.fanStrategy === 'corporate' ? 0.03 : 0) +
     (state?.directorArchetype === 'Financial Mogul' || state?.directorArchetype === 'Brand Ambassador' ? 0.03 : 0);
   const salesProbBonus = hasSalesmaster ? 0.10 : 0;
 
-  const megaSuccessProb = Math.max(0.32, Math.min(0.72, 0.45 + ovrProbDelta + euroProbBonus + repProbBonus + corpProbBonus + salesProbBonus));
+  const megaSuccessProb = Math.max(0.38, Math.min(0.78, 0.50 + ovrProbDelta + euroProbBonus + repProbBonus + corpProbBonus + salesProbBonus));
   const megaSuccessPct = Math.round(megaSuccessProb * 100);
 
   const baseStandard = getSponsorBrandForClub(country, 0, year, clubName, 0, tier);
   const baseMega = getSponsorBrandForClub(country, 1, year, clubName, 0, tier);
   const basePerf = getSponsorBrandForClub(country, 2, year, clubName, 0, tier);
+  const namingBrandA = getSponsorBrandForClub(country, 1, year, clubName, 1, tier);
+  const namingBrandB = getSponsorBrandForClub(country, 0, year, clubName, 2, tier);
+  const namingBrandC = getSponsorBrandForClub(country, 2, year, clubName, 3, tier);
 
   const seasonDeals = (state?.seasonSponsorDeals && state?.seasonSponsorDealsYear === year)
     ? state.seasonSponsorDeals
@@ -1799,6 +1839,31 @@ export const getDynamicSponsorPitchTerms = (state: any): DynamicSponsorPitchTerm
     };
   };
 
+  const defaultSuffix = ['GER', 'AUT', 'SUI'].includes(country) ? 'Arena' : country === 'FRA' ? 'Arena' : 'Arena';
+  const namingOffers = [
+    {
+      id: 'naming_flagship',
+      brand: namingBrandA,
+      defaultSuffix,
+      annualPayout: cleanRound(namingBaseAnnual * 1.12),
+      recommendedYears: 3 as 2 | 3 | 5,
+    },
+    {
+      id: 'naming_regional',
+      brand: namingBrandB,
+      defaultSuffix: ['GER', 'AUT', 'SUI'].includes(country) ? 'Halle' : 'Dome',
+      annualPayout: namingBaseAnnual,
+      recommendedYears: 2 as 2 | 3 | 5,
+    },
+    {
+      id: 'naming_longterm',
+      brand: namingBrandC,
+      defaultSuffix: 'Park',
+      annualPayout: cleanRound(namingBaseAnnual * 1.24),
+      recommendedYears: 5 as 2 | 3 | 5,
+    },
+  ];
+
   return {
     standardPayout: seasonDeals[0]?.status === 'signed' && seasonDeals[0]?.payout !== undefined ? seasonDeals[0].payout : standardPayout,
     megaPayout: seasonDeals[1]?.status === 'signed' && seasonDeals[1]?.payout !== undefined ? seasonDeals[1].payout : megaPayout,
@@ -1808,6 +1873,8 @@ export const getDynamicSponsorPitchTerms = (state: any): DynamicSponsorPitchTerm
     baseMegaPayout: megaPayout,
     basePerformanceUpfront: performanceUpfront,
     basePerformanceBonus: performanceBonus,
+    namingBaseAnnual,
+    namingOffers,
     performanceTargetPos: Math.max(1, Math.floor(((league as any).teams || 18) / 2)),
     megaSuccessProb,
     megaSuccessPct,
@@ -1960,7 +2027,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   FRA: {
     tier: 1,
     tierName: 'Tier 1: Mega Market (Premium National Sports League)',
-    pinnacleArenaCap: 20000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.35, // €1.2M LNH broadcast rights
     sponsorScale: 0.95,
     sugarDaddyBoost: 1.0,
@@ -1972,7 +2039,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   HUN: {
     tier: 2,
     tierName: 'Tier 2: Elite State / Corporate Benefactor Market',
-    pinnacleArenaCap: 15000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.08, // €280k domestic TV
     sponsorScale: 0.70,
     sugarDaddyBoost: 1.10, // Veszprém / Szeged reach up to 110% of German commercial sponsorship
@@ -1982,7 +2049,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   POL: {
     tier: 2,
     tierName: 'Tier 2: Elite Industrial Benefactor Market',
-    pinnacleArenaCap: 15000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.09, // €320k domestic TV
     sponsorScale: 0.65,
     sugarDaddyBoost: 1.05, // Kielce / Wisła Płock backed by major industrial state groups
@@ -1992,7 +2059,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   DEN: {
     tier: 2,
     tierName: 'Tier 2: Elite Commercial Handball Market',
-    pinnacleArenaCap: 14000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.12, // €420k TV
     sponsorScale: 0.85,
     sugarDaddyBoost: 1.0,
@@ -2002,7 +2069,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   MKD: {
     tier: 2,
     tierName: 'Tier 2: Elite Benefactor Market',
-    pinnacleArenaCap: 10000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.05, // €175k TV
     sponsorScale: 0.50,
     sugarDaddyBoost: 1.15, // Vardar / Pelister private benefactors
@@ -2014,7 +2081,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   ESP: {
     tier: 3,
     tierName: 'Tier 3: Mid-Tier European (ASOBAL Heritage)',
-    pinnacleArenaCap: 8000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.07, // €250k domestic TV (Barca subsidizes from football)
     sponsorScale: 0.40,
     sugarDaddyBoost: 1.0,
@@ -2024,7 +2091,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   POR: {
     tier: 3,
     tierName: 'Tier 3: Mid-Tier European (Multi-Sport Club Model)',
-    pinnacleArenaCap: 6500,
+    pinnacleArenaCap: 30000,
     tvScale: 0.05, // €180k TV
     sponsorScale: 0.40,
     sugarDaddyBoost: 1.0,
@@ -2034,7 +2101,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   SWE: {
     tier: 3,
     tierName: 'Tier 3: Mid-Tier European (Organic Fan-Owned Model)',
-    pinnacleArenaCap: 8000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.06, // €200k TV
     sponsorScale: 0.45,
     sugarDaddyBoost: 1.0,
@@ -2044,7 +2111,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   NOR: {
     tier: 3,
     tierName: 'Tier 3: Mid-Tier European (Sustainable Nordic Model)',
-    pinnacleArenaCap: 8000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.06, // €200k TV
     sponsorScale: 0.50,
     sugarDaddyBoost: 1.05, // Kolstad project backing
@@ -2056,7 +2123,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   ROU: {
     tier: 4,
     tierName: 'Tier 4: Developing European Market',
-    pinnacleArenaCap: 6000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.04, // €140k TV
     sponsorScale: 0.30,
     sugarDaddyBoost: 1.0,
@@ -2066,7 +2133,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   CRO: {
     tier: 4,
     tierName: 'Tier 4: Developing European Market',
-    pinnacleArenaCap: 6000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.03, // €100k TV
     sponsorScale: 0.28,
     sugarDaddyBoost: 1.0,
@@ -2076,7 +2143,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   SUI: {
     tier: 4,
     tierName: 'Tier 4: High-Cost Developing Market',
-    pinnacleArenaCap: 5000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.04, // €140k TV
     sponsorScale: 0.35,
     sugarDaddyBoost: 1.0,
@@ -2086,7 +2153,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   AUT: {
     tier: 4,
     tierName: 'Tier 4: Developing European Market',
-    pinnacleArenaCap: 4500,
+    pinnacleArenaCap: 30000,
     tvScale: 0.03, // €100k TV
     sponsorScale: 0.25,
     sugarDaddyBoost: 1.0,
@@ -2096,7 +2163,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   ISL: {
     tier: 4,
     tierName: 'Tier 4: Compact Island Market (~380k pop)',
-    pinnacleArenaCap: 3500,
+    pinnacleArenaCap: 30000,
     tvScale: 0.02, // €60k TV
     sponsorScale: 0.20,
     sugarDaddyBoost: 1.0,
@@ -2106,7 +2173,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   ENG: {
     tier: 4,
     tierName: 'Tier 4: Grassroots Developing Market',
-    pinnacleArenaCap: 3000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.01, // €30k TV
     sponsorScale: 0.15,
     sugarDaddyBoost: 1.0,
@@ -2116,7 +2183,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   SLO: {
     tier: 3,
     tierName: 'Tier 3: Continental Stronghold (Balkan Heritage)',
-    pinnacleArenaCap: 7000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.05, // €180k TV
     sponsorScale: 0.40,
     sugarDaddyBoost: 1.0,
@@ -2126,7 +2193,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   ITA: {
     tier: 4,
     tierName: 'Tier 4: Developing Mediterranean Market',
-    pinnacleArenaCap: 4500,
+    pinnacleArenaCap: 30000,
     tvScale: 0.03, // €100k TV
     sponsorScale: 0.25,
     sugarDaddyBoost: 1.0,
@@ -2136,7 +2203,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   USA: {
     tier: 4,
     tierName: 'Tier 4: Emerging North American Market',
-    pinnacleArenaCap: 6000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.02, // €60k TV
     sponsorScale: 0.30,
     sugarDaddyBoost: 1.0,
@@ -2146,7 +2213,7 @@ export const COUNTRY_ECONOMIC_PROFILES: Record<string, CountryEconomicProfile> =
   ECU: {
     tier: 4,
     tierName: 'Tier 4: Developing South American Market',
-    pinnacleArenaCap: 3000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.01, // €30k TV
     sponsorScale: 0.15,
     sugarDaddyBoost: 1.0,
@@ -2160,7 +2227,7 @@ export const getCountryEconomicProfile = (country: string = 'GER'): CountryEcono
   return COUNTRY_ECONOMIC_PROFILES[norm] || {
     tier: 4,
     tierName: 'Tier 4: Developing Market',
-    pinnacleArenaCap: 5000,
+    pinnacleArenaCap: 30000,
     tvScale: 0.03,
     sponsorScale: 0.25,
     sugarDaddyBoost: 1.0,
@@ -2169,8 +2236,8 @@ export const getCountryEconomicProfile = (country: string = 'GER'): CountryEcono
   };
 };
 
-export const getPinnacleArenaCapacity = (country: string = 'GER'): number => {
-  return getCountryEconomicProfile(country).pinnacleArenaCap;
+export const getPinnacleArenaCapacity = (_country: string = 'GER'): number => {
+  return MAX_ARENA_CAPACITY;
 };
 
 // HANDBALL SCALED BUDGETS & OPERATIONS
@@ -2584,37 +2651,10 @@ export const getInitials = (name?: string): string => {
   return initials.toUpperCase();
 };
 
-export const isReserveClub = (name?: string): boolean => {
-  if (!name) return false;
-  const trimmed = name.trim();
-  const lower = trimmed.toLowerCase();
-  return (
-    trimmed.endsWith(' II') ||
-    trimmed.endsWith(' 2') ||
-    trimmed.endsWith(' B') ||
-    trimmed.endsWith(' U') ||
-    trimmed.endsWith('(B)') ||
-    trimmed.endsWith(' (B)') ||
-    trimmed.endsWith('(U)') ||
-    trimmed.endsWith(' (U)') ||
-    trimmed.endsWith('(II)') ||
-    trimmed.endsWith(' (II)') ||
-    /\s+(II|U19|U20|U21|U22|U23)\b/i.test(trimmed) ||
-    lower === 'veszprém fa' ||
-    lower === 'veszprem fa' ||
-    lower.includes('barça atlètic') ||
-    lower.includes('barca atletic') ||
-    lower.includes('youngsters') ||
-    lower.includes('youngstars') ||
-    lower.endsWith(' amateure') ||
-    lower.endsWith(' reserve') ||
-    lower.endsWith(' reserves') ||
-    lower.endsWith(' espoirs') ||
-    lower.endsWith(' u23') ||
-    lower.endsWith(' u21') ||
-    lower.endsWith(' u19')
-  );
-};
+import { isReserveClubName, getClubStartingAttendance, getCalibratedStartingFanbase, getRealLifeStartingAttendance } from './realLifeAttendance';
+export { getClubStartingAttendance, getCalibratedStartingFanbase, getRealLifeStartingAttendance };
+
+export const isReserveClub = isReserveClubName;
 
 
 
@@ -2723,8 +2763,7 @@ export interface CatchmentCeilingInfo {
 }
 
 import { extractClubCity } from './demographicsData';
-import { getClubStartingAttendance, getCalibratedStartingFanbase, getRealLifeStartingAttendance } from './realLifeAttendance';
-export { extractClubCity, getClubStartingAttendance, getCalibratedStartingFanbase, getRealLifeStartingAttendance };
+export { extractClubCity };
 
 export const getClubCatchmentCeiling = (club: Partial<Club>, state?: any): CatchmentCeilingInfo => {
   const normCountry = normalizeCountry(club.country || 'GER');
@@ -2776,15 +2815,15 @@ export const getClubCatchmentCeiling = (club: Partial<Club>, state?: any): Catch
   const isHistoricGiant = ['Magdeburg', 'Kiel', 'Flensburg', 'Füchse Berlin', 'Barcelona', 'Veszprém', 'Veszprem', 'Kielce', 'Montpellier', 'Nantes', 'Aalborg', 'Pick Szeged'].some(n => (club.name || '').includes(n));
   const topFlightTitleCount = history.filter((h: any) => h.pos === 1 && (h.tier === 1 || h.playedTier === 1)).length;
 
-  // Normalize uncalibrated raw database fanbases against getCalibratedStartingFanbase in Tier 4 developing markets
-  // (e.g. in Iceland) so they don't falsely trigger 60,000+ mega-club status on Day 1 from legacy raw numbers
-  const econProfile = getCountryEconomicProfile(normCountry);
+  // Normalize uncalibrated raw legacy database fanbases across all countries
+  // so clubs don't falsely trigger 100% saturation or 60,000+ mega-club status on Day 1 from legacy raw numbers
   const dbMatch =
     getActiveClubs(normCountry).find(c => (club.id !== undefined && c.id === club.id) || (c.name && club.name && c.name.trim().toLowerCase() === club.name.trim().toLowerCase())) ||
     ALL_CLUBS.find(c => (club.id !== undefined && c.id === club.id) || (c.name && club.name && c.name.trim().toLowerCase() === club.name.trim().toLowerCase()));
   const calibratedBaseFans = getCalibratedStartingFanbase(club);
   const rawClubFans = club.fanBase || calibratedBaseFans;
-  const effectiveClubFans = (econProfile.tier === 4 && dbMatch && dbMatch.fanBase && dbMatch.fanBase > calibratedBaseFans * 2.5 && rawClubFans >= dbMatch.fanBase * 0.6)
+  const isCatchmentVenueExpanded = Boolean(dbMatch?.stadium && (club.stadium || 0) > dbMatch.stadium);
+  const effectiveClubFans = (!isCatchmentVenueExpanded && !(club as any).fanCalibrated && dbMatch && dbMatch.fanBase && dbMatch.fanBase > calibratedBaseFans * 1.5 && rawClubFans >= dbMatch.fanBase * 0.85 && history.length === 0)
     ? calibratedBaseFans + Math.max(0, rawClubFans - dbMatch.fanBase)
     : rawClubFans;
 
@@ -3053,13 +3092,14 @@ export const calculateClubFinancials = (state: {
   activeLoan?: any;
   history?: any[];
 }) => {
-  const country = normalizeCountry(state.club.country || 'GER');
+  const safeClub = state?.club || ({ name: 'Club', tier: 1, country: 'GER', baseOvr: 70, stadium: 2000 } as any);
+  const country = normalizeCountry(safeClub.country || 'GER');
   const dbClub =
-    getActiveClubs(country).find(c => c.name === state.club?.name || String(c.id) === String(state.club?.id)) ||
-    ALL_CLUBS.find(c => c.name === state.club?.name || String(c.id) === String(state.club?.id));
-  const tier = state.club?.tier || dbClub?.tier || 5;
+    getActiveClubs(country).find(c => c.name === safeClub?.name || String(c.id) === String(safeClub?.id)) ||
+    ALL_CLUBS.find(c => c.name === safeClub?.name || String(c.id) === String(safeClub?.id));
+  const tier = safeClub?.tier || dbClub?.tier || 5;
   const league = getLeagueInfo(tier, country);
-  const isReserve = isReserveClub(state.club.name);
+  const isReserve = isReserveClub(safeClub.name);
   const cMult = getCountryMult(country);
   const leagueAvgOvr = league.avgOvr || (tier === 1 ? 80 : tier === 2 ? 69 : tier === 3 ? 62 : tier === 4 ? 54 : 45);
   
@@ -3121,12 +3161,19 @@ export const calculateClubFinancials = (state: {
   const baseFan = getCalibratedStartingFanbase(commercialClub);
   const rawDbFan = dbClub?.fanBase || baseFan;
   const rawStateFans = state.club.fanBase || baseFan;
-  // Normalize uncalibrated raw database fanbases in Tier 4 compact markets (e.g. 65k-130k in Iceland)
-  // so they do not inflate Day 1 attendance to 3.5x or create €78k admin-cost drops when clamped
-  const normalizedStateFans = (profile.tier === 4 && rawDbFan > baseFan * 2.5 && rawStateFans >= rawDbFan * 0.6)
+  const isVenueExpanded = Boolean(dbClub?.stadium && currStad > dbClub.stadium);
+  const isUncalibratedDbSnapshot =
+    !isVenueExpanded &&
+    !(state.club as any).fanCalibrated &&
+    rawDbFan > baseFan * 1.5 &&
+    rawStateFans >= rawDbFan * 0.85 &&
+    (state.history || []).length === 0;
+  // Normalize uncalibrated raw legacy database fanbases across ALL countries on Day 1
+  // so clubs never inflate Day-1 attendance to 3.5x or sell out falsely
+  const normalizedStateFans = isUncalibratedDbSnapshot
     ? baseFan + Math.max(0, rawStateFans - rawDbFan)
     : rawStateFans;
-  const clubInitialFans = (profile.tier === 4 && rawDbFan > baseFan * 2.5)
+  const clubInitialFans = (!isVenueExpanded && rawDbFan > baseFan * 1.5)
     ? baseFan
     : Math.max(baseFan, rawDbFan);
   const signingHypeFansThisSeason = galacticoTransfers > 0 ? galacticoTransfers * 5000 : 0;
@@ -3135,7 +3182,9 @@ export const calculateClubFinancials = (state: {
 
   let expectedAtt = 0;
   if (isReserve) {
-      expectedAtt = formatOrganicAttendance(Math.min(300, maxAtt), currStad, sCount);
+      const resCap = Math.min(300, currStad, maxAtt);
+      const resBase = getClubStartingAttendance(commercialClub);
+      expectedAtt = Math.min(resCap, formatOrganicAttendance(Math.min(resBase, resCap), resCap, sCount + (clubNameSeed % 53)));
   } else {
       // 1. Establish authentic baseline starting attendance (real-life documented where available, else tier-calibrated)
       const startAtt = getClubStartingAttendance(commercialClub);
@@ -3153,15 +3202,36 @@ export const calculateClubFinancials = (state: {
       const stratMult = fanStrat === 'ultras' ? 1.15 : fanStrat === 'community' ? 1.08 : fanStrat === 'corporate' ? 0.88 : 1.0;
 
       // 4. On-court performance factor modulates crowd excitement
-      const ovrDelta = commercialOvr - leagueAvgOvr;
+      // Documented DB clubs already reflect starting OVR in real-life startAtt; shift relative to dbClub.baseOvr as the club improves/declines
+      const hasDbBaselineOvr = Boolean(dbClub && typeof dbClub.baseOvr === 'number');
+      const ovrDelta = hasDbBaselineOvr
+        ? (commercialOvr - dbClub!.baseOvr)
+        : (commercialOvr - leagueAvgOvr);
       const perfMod = Math.max(-0.22, Math.min(0.28, ovrDelta * 0.022));
 
       // 5. Dynamic evolving crowd demand starting from authentic baseline
-      let crowd = Math.round(startAtt * fanGrowthMult * (1 + perfMod) * stratMult * seasonalVariance);
-      if (catchment.isMegaClub) {
+      const isBaselineSeason = (state.history || []).length === 0 && (!fanStrat || fanStrat === 'balanced') && fanGrowthMult <= 1.01;
+      const effectiveVariance = isBaselineSeason
+        ? (0.985 + (pseudoRandom * 0.03))
+        : seasonalVariance;
+      let crowd = Math.round(startAtt * fanGrowthMult * (1 + perfMod) * stratMult * effectiveVariance);
+
+      const hasEarnedMegaSurge =
+        isVenueExpanded ||
+        fanGrowthMult > 1.04 ||
+        (state.history || []).some((h: any) =>
+          (!h.clubName || !state.club.name || h.clubName === state.club.name) &&
+          (h.pos === 1 || h.trophiesThisYear?.cl || h.trophiesThisYear?.el)
+        );
+      if (catchment.isMegaClub && hasEarnedMegaSurge) {
         crowd = Math.round(crowd * 1.15);
       }
-      crowd += nonRoundOffset;
+      if (!isBaselineSeason) {
+        crowd += nonRoundOffset;
+      }
+      if (isBaselineSeason && startAtt >= currStad * 0.99) {
+        crowd = Math.min(currStad, maxAtt);
+      }
 
       const minFloor = Math.min(currStad, tier >= 4 ? 40 : 120);
       const rawExpected = Math.max(minFloor, Math.min(currStad, crowd, maxAtt));
@@ -3194,8 +3264,8 @@ export const calculateClubFinancials = (state: {
   const euroRev = isReserve ? 0 : state.euroStatus === 'CL' ? 2500000 : state.euroStatus === 'EL' ? 800000 : state.euroStatus === 'ECL' ? 300000 : 0;
   
   // 3. Sponsorships (Country Tier & Sugar Daddy Benefactor Logic)
-  // In European handball, commercial sponsorships represent 50%-65% of club operating revenues
-  const autoSponsorRate = tier === 1 ? 0.72 : tier === 2 ? 0.58 : tier === 3 ? 0.65 : tier === 4 ? 0.68 : tier === 5 ? 0.65 : 0.55;
+  // In European handball, commercial sponsorships represent 55%-75% of club operating revenues across all tiers
+  const autoSponsorRate = tier === 1 ? 0.77 : tier === 2 ? 0.68 : tier === 3 ? 0.76 : tier === 4 ? 0.78 : tier === 5 ? 0.76 : 0.70;
   const isEuropeanContender = state.euroStatus === 'CL' || state.euroStatus === 'EL' || commercialOvr >= 80;
   
   // In Tier 2 benefactor markets (Hungary, Poland, North Macedonia), reaching the Champions League unlocks heavy state/industrial benefactor sponsorship
@@ -3271,6 +3341,7 @@ export const calculateClubFinancials = (state: {
     ? 0
     : Math.min(Math.floor(sponsorWageBase * 0.35), Math.floor(brandGrowthFans * 2.5 * cMult));
 
+  const ovrCommercialCurve = Math.max(0.80, Math.pow(commercialOvr / leagueAvgOvr, 1.25));
   const baseAutoSponsor = isReserve
     ? 0
     : Math.max(
@@ -3278,7 +3349,7 @@ export const calculateClubFinancials = (state: {
         Math.floor(
           sponsorWageBase *
             autoSponsorRate *
-            Math.pow(commercialOvr / leagueAvgOvr, 1.4) *
+            ovrCommercialCurve *
             effectiveSponsorScale *
             euroSponsorBoost *
             arenaCorporateBoost *
@@ -3291,9 +3362,9 @@ export const calculateClubFinancials = (state: {
           organicSponsorOffset
       );
   
-  // Volatility rule: If a Tier 2 benefactor team loses primary backing, revenue drops by 60% instantly
+  // Volatility rule: Softened commercial penalty floor so missed sponsor targets do not trigger an unrecoverable death spiral
   const sponsorPenaltyMult = state.failedSponsorTargetNextSeason 
-    ? (profile.tier === 2 ? 0.40 : 0.60) 
+    ? (profile.tier === 2 ? 0.72 : 0.82) 
     : 1.0;
   const isPlaymakerFocus = (state as any).tactic === 'Playmaker Focus' || (state as any).tactic === 'Total Handball';
   const sponsorInc = Math.floor(baseAutoSponsor * (hasSalesmaster ? 1.20 : 1.0) * (isPlaymakerFocus ? 1.15 : 1.0) * sponsorPenaltyMult);
@@ -3357,7 +3428,16 @@ export const calculateClubFinancials = (state: {
       pct: 'Brand',
       positive: true,
     });
-  } 
+  }
+  const activeNamingDeal = (state as any).namingRightsDeal;
+  if (activeNamingDeal && activeNamingDeal.yearsRemaining > 0 && activeNamingDeal.annualPayout > 0) {
+    sponsorDrivers.push({
+      labelEn: `Stadium Naming (${activeNamingDeal.arenaName})`,
+      labelDe: `Stadion-Namensrecht (${activeNamingDeal.arenaName})`,
+      pct: `+${formatMoney(activeNamingDeal.annualPayout)}/yr`,
+      positive: true,
+    });
+  }
   
   // Austerity Rebuild / Treasury Prudence Yield:
   // Maintaining €10M+ in cash treasury yields a 2% annual treasury management dividend (+€200k+), capped at €2.5M
@@ -3615,7 +3695,9 @@ export const calculateClubFinancials = (state: {
   const operatingExpenses = baseOperatingExpenses + luxuryTax + shareholderDividend;
   const operatingMargin = estRevenue - operatingExpenses;
   const isStructuredDebt = operatingMargin >= 0;
-  const debtInterest = (state.budget < 0 && !isStructuredDebt) ? Math.floor(Math.abs(state.budget) * 0.05) : 0;
+  const debtInterest = (state.budget < 0 && !isStructuredDebt)
+    ? Math.min(Math.floor(Math.abs(state.budget) * 0.035), Math.max(2500, Math.round(estRevenue * 0.12)))
+    : 0;
   const totalExpenses = operatingExpenses + debtInterest + loanInstallment;
   const net = estRevenue - totalExpenses;
 
@@ -3675,6 +3757,8 @@ export const HISTORICAL_MANAGERS: HistoricalManager[] = [
 ];
 
 export const KNOWN_ARENAS: Record<string, string> = {
+  'SC Magdeburg Youngsters': 'Wolfgang-Lakenmacher-Halle, Magdeburg',
+  'SC Magdeburg II': 'Wolfgang-Lakenmacher-Halle, Magdeburg',
   'SC Magdeburg': 'GETEC Arena, Magdeburg',
   'Füchse Berlin': 'Max-Schmeling-Halle, Berlin',
   'THW Kiel': 'Wunderino Arena, Kiel',
@@ -3734,6 +3818,7 @@ export const KNOWN_ARENAS: Record<string, string> = {
 
 export const getClubHomeArena = (club?: Partial<Club> | { name: string; [key: string]: any } | null): string => {
   if (!club) return 'Club Arena';
+  if ((club as any).customArenaName) return String((club as any).customArenaName).trim();
   if ((club as any).arena) return (club as any).arena;
   if ((club as any).stadiumName) return (club as any).stadiumName;
   if (club.name && KNOWN_ARENAS[club.name]) return KNOWN_ARENAS[club.name];

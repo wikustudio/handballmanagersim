@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { GameState } from '../types';
-import { getLeagueInfo, formatMoney, formatNum, isReserveClub, calculateClubFinancials, getCreditLimit, getCountryEconomicProfile, getPinnacleArenaCapacity, COUNTRY_LEAGUES, getCurrencyForCountry, getCorporateEntityInfo, getDynamicSponsorPitchTerms } from '../data/gameConstants';
+import { getLeagueInfo, formatMoney, formatNum, isReserveClub, calculateClubFinancials, getCreditLimit, getCountryEconomicProfile, getPinnacleArenaCapacity, getCurrencyForCountry, getCorporateEntityInfo, getDynamicSponsorPitchTerms } from '../data/gameConstants';
 import { ALL_CLUBS } from '../data/clubsData';
 import { getActiveClubs } from '../utils/modManager';
 import { t } from '../data/translations';
@@ -271,7 +271,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                 {league.name}
               </span>
               <span className="text-[10px] text-zinc-400 bg-white/[0.03] px-2 py-0.5 rounded-md border border-white/[0.04] font-medium flex items-center gap-1 shrink-0">
-                <i className="fas fa-layer-group text-sky-400 text-[9px]" />
+                <i className="fas fa-layer-group text-sky-400 text-[10px]" />
                 <span>{country} · Tier {tier}</span>
               </span>
             </div>
@@ -306,7 +306,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
              {/* Key Figures Row */}
              <div className="grid grid-cols-2 gap-2.5 sm:gap-3 pt-1">
                 <div className="bg-black/30 rounded-xl p-2.5 sm:p-3 border border-white/[0.04] min-w-0">
-                   <span className="text-[9px] sm:text-[10px] font-medium text-zinc-400 uppercase tracking-wider block mb-1 truncate">
+                   <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider block mb-1 truncate">
                       {tr('Current Treasury', 'Kassenbestand')}
                    </span>
                    <span className={`text-lg sm:text-2xl font-semibold tracking-tight tabular-nums block truncate ${currentBudget < 0 ? 'text-rose-400' : 'text-white'}`}>
@@ -316,7 +316,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
 
                 {/* Net Profit highlighted */}
                 <div className="bg-black/30 rounded-xl p-2.5 sm:p-3 border border-white/[0.04] min-w-0">
-                   <span className="text-[9px] sm:text-[10px] font-medium text-zinc-400 uppercase tracking-wider block mb-1 truncate">
+                   <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider block mb-1 truncate">
                       {tr('Net Profit / Loss', 'Netto-Gewinn / Verlust')}
                    </span>
                    <span className={`text-lg sm:text-2xl font-semibold tracking-tight tabular-nums block truncate ${netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -352,13 +352,13 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                    <div className="grid grid-cols-3 gap-1.5 pt-1">
                      {slots.map(s => (
                        <div key={s.key} className="px-2 py-1.5 rounded-lg bg-black/30 border border-white/[0.06] flex flex-col justify-between gap-0.5 min-w-0 overflow-hidden">
-                         <span className="text-[8px] sm:text-[9px] uppercase tracking-wider text-zinc-500 truncate block">
+                         <span className="text-[10px] uppercase tracking-wider text-zinc-500 truncate block">
                            {s.label}
                          </span>
-                         <span className="text-[10px] font-semibold text-zinc-200 truncate block">
+                         <span className="text-[11px] font-semibold text-zinc-200 truncate block">
                            {s.status === 'failed' ? tr('Empty', 'Leer') : s.brand}
                          </span>
-                         <span className={`text-[9px] font-semibold tabular-nums truncate block ${
+                         <span className={`text-[10px] font-semibold tabular-nums truncate block ${
                            s.status === 'signed' ? 'text-emerald-400' : s.status === 'failed' ? 'text-rose-400' : 'text-amber-300'
                          }`}>
                            {s.status === 'signed' ? (s.yearsLeft > 1 ? `${tr('Signed', 'Aktiv')} · ${s.yearsLeft}y` : tr('Signed', 'Aktiv')) : s.status === 'failed' ? tr('Empty', 'Leer') : tr('Open', 'Offen')}
@@ -574,7 +574,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-[#14151e] p-2.5 rounded-xl border border-white/[0.04] min-w-0">
-                  <span className="text-[9px] sm:text-[10px] text-zinc-400 uppercase tracking-wider block mb-0.5 font-medium truncate">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-wider block mb-0.5 font-medium truncate">
                     {tr('Live Stock / IPO Price', 'Aktienkurs / IPO-Basis')}
                   </span>
                   <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
@@ -587,7 +587,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   </div>
                 </div>
                 <div className="bg-[#14151e] p-2.5 rounded-xl border border-white/[0.04] min-w-0">
-                  <span className="text-[9px] sm:text-[10px] text-zinc-400 uppercase tracking-wider block mb-0.5 font-medium truncate">
+                  <span className="text-[10px] text-zinc-400 uppercase tracking-wider block mb-0.5 font-medium truncate">
                     {tr('Market Capitalization', 'Marktkapitalisierung')}
                   </span>
                   <div className="flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
@@ -674,7 +674,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                     {gov.heritageLabel}
                   </span>
                   <span className="text-[10px] font-medium text-amber-200/90 bg-black/40 border border-white/[0.04] px-2 py-0.5 rounded flex items-center gap-1 whitespace-nowrap">
-                    <i className="fas fa-clock-rotate-left text-[9px] text-amber-400" />
+                    <i className="fas fa-clock-rotate-left text-[10px] text-amber-400" />
                     {tr('1x every 3 seasons', '1x alle 3 Saisons')}
                   </span>
                 </div>
@@ -779,7 +779,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                     {fin.sponsorDrivers.map((d: any, idx: number) => (
                       <span
                         key={idx}
-                        className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${
+                        className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
                           d.positive
                             ? 'text-emerald-300/90 bg-emerald-500/10 border-emerald-500/20'
                             : 'text-rose-300/90 bg-rose-500/10 border-rose-500/20'
@@ -791,42 +791,13 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   </div>
                 )}
               </div>
-              {(() => {
-                const pitchTerms = getDynamicSponsorPitchTerms(state);
-                const deals: any = (state.seasonSponsorDeals && state.seasonSponsorDealsYear === state.year) ? state.seasonSponsorDeals : {};
-                const slots = [
-                  { key: 'standard' as const, label: 'Standard', brand: deals[0]?.brandName || pitchTerms.standardBrand.name, status: deals[0]?.status || 'available' },
-                  { key: 'mega' as const, label: 'Megadeal', brand: deals[1]?.brandName || pitchTerms.megaBrand.name, status: deals[1]?.status || 'available' },
-                  { key: 'perf' as const, label: 'Performance', brand: deals[2]?.brandName || pitchTerms.perfBrand.name, status: deals[2]?.status || 'available' }
-                ];
-                return (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between items-center gap-2 text-zinc-400">
-                      <span className="flex items-center gap-1.5 text-sky-300 min-w-0">
-                        <i className="fas fa-handshake text-[10px] shrink-0" />
-                        <span className="truncate">{tr('Pitched Megadeals & Partner Contracts', 'Akquirierte Megadeals & Sponsoren-Pitches')}</span>
-                      </span>
-                      <span className="text-emerald-400 font-semibold tabular-nums shrink-0">+{formatMoney(fin.extraSponsorInc || 0)}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1 pl-2">
-                      {slots.map(s => (
-                        <span
-                          key={s.key}
-                          className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${
-                            s.status === 'signed'
-                              ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
-                              : s.status === 'failed'
-                              ? 'text-zinc-500 bg-white/[0.02] border-white/[0.06]'
-                              : 'text-amber-300/90 bg-amber-500/10 border-amber-500/20'
-                          }`}
-                        >
-                          {s.label}: {s.status === 'failed' ? tr('Empty', 'Leer') : s.brand} ({s.status === 'signed' ? tr('Signed', 'Aktiv') : s.status === 'failed' ? tr('Missed', 'Leer') : tr('Unpitched', 'Offen')})
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+              <div className="flex justify-between items-center gap-2 text-zinc-400">
+                <span className="flex items-center gap-1.5 text-sky-300 min-w-0">
+                  <i className="fas fa-handshake text-[10px] shrink-0" />
+                  <span className="truncate">{tr('Pitched Megadeals & Partner Contracts', 'Akquirierte Megadeals & Sponsoren-Pitches')}</span>
+                </span>
+                <span className="text-emerald-400 font-semibold tabular-nums shrink-0">+{formatMoney(fin.extraSponsorInc || 0)}</span>
+              </div>
               <div className="flex justify-between items-center gap-2 text-zinc-400">
                 <span className="min-w-0">{tr('League Merit / Prize Money', 'Ligaprämien & Platzierung')}</span>
                 <span className="text-white font-medium tabular-nums shrink-0">+{formatMoney(fin.posPrize ?? fin.posPrizeK)}</span>
@@ -999,7 +970,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                 <i className="fas fa-globe-europe text-sky-400 text-[10px] shrink-0" />
                 <span className="truncate">{country} Commercial Media Profile ({profile.tierName.includes(':') ? profile.tierName.split(':')[1].trim() : profile.tierName})</span>
               </span>
-              <i className={`fas fa-chevron-${showMarketInfo ? 'up' : 'down'} text-[9px] text-zinc-500 shrink-0`} />
+              <i className={`fas fa-chevron-${showMarketInfo ? 'up' : 'down'} text-[10px] text-zinc-500 shrink-0`} />
             </button>
             {showMarketInfo && (
               <div className="p-3 pt-1 border-t border-white/[0.04] text-[11px] text-zinc-400 flex flex-col gap-2 bg-black/20">
@@ -1026,7 +997,7 @@ export const LedgerModal: React.FC<LedgerModalProps> = ({ state, lang, onClose }
                   </div>
                 </div>
                 <div className="text-[10px] text-zinc-500 flex items-center gap-1.5 pt-0.5">
-                  <i className="fas fa-scale-balanced text-amber-400 text-[9px] shrink-0" />
+                  <i className="fas fa-scale-balanced text-amber-400 text-[10px] shrink-0" />
                   <span>{tr('Progressive luxury tax activates above €8.0M treasury surplus or for squad payroll exceeding soft cap.', 'Progressive Luxussteuer reguliert übermäßige Kassenbestände (>€8M) und Gehaltsexzesse für die Liga-Parität.')}</span>
                 </div>
               </div>

@@ -356,7 +356,7 @@ export const YouthChampionshipModal: React.FC<YouthChampionshipModalProps> = ({ 
                     {m.isPlayerMatch && hasPlayed && m.mvpName && (
                         <div className="pt-1.5 mt-0.5 border-t border-white/[0.04] px-2 flex items-center justify-between text-[10px] text-zinc-400">
                             <span className="flex items-center gap-1">
-                                <i className="fas fa-star text-amber-400 text-[9px]" />
+                                <i className="fas fa-star text-amber-400 text-[10px]" />
                                 <span>MVP: <strong className="text-white font-medium">{m.mvpName}</strong></span>
                             </span>
                             <span className="font-mono text-amber-400 tabular-nums">{m.mvpGoals} goals</span>
@@ -408,7 +408,7 @@ export const YouthChampionshipModal: React.FC<YouthChampionshipModalProps> = ({ 
                         </div>
                         <div className="flex flex-col">
                             <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 leading-none mb-1">
-                                {round === 0 ? 'QUARTER-FINALS' : round === 1 ? 'SEMI-FINALS' : round === 2 ? 'GRAND FINAL' : 'TOURNAMENT COMPLETE'}
+                                {round === 3 ? 'TOURNAMENT COMPLETE' : `SEASON ${state.year} U19 BRACKET`}
                             </span>
                             <h2 className="text-xl sm:text-2xl font-semibold text-white tracking-tight leading-none">
                                 {t('U19 National Cup', 'U19-Meisterschaft')}
@@ -524,7 +524,7 @@ export const YouthChampionshipModal: React.FC<YouthChampionshipModalProps> = ({ 
                     {round >= 2 && finalMatch && (
                         <div className="space-y-2">
                             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-400">
-                                <i className="fas fa-crown text-[9px]" />
+                                <i className="fas fa-crown text-[10px]" />
                                 <span>GRAND FINAL</span>
                             </div>
                             {renderMatch(finalMatch, 0)}

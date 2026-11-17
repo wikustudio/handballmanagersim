@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { formatMoney, getCountryFlag } from '../data/gameConstants';
+import { formatMoney } from '../data/gameConstants';
 import { ClubLogo } from './ClubLogo';
 import { Language, Club } from '../types';
 import { useModalDismiss } from '../utils/modalUtils';
@@ -58,7 +58,7 @@ export const TvCupTieModal: React.FC<TvCupTieModalProps> = ({
           </div>
 
           <div className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wider uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-            <i className="fas fa-trophy text-[9px]" />
+            <i className="fas fa-trophy text-[10px]" />
             <span>{cupName}</span>
           </div>
         </div>

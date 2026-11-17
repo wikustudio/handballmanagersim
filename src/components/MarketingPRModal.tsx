@@ -403,7 +403,7 @@ export const MarketingPRModal: React.FC<MarketingPRModalProps> = ({
                 title="Spin the Wheel"
               >
                 <span className="text-[10px] tracking-tight leading-none font-semibold">SPIN</span>
-                <i className={`fas ${isSpinning ? 'fa-spinner fa-spin' : 'fa-play'} text-[9px] mt-0.5 text-amber-300`} />
+                <i className={`fas ${isSpinning ? 'fa-spinner fa-spin' : 'fa-play'} text-[10px] mt-0.5 text-amber-300`} />
               </button>
             </div>
 
@@ -455,11 +455,11 @@ export const MarketingPRModal: React.FC<MarketingPRModalProps> = ({
                           <div key={mIdx} className="bg-black/35 border border-white/[0.04] rounded-xl p-2.5 flex items-center justify-between text-xs">
                             <div className="flex flex-col min-w-0 pr-1">
                               <span className="font-semibold text-white truncate text-[11px]">{m.opp}</span>
-                              <span className="text-[9px] text-zinc-400">Match #{mIdx + 1}</span>
+                              <span className="text-[10px] text-zinc-400">Match #{mIdx + 1}</span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               <span className="font-mono font-semibold text-white text-[12px]">{m.playerGoals} : {m.oppGoals}</span>
-                              <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded border ${
+                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
                                 m.won ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : m.draw ? 'bg-amber-500/10 text-amber-300 border-amber-500/20' : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
                               }`}>
                                 {m.won ? 'W' : m.draw ? 'D' : 'L'}

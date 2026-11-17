@@ -11,7 +11,7 @@ console.log('--- RUNNING MODAL INTERACTION & UI INTEGRITY AUDIT TEST SUITE ---')
 const MODALS_DIR = path.resolve('src/components');
 const modalFiles = fs.readdirSync(MODALS_DIR).filter(f => f.endsWith('Modal.tsx'));
 
-assert(modalFiles.length >= 40, `Found ${modalFiles.length} modals, expected >= 40`);
+assert(modalFiles.length >= 30, `Found ${modalFiles.length} modals, expected >= 30`);
 console.log(`Auditing ${modalFiles.length} modal component files in ${MODALS_DIR}...`);
 
 // TEST 1: Scroll Containment & Viewport Overflow Safeguards

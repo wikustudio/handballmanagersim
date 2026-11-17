@@ -77,9 +77,11 @@ test('Dynamic league sizes map to authentic handball matchday halves (34, 30, 26
   assert.equal((fraSize - 1) * 2, 30, '16-team French Starligue has 30 matchdays (1-15 / 16-30)');
   assert.equal((denSize - 1) * 2, 26, '14-team Danish Herreligaen has 26 matchdays (1-13 / 14-26)');
 
-  const dockSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/MatchdayActionDock.tsx'), 'utf8');
-  assert.ok(dockSrc.includes('halfMatchdays'), 'MatchdayActionDock must compute dynamic halfMatchdays');
-  assert.ok(!dockSrc.includes("'MD 1–17'"), 'MatchdayActionDock must not hardcode MD 1–17 for non-18-team leagues');
+  const courtsideStatsSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/utils/courtsideStats.ts'), 'utf8');
+  const overlaySrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/SimulatingOverlay.tsx'), 'utf8');
+  assert.ok(courtsideStatsSrc.includes('halfMatchdays'), 'courtsideStats must compute dynamic halfMatchdays');
+  assert.ok(overlaySrc.includes('halfMatchdays'), 'SimulatingOverlay must compute dynamic halfMatchdays');
+  assert.ok(!courtsideStatsSrc.includes("'MD 1–17'"), 'courtsideStats must not hardcode MD 1–17 for non-18-team leagues');
 });
 
 test('WinterBreakModal wires onReturnToDashboard to Escape & Manage Club, and Dashboard guards SponsorModal + Retire', () => {
@@ -92,9 +94,8 @@ test('WinterBreakModal wires onReturnToDashboard to Escape & Manage Club, and Da
   assert.ok(dashSrc.includes('showConfirmRetire'), 'Dashboard must guard Retire from Management behind confirmation');
   assert.ok(dashSrc.includes('preSeasonSupercupQueue.length > 0'), 'Dashboard anyModalOpen must guard preSeasonSupercupQueue');
 
-  const dockSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/MatchdayActionDock.tsx'), 'utf8');
-  assert.ok(dockSrc.includes('invisible'), 'Disabled MatchdayActionDock must apply invisible so background controls do not leak into accessibility tree');
-  assert.ok(dockSrc.includes('aria-hidden={disabled || undefined}'), 'Disabled MatchdayActionDock must mark aside aria-hidden');
+  assert.ok(!dashSrc.includes('MatchdayActionDock'), 'Dashboard must no longer mount retired MatchdayActionDock');
+  assert.ok(dashSrc.includes('simulateDisabled={simulateBlocked}'), 'Dashboard must forward simulateBlocked guard to CourtsideWorkspace');
 
   const consentSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/components/ConsentBanner.tsx'), 'utf8');
   assert.ok(!consentSrc.includes('fixed bottom-20 sm:bottom-3 left-3 z-40'), 'ConsentBanner re-open button must not float fixed over Dashboard HUD cards');

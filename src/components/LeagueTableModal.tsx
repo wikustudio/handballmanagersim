@@ -353,59 +353,59 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
   }, [almanacComp, effectiveAlmanacTier, selectedCountry, almanacNationalCupName, almanacSupercupName]);
 
   const content = (
-    <div className={embedded ? "w-full text-center flex flex-col h-full overflow-hidden pointer-events-auto p-2.5 sm:p-4" : `bg-[#14151e] w-full sm:max-w-3xl lg:max-w-4xl rounded-2xl p-3 sm:p-5 shadow-[0_25px_70px_rgba(0,0,0,0.9)] border border-white/[0.04] text-center pointer-events-auto relative cursor-default overflow-hidden ${activeTab === 'almanac' ? 'h-[90vh]' : 'h-auto'} max-h-[92vh] flex flex-col`}>
+    <div className={embedded ? "w-full text-center flex flex-col flex-1 min-h-0 h-full overflow-hidden pointer-events-auto p-2 sm:p-4" : `bg-[#14151e] w-full sm:max-w-3xl lg:max-w-4xl rounded-2xl p-2.5 sm:p-5 shadow-[0_25px_70px_rgba(0,0,0,0.9)] border border-white/[0.04] text-center pointer-events-auto relative cursor-default overflow-hidden h-[90dvh] sm:h-auto ${activeTab === 'almanac' ? 'sm:h-[90vh]' : ''} max-h-[92dvh] sm:max-h-[92vh] flex flex-col`}>
       {!embedded && <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-sky-400/25 to-transparent pointer-events-none" />}
       {!embedded && (
         <button
           aria-label="Close modal"
           onClick={onClose}
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 w-7 h-7 rounded-full bg-white/[0.04] hover:bg-white/[0.1] text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer z-10 border border-white/[0.04]"
+          className="absolute top-2.5 right-2.5 sm:top-4 sm:right-4 w-7 h-7 rounded-full bg-white/[0.04] hover:bg-white/[0.1] text-zinc-400 hover:text-white flex items-center justify-center transition cursor-pointer z-10 border border-white/[0.04]"
         >
           <i className="fas fa-xmark text-xs" />
         </button>
       )}
 
-      {/* Top Header - Responsive bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5 shrink-0 pr-8 sm:pr-9">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center border p-1.5 shrink-0 ${
+      {/* Top Header - Single compact row on embedded mobile */}
+      <div className={`flex ${embedded ? 'flex-row items-center' : 'flex-col sm:flex-row sm:items-center pr-8 sm:pr-9'} justify-between gap-2 mb-1.5 sm:mb-2.5 shrink-0`}>
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center border p-1 sm:p-1.5 shrink-0 ${
             activeTab === 'almanac'
               ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
               : 'bg-sky-500/10 border-sky-500/20'
           }`}>
             {activeTab === 'almanac' ? (
-              <i className="fas fa-book-bookmark text-sm text-amber-400" />
+              <i className="fas fa-book-bookmark text-xs sm:text-sm text-amber-400" />
             ) : currentLeagueInfo?.logo ? (
               <img
                 src={currentLeagueInfo.logo}
                 alt={`${currentLeagueInfo.name} logo`}
                 referrerPolicy="no-referrer"
                 onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
-                className="w-5 h-5 object-contain drop-shadow"
+                className="w-4 h-4 sm:w-5 sm:h-5 object-contain drop-shadow"
               />
             ) : (
-              <i className="fas fa-list-ol text-sm text-sky-400" />
+              <i className="fas fa-list-ol text-xs sm:text-sm text-sky-400" />
             )}
           </div>
-          <div className="text-left min-w-0">
-            <h3 className="text-sm sm:text-base font-semibold text-white tracking-tight leading-tight truncate">
+          <div className="text-left min-w-0 flex-1">
+            <h3 className="text-xs sm:text-base font-semibold text-white tracking-tight leading-tight truncate">
               {activeTab === 'almanac'
                 ? 'Historical Almanac & Roll of Honour'
-                : `${yearTag} ${currentLeagueInfo.name}`}
+                : `${yearTag} · ${currentLeagueInfo.name}`}
             </h3>
-            <p className="text-[10px] sm:text-[11px] font-mono text-zinc-400 truncate">
+            <p className={`text-[10px] sm:text-[11px] font-mono text-zinc-400 truncate ${embedded ? 'hidden sm:block' : ''}`}>
               {activeTab === 'almanac'
                 ? `${getCountryFlag(currentCountry)} ${countryLabels[currentCountry] || currentCountry} · League Pyramid & Cup Archive (1950–Present)`
-                : `${getCountryFlag(currentCountry)} ${currentCountry} · ${leagueTag} · Season Standings`}
+                : `${getCountryFlag(currentCountry)} ${countryLabels[currentCountry] || currentCountry} · Season Standings`}
             </p>
           </div>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center bg-[#10121a] p-1 rounded-xl border border-white/[0.04] shrink-0 gap-1 w-full sm:w-auto">
+        <div className={`flex items-center bg-[#10121a] p-0.5 sm:p-1 rounded-xl border border-white/[0.04] shrink-0 gap-1 ${embedded ? 'w-auto' : 'w-full sm:w-auto'}`}>
           <button
             onClick={() => setActiveTab('standings')}
-            className={`flex-1 sm:flex-initial justify-center px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
+            className={`flex-1 sm:flex-initial justify-center px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-medium transition flex items-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === 'standings'
                 ? 'bg-sky-500/[0.05] text-sky-300 border border-sky-500/20 shadow-sm'
                 : 'text-zinc-400 hover:text-white border border-transparent'
@@ -416,7 +416,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('almanac')}
-            className={`flex-1 sm:flex-initial justify-center px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
+            className={`flex-1 sm:flex-initial justify-center px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-medium transition flex items-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === 'almanac'
                 ? 'bg-amber-500/[0.05] text-amber-300 border border-amber-500/20 shadow-sm'
                 : 'text-zinc-400 hover:text-white border border-transparent'
@@ -424,7 +424,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
           >
             <i className="fas fa-book-bookmark text-[10px]" />
             <span>Almanac</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-medium tabular-nums ${
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-medium tabular-nums hidden sm:inline ${
               activeTab === 'almanac' ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-white/[0.06] text-zinc-400'
             }`}>
               {almanacEntries.length}
@@ -435,11 +435,11 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
 
       {activeTab === 'standings' && (
         <div className="w-full max-w-4xl mx-auto flex flex-col flex-1 min-h-0 text-left">
-          {/* Standings Toolbar: Country, Division & Season Archive Selectors side by side */}
-          <div className="flex items-center justify-between gap-2.5 mb-2.5 flex-wrap shrink-0">
-            <div className="flex items-center gap-2 flex-wrap">
+          {/* Standings Toolbar: Country, Division & Season Archive Selectors */}
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2.5 mb-1.5 sm:mb-2.5 shrink-0">
+            <div className="grid grid-cols-[1fr_1fr_auto] sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-2 min-w-0 flex-1 py-0.5">
               {/* League Country Selector Dropdown */}
-              <div className="relative inline-flex items-center">
+              <div className="relative flex items-center min-w-0">
                 <select
                   aria-label="Select League Country"
                   value={selectedCountry}
@@ -451,7 +451,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                       setSelectedTier(1);
                     }
                   }}
-                  className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2.5 pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-sky-400 transition cursor-pointer"
+                  className="w-full min-w-0 truncate appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2 sm:pl-2.5 pr-5 sm:pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-sky-400 transition cursor-pointer"
                 >
                   {availableCountries.map((c) => {
                     const isMyCountry = (state.club.country || 'GER') === c;
@@ -462,11 +462,11 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                     );
                   })}
                 </select>
-                <i className="fas fa-chevron-down text-[8px] text-zinc-400 absolute right-2 pointer-events-none" />
+                <i className="fas fa-chevron-down text-[9px] sm:text-[10px] text-zinc-400 absolute right-1.5 sm:right-2 pointer-events-none" />
               </div>
 
               {/* Division Selector Dropdown */}
-              <div className="relative inline-flex items-center">
+              <div className="relative flex items-center min-w-0">
                 <select
                   aria-label="Select Division"
                   value={effectiveTier}
@@ -475,7 +475,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                     setSelectedTier(nextTier);
                     setAlmanacTier(nextTier);
                   }}
-                  className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2.5 pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-sky-400 transition cursor-pointer"
+                  className="w-full min-w-0 truncate appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2 sm:pl-2.5 pr-5 sm:pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-sky-400 transition cursor-pointer"
                 >
                   {availableTiers.map((t) => {
                     const info = getLeagueInfo(t, selectedCountry);
@@ -487,12 +487,12 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                     );
                   })}
                 </select>
-                <i className="fas fa-chevron-down text-[8px] text-zinc-400 absolute right-2 pointer-events-none" />
+                <i className="fas fa-chevron-down text-[9px] sm:text-[10px] text-zinc-400 absolute right-1.5 sm:right-2 pointer-events-none" />
               </div>
 
               {/* Season Archive Selector Dropdown */}
               {availableYears.length > 1 ? (
-                <div className="relative inline-flex items-center">
+                <div className="relative flex items-center shrink-0">
                   <select
                     aria-label="Select Season Year"
                     value={selectedYear}
@@ -506,22 +506,22 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                         setSelectedTier(state.club.tier);
                       }
                     }}
-                    className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2.5 pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-sky-400 transition cursor-pointer"
+                    className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 hover:text-white text-[11px] font-medium py-1 pl-2 sm:pl-2.5 pr-5 sm:pr-6 rounded-lg border border-white/10 focus:outline-none focus:border-sky-400 transition cursor-pointer whitespace-nowrap"
                   >
                     {availableYears.map((yr) => {
                       const isCurrentActive = yr === state.year && (!currentSelectedHist || currentSelectedHist.year !== yr);
                       return (
                         <option key={`standings-year-${yr}`} value={yr} className="bg-[#161722] text-white">
-                          Season {yr} {isCurrentActive ? '(Active)' : ''}
+                          {yr}{isCurrentActive ? ' ★' : ''}
                         </option>
                       );
                     })}
                   </select>
-                  <i className="fas fa-chevron-down text-[8px] text-zinc-400 absolute right-2 pointer-events-none" />
+                  <i className="fas fa-chevron-down text-[9px] sm:text-[10px] text-zinc-400 absolute right-1.5 sm:right-2 pointer-events-none" />
                 </div>
               ) : (
-                <div className="px-2.5 py-1 bg-white/[0.03] border border-white/10 rounded-lg text-[11px] font-mono font-medium text-zinc-400">
-                  Season {selectedYear}
+                <div className="px-2 sm:px-2.5 py-1 bg-white/[0.03] border border-white/10 rounded-lg text-[11px] font-mono font-medium text-zinc-400 whitespace-nowrap shrink-0 tabular-nums">
+                  {selectedYear}
                 </div>
               )}
 
@@ -533,10 +533,10 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                     setSelectedCountry(initialCountry);
                     setSelectedTier(initialTier);
                   }}
-                  className="px-2 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 text-[10px] font-semibold transition cursor-pointer flex items-center gap-1"
+                  className="col-span-3 sm:col-span-1 px-2 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 text-[10px] font-semibold transition cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap"
                   title="Reset to your active league and season"
                 >
-                  <i className="fas fa-rotate-left text-[9px]" />
+                  <i className="fas fa-rotate-left text-[10px]" />
                   <span>My League</span>
                 </button>
               )}
@@ -565,9 +565,9 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
 
           {/* Stakes & Mathematical Point Gaps Strip */}
           {stakes && stakes.leaderRow && (
-            <div className="mb-2.5 px-3 py-2 rounded-xl bg-[#10121a] border border-white/[0.04] flex items-center justify-between text-xs font-mono flex-wrap gap-2 text-zinc-300">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-zinc-500 uppercase tracking-wider text-[10px] font-medium">Stakes:</span>
+            <div className="mb-1.5 sm:mb-2.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-[#10121a] border border-white/[0.04] flex items-center justify-between text-[11px] sm:text-xs font-mono flex-wrap gap-x-2 gap-y-1 text-zinc-300 shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+                <span className="text-zinc-500 uppercase tracking-wider text-[10px] font-medium hidden sm:inline">Stakes:</span>
                 <span className="flex items-center gap-1 text-amber-300">
                   <span className="font-semibold">1st (C)</span> {stakes.leaderRow.name} ({stakes.leaderRow.pts} pts)
                 </span>
@@ -631,17 +631,17 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
           )}
 
           {/* Table Container */}
-          <div className="bg-[#14151e] rounded-2xl border border-white/[0.04] overflow-hidden shadow-lg flex flex-col text-left">
-            <div className="overflow-x-auto custom-scrollbar overscroll-contain flex flex-col">
-              <div className="min-w-[340px] flex items-center py-2.5 px-3 bg-[#10121a] border-b border-white/[0.04] text-[10px] font-mono font-medium text-zinc-400 uppercase tracking-wider shrink-0">
-                <div className="w-8 text-center shrink-0">#</div>
-                <div className="flex-1 px-2 min-w-0">Club</div>
-                <div className="w-14 text-center shrink-0">W-D-L</div>
-                <div className="w-12 text-center shrink-0">GD</div>
-                <div className="w-12 text-right pr-1 shrink-0">PTS</div>
+          <div className="bg-[#14151e] rounded-2xl border border-white/[0.04] overflow-hidden shadow-lg flex-1 min-h-0 flex flex-col text-left">
+            <div className="overflow-x-auto custom-scrollbar overscroll-contain flex-1 min-h-0 flex flex-col">
+              <div className="w-full min-w-[290px] flex items-center py-2 sm:py-2.5 px-2 sm:px-3 bg-[#10121a] border-b border-white/[0.04] text-[10px] font-mono font-medium text-zinc-400 uppercase tracking-wider shrink-0">
+                <div className="w-6 sm:w-8 text-center shrink-0">#</div>
+                <div className="flex-1 px-1.5 sm:px-2 min-w-0">Club</div>
+                <div className="w-[52px] sm:w-16 text-center shrink-0">W-D-L</div>
+                <div className="w-9 sm:w-12 text-center shrink-0">GD</div>
+                <div className="w-8 sm:w-12 text-right pr-0.5 sm:pr-1 shrink-0">PTS</div>
               </div>
 
-              <div className="min-w-[340px] overflow-y-auto custom-scrollbar max-h-[60vh] overscroll-contain">
+              <div className={`w-full min-w-[290px] flex-1 min-h-0 overflow-y-auto custom-scrollbar ${embedded ? '' : 'sm:max-h-[60vh]'} overscroll-contain`}>
                 {tableData.map((r, i) => {
                 const isPromo = i < 2 || r.statusMarker === 'P';
                 const isPlayoff = r.statusMarker === 'PO' || (hasPromotionPlayoffs && i >= 2 && i < 6);
@@ -655,7 +655,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                 return (
                   <div
                     key={`${r.name}-${i}`}
-                    className={`group relative flex items-center py-2.5 px-3 border-b border-white/[0.03] transition-colors ${rowBg}`}
+                    className={`group relative flex items-center py-1.5 sm:py-2.5 px-2 sm:px-3 border-b border-white/[0.03] transition-colors ${rowBg}`}
                   >
                     {/* Status indicator line */}
                     <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-90 ${
@@ -668,7 +668,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                         : 'bg-transparent'
                     }`} />
 
-                    <div className={`w-8 text-center font-mono font-semibold text-xs shrink-0 tabular-nums ${
+                    <div className={`w-6 sm:w-8 text-center font-mono font-semibold text-[11px] sm:text-xs shrink-0 tabular-nums ${
                       isPlayer ? 'text-sky-300 font-semibold'
                       : isPromo ? (isTier1 ? 'text-amber-400' : 'text-emerald-400')
                       : isRelegation ? 'text-rose-400'
@@ -677,20 +677,20 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                       {r.pos}.
                     </div>
 
-                    <div className="flex-1 flex items-center gap-2 overflow-hidden px-2 min-w-0">
+                    <div className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-hidden px-1.5 sm:px-2 min-w-0">
                       <ClubLogo
                         name={r.name}
                         color={r.color}
                         logo={r.logo}
                         fallbackLogo={r.fallbackLogo}
                         alt=""
-                        className="w-5 h-5 object-contain shrink-0 select-none"
-                        fallbackClassName="w-5 h-5 text-[8px] select-none"
+                        className="w-4 h-4 sm:w-5 sm:h-5 object-contain shrink-0 select-none"
+                        fallbackClassName="w-4 h-4 sm:w-5 sm:h-5 text-[8px] select-none"
                       />
-                      <div className={`text-xs truncate flex items-center gap-1.5 min-w-0 ${isPlayer ? 'text-white font-semibold' : 'text-zinc-300 font-medium'}`}>
+                      <div className={`text-[11px] sm:text-xs truncate flex items-center gap-1 sm:gap-1.5 min-w-0 ${isPlayer ? 'text-white font-semibold' : 'text-zinc-300 font-medium'}`}>
                         <span className="truncate">{r.name}</span>
                         {isPlayer && (
-                          <span className="px-1.5 py-0.2 rounded-md bg-sky-500/10 border border-sky-400/20 text-[9px] font-medium uppercase text-sky-300 shrink-0">
+                          <span className="px-1 sm:px-1.5 py-0.2 rounded-md bg-sky-500/10 border border-sky-400/20 text-[9px] sm:text-[10px] font-medium uppercase text-sky-300 shrink-0">
                             YOU
                           </span>
                         )}
@@ -702,31 +702,31 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                           </span>
                         )}
                         {isReserveClub(r.name) && (
-                          <span className="px-1 py-0.2 text-[8px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded uppercase tracking-wider shrink-0">
+                          <span className="px-1 py-0.2 text-[9px] sm:text-[10px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded uppercase tracking-wider shrink-0">
                             Res.
                           </span>
                         )}
                         {(r.pointsDeducted || 0) > 0 && (
-                          <span className="px-1 py-0.2 text-[8px] font-medium bg-rose-500/15 text-rose-300 border border-rose-500/20 rounded uppercase tracking-wider shrink-0 tabular-nums">
+                          <span className="px-1 py-0.2 text-[9px] sm:text-[10px] font-medium bg-rose-500/15 text-rose-300 border border-rose-500/20 rounded uppercase tracking-wider shrink-0 tabular-nums">
                             -{r.pointsDeducted} Pts
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="w-14 flex justify-center gap-0.5 font-mono text-[11px] text-zinc-400 shrink-0 tabular-nums">
-                      <span className="w-3.5 text-center tabular-nums">{r.w}</span>
-                      <span className="w-3.5 text-center tabular-nums">{r.d}</span>
-                      <span className="w-3.5 text-center tabular-nums">{r.l}</span>
+                    <div className="w-[52px] sm:w-16 flex justify-center gap-0.5 font-mono text-[10px] sm:text-[11px] text-zinc-400 shrink-0 tabular-nums whitespace-nowrap">
+                      <span className="w-4 sm:w-4.5 text-center tabular-nums">{r.w}</span>
+                      <span className="w-3.5 sm:w-4 text-center tabular-nums">{r.d}</span>
+                      <span className="w-4 sm:w-4.5 text-center tabular-nums">{r.l}</span>
                     </div>
 
-                    <div className={`w-12 text-center font-mono font-medium text-xs shrink-0 tabular-nums ${
+                    <div className={`w-9 sm:w-12 text-center font-mono font-medium text-[11px] sm:text-xs shrink-0 tabular-nums whitespace-nowrap ${
                       parseInt(r.gd) > 0 ? 'text-emerald-400' : parseInt(r.gd) < 0 ? 'text-rose-400' : 'text-zinc-500'
                     }`}>
                       {r.gd}
                     </div>
 
-                    <div className={`w-12 text-right pr-1 font-mono font-semibold text-sm shrink-0 tabular-nums leading-none ${isPlayer ? 'text-sky-300' : 'text-white'}`}>
+                    <div className={`w-8 sm:w-12 text-right pr-0.5 sm:pr-1 font-mono font-semibold text-xs sm:text-sm shrink-0 tabular-nums whitespace-nowrap leading-none ${isPlayer ? 'text-sky-300' : 'text-white'}`}>
                       {r.pts}
                     </div>
                   </div>
@@ -737,15 +737,15 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
         </div>
 
           {/* Table Legend */}
-          <div className="mt-2.5 bg-[#10121a] rounded-xl p-2 border border-white/[0.04] flex flex-wrap gap-x-4 gap-y-1 justify-center text-[10px] text-zinc-400 font-medium shrink-0">
-            <div className="flex items-center gap-1"><span className="text-amber-400 font-semibold">(C)</span> {isTier1 ? 'Champions (EHF CL)' : 'Champions (Promoted)'}</div>
-            {!isTier1 && <div className="flex items-center gap-1"><span className="text-emerald-400 font-semibold">(P)</span> Direct Promotion (1st-2nd)</div>}
+          <div className="mt-1.5 sm:mt-2.5 bg-[#10121a] rounded-xl px-2 py-1 sm:p-2 border border-white/[0.04] flex flex-wrap gap-x-3 sm:gap-x-4 gap-y-0.5 sm:gap-y-1 justify-center text-[9px] sm:text-[10px] text-zinc-400 font-medium shrink-0">
+            <div className="flex items-center gap-1"><span className="text-amber-400 font-semibold">(C)</span> <span className="sm:hidden">Champ</span><span className="hidden sm:inline">{isTier1 ? 'Champions (EHF CL)' : 'Champions (Promoted)'}</span></div>
+            {!isTier1 && <div className="flex items-center gap-1"><span className="text-emerald-400 font-semibold">(P)</span> <span className="sm:hidden">Promoted</span><span className="hidden sm:inline">Direct Promotion (1st-2nd)</span></div>}
             {(hasPromotionPlayoffs || selectedTier > 1 || currentCountry === 'ESP' || currentCountry === 'SUI') && (
-              <div className="flex items-center gap-1"><span className="text-amber-300 font-semibold">(PO)</span> Playoff Contender</div>
+              <div className="flex items-center gap-1"><span className="text-amber-300 font-semibold">(PO)</span> <span className="sm:hidden">Playoff</span><span className="hidden sm:inline">Playoff Contender</span></div>
             )}
-            {isTier1 && <div className="flex items-center gap-1"><span className="text-sky-400 font-semibold">(Q)</span> European Qualification</div>}
-            {!isMaxTier && <div className="flex items-center gap-1"><span className="text-rose-400 font-semibold">(R)</span> Relegation Drop Zone</div>}
-            {isMaxTier && <div className="flex items-center gap-1"><span className="text-zinc-500 font-medium">🛡️</span> Division Floor (No Relegation)</div>}
+            {isTier1 && <div className="flex items-center gap-1"><span className="text-sky-400 font-semibold">(Q)</span> <span className="sm:hidden">Euro</span><span className="hidden sm:inline">European Qualification</span></div>}
+            {!isMaxTier && <div className="flex items-center gap-1"><span className="text-rose-400 font-semibold">(R)</span> <span className="sm:hidden">Relegated</span><span className="hidden sm:inline">Relegation Drop Zone</span></div>}
+            {isMaxTier && <div className="flex items-center gap-1"><span className="text-zinc-500 font-medium">🛡️</span> <span className="sm:hidden">Floor</span><span className="hidden sm:inline">Division Floor (No Relegation)</span></div>}
           </div>
         </div>
       )}
@@ -753,9 +753,9 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
       {activeTab === 'almanac' && (
         <div className="flex flex-col flex-1 min-h-0 text-left">
           {/* Almanac Filter Card */}
-          <div className="bg-[#10121a] border border-white/[0.06] rounded-2xl p-3.5 sm:p-4 mb-3 shrink-0 shadow-md">
+          <div className="bg-[#10121a] border border-white/[0.06] rounded-2xl p-2.5 sm:p-4 mb-2 sm:mb-3 shrink-0 shadow-md">
             {/* Row 1: Country, Tier, All Years Dropdowns */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3.5">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mb-2 sm:mb-3.5">
               {/* Country Filter */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
@@ -960,7 +960,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
                               {entry.clubName}
                             </span>
                             {entry.isUserClub && (
-                              <span className="px-1.5 py-0.2 rounded bg-sky-500/15 border border-sky-400/30 text-[9px] font-semibold uppercase text-sky-300 shrink-0">
+                              <span className="px-1.5 py-0.2 rounded bg-sky-500/15 border border-sky-400/30 text-[10px] font-semibold uppercase text-sky-300 shrink-0">
                                 YOU
                               </span>
                             )}
@@ -1032,7 +1032,7 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
       onClick={onClose}
       className="fixed inset-0 bg-black/80 flex items-center p-2 sm:p-4 justify-center z-[10000] backdrop-blur-2xl transition-all cursor-pointer"
     >
-      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-3xl lg:max-w-4xl flex justify-center ${activeTab === 'almanac' ? 'h-full max-h-[92vh]' : 'h-auto max-h-[92vh]'}`}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-3xl lg:max-w-4xl flex justify-center h-[90dvh] sm:h-auto max-h-[92dvh] sm:max-h-[92vh]">
         {content}
       </div>
     </motion.div>

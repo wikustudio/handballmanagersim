@@ -810,10 +810,9 @@ export function generateBoardRoadmap(
   const targetTier = isReserve ? Math.max(2, tier - 2) : Math.max(1, tier - 2);
   
   // Proportional, realistic fanbase scaling by tier (capped by club catchment ceiling so goal is always achievable):
-  const econProfile = getCountryEconomicProfile(country);
   const calibratedBaseFan = getCalibratedStartingFanbase(club);
   const rawClubFan = club.fanBase || (tier === 3 ? 5000 : tier === 4 ? 2000 : 800);
-  const currentFans = (econProfile.tier === 4 && rawClubFan > calibratedBaseFan * 2.5)
+  const currentFans = (!(club as any).fanCalibrated && rawClubFan > calibratedBaseFan * 1.5)
     ? calibratedBaseFan
     : rawClubFan;
   const catchment = getClubCatchmentCeiling({ ...club, fanBase: currentFans });

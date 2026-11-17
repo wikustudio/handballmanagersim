@@ -1,34 +1,26 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { WinterBreakModal } from './WinterBreakModal';
-import { ToastContainer } from './ToastContainer';
 import { GachaRevealModal } from './GachaRevealModal';
-import { DashboardHeader } from './DashboardHeader';
 import { ClubProfileModal } from './ClubProfileModal';
-import { Club, Language, UniverseMovement, ResolvedCupOutcome, ResolvedPlayoffOutcome, BoardRoadmap } from '../types';
+import { Club, PressureChoice, PressureMoment, UniverseMovement, ResolvedCupOutcome, ResolvedPlayoffOutcome, BoardRoadmap } from '../types';
 
 import { useGameStore, POSTSEASON_CHECKPOINT_KEY, pruneCareerHistoryForStorage } from "../store/useGameStore";
 import { isReserveClub } from "../data/gameConstants";
-import { getLeagueSize, generateYouthProspect } from "../engine/engine";
-import { ALL_CLUBS } from "../data/clubsData";
+import { getLeagueSize } from "../engine/engine";
 import { getActiveClubs, isAnyModActive, mergeClubWithWorldState } from "../utils/modManager";
 import { generateLeagueTable, getDecisionDayStandingsSlice } from "../utils/leagueTableGenerator";
 import { getBroadcastingPackage } from "../data/broadcastingPackages";
 import { generateDomesticCupTournament, generateEuroCupTournament } from "../utils/bracketGenerator";
-import { getMaxTier, getCreditLimit, getClubHistoricContext, getClubHomeArena, getFAInfo } from "../data/gameConstants";
+import { getMaxTier, getCreditLimit, getClubHistoricContext, getClubHomeArena, getFAInfo, getDynamicLeagueAvgOvr } from "../data/gameConstants";
 import { motion, AnimatePresence } from "motion/react";
-import { Trophy, Users2, Activity, Shield, User } from "lucide-react";
-import { SeasonHistoryTable } from "./SeasonHistoryTable";
+import { CourtsideWorkspace, CourtsideNavTab } from "./CourtsideWorkspace";
 import { ClubImpactModal } from "./ClubImpactModal";
-import { ActionPanel } from "./ActionPanel";
-import { MatchdayActionDock } from "./MatchdayActionDock";
 import { JobMarketModal } from "./JobMarketModal";
 import { ManagerProfileModal } from "./ManagerProfileModal";
 import { ManagerSkillsModal } from "./ManagerSkillsModal";
 import { LedgerModal } from "./LedgerModal";
 import { LeagueTableModal } from "./LeagueTableModal";
-import { AnimatedTreasury } from "./AnimatedTreasury";
 import { SeasonFinishModal } from "./SeasonFinishModal";
-import { SimulatingOverlay } from "./SimulatingOverlay";
 import { StatusChangeModal } from "./StatusChangeModal";
 import { BankruptcyModal } from "./BankruptcyModal";
 import { BoardExpectationModal } from "./BoardExpectationModal";
@@ -43,22 +35,21 @@ import { MedicalModal } from "./MedicalModal";
 import { AcademyModal } from "./AcademyModal";
 import { trackEvent } from "../utils/analytics";
 import { PhilosophyModal } from "./PhilosophyModal";
-import { MoraleModal } from "./MoraleModal";
 import { OvrModal } from "./OvrModal";
-import { ShieldsModal } from "./ShieldsModal";
 import { TeamBondingModal } from "./TeamBondingModal";
-import { SeasonPrepInfoModal } from "./SeasonPrepInfoModal";
 import { TransferModal } from "./TransferModal";
 import { LoanModal } from "./LoanModal";
 import { MarketingPRModal } from "./MarketingPRModal";
 import { IPOModal } from "./IPOModal";
 import { SponsorModal } from "./SponsorModal";
 import { YouthModal } from "./YouthModal";
+import { YouthChampionshipModal } from "./YouthChampionshipModal";
 import { ActiveEventModal } from "./ActiveEventModal";
 import { ConfirmResetModal } from "./ConfirmResetModal";
-import { LeaderboardModal } from "./LeaderboardModal";
 import { ClubCustomizationModal } from "./ClubCustomizationModal";
 import { BoardRoadmapModal } from "./BoardRoadmapModal";
+import { PressureMomentModal } from "./PressureMomentModal";
+import { evaluateMidSeasonPressure, estimateMidSeasonStanding, generatePressureMoment, resolvePressureResponse } from "../engine/pressureEngine";
 import { evaluateRoadmapProgress, generateBoardRoadmap } from "../utils/roadmapManager";
 import { calculateLiveScore, saveHighscore } from "../utils/leaderboard";
 import { generateRandomEvent, resolveDynamicEvent, generateMidSeasonCrisis } from "../data/randomEvents";
@@ -80,12 +71,20 @@ import {
   TACTICS
 } from "../data/gameConstants";
 
-const seededRandomDashboard = (seed: number) => {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
-};
-
-export function Dashboard({ state: propState, lang }: { state: any; lang: any }) {
+export function Dashboard({
+  state: propState,
+  lang,
+  activeTab: externalTab,
+  onSelectTab: externalSetTab,
+}: {
+  state: any;
+  lang: any;
+  activeTab?: CourtsideNavTab;
+  onSelectTab?: (tab: CourtsideNavTab) => void;
+}) {
+  const [localTab, setLocalTab] = useState<CourtsideNavTab>('overview');
+  const activeCourtsideTab = externalTab ?? localTab;
+  const handleSelectCourtsideTab = externalSetTab ?? setLocalTab;
   const storeState = useGameStore();
   const state = (storeState && storeState.club?.name) ? storeState : propState;
   const { club, budget, year, managerName, simulateSeason } = state || {};
@@ -127,11 +126,8 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     }
   }, [state?.seasonsInDebt, state?.budget, state?.bankruptcyPending]);
   const [showAcademy, setShowAcademy] = useState(false);
-  const [showMorale, setShowMorale] = useState(false);
   const [showOvrModal, setShowOvrModal] = useState(false);
-  const [showShields, setShowShields] = useState(false);
   const [showTeamBonding, setShowTeamBonding] = useState(false);
-  const [showPrepInfo, setShowPrepInfo] = useState(false);
   const [showWinterBreak, setShowWinterBreak] = useState(false);
   const winterBreakSeenYear = state?.winterBreakSeenYear ?? -1;
   const winterTransfersOpenedYear = state?.winterTransfersOpenedYear ?? -1;
@@ -140,14 +136,18 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const [showMarketing, setShowMarketing] = useState(false);
   const [showIPO, setShowIPO] = useState(false);
   const [showSponsors, setShowSponsors] = useState(false);
+  const [sponsorInitialDeal, setSponsorInitialDeal] = useState<0 | 1 | 2 | 3>(0);
   const [showStadium, setShowStadium] = useState(false);
   const [showArenaOverview, setShowArenaOverview] = useState(false);
+  const [arenaOverviewInitialTab, setArenaOverviewInitialTab] = useState<'market' | 'trend' | 'strategy' | 'expansion'>('market');
   const [showNewBuild, setShowNewBuild] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showCustomization, setShowCustomization] = useState(false);
   const [showClubProfile, setShowClubProfile] = useState(false);
+  const [clubProfileInitialTab, setClubProfileInitialTab] = useState<'overview' | 'reputation' | 'attendance' | 'history' | 'trophies'>('overview');
+  const [selectedTeamModalClub, setSelectedTeamModalClub] = useState<any | null>(null);
   const [showYouth, setShowYouth] = useState(false);
+  const [showYouthChampionship, setShowYouthChampionship] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [showConfirmRetire, setShowConfirmRetire] = useState(false);
   const [activeEvent, setActiveEvent] = useState<any>(null);
@@ -156,7 +156,6 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const [simulationPhase, setSimulationPhase] = useState<"idle"|"first_half"|"second_half">("idle");
   const [showPhilosophy, setShowPhilosophy] = useState(false);
   const [philosophyInitialTab, setPhilosophyInitialTab] = useState<'overview' | 'philosophy' | 'rebuild'>('overview');
-  const [trophyInfoModal, setTrophyInfoModal] = useState<'dom' | 'intl' | null>(null);
   const [showBoardExpectations, setShowBoardExpectations] = useState(false);
   const [showRoadmap, setShowRoadmap] = useState(false);
   const [isSeasonalBoardTransition, setIsSeasonalBoardTransition] = useState(false);
@@ -185,6 +184,8 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const [eliminatedCupOpponents, setEliminatedCupOpponents] = useState<string[]>(() => state?.activeCupTournament?.eliminatedClubs || []);
   const [eliminatedEuroOpponents, setEliminatedEuroOpponents] = useState<string[]>(() => state?.activeEuroTournament?.eliminatedClubs || []);
   const [winterBreakPending, setWinterBreakPending] = useState(false);
+  const [activePressureMoment, setActivePressureMoment] = useState<PressureMoment | null>(null);
+  const [openWinterBreakAfterPressure, setOpenWinterBreakAfterPressure] = useState(false);
   const postSeasonHydratedRef = React.useRef<string>('');
 
   // Rehydrate post-season flow if the user reloaded during post-season resolution screens
@@ -340,6 +341,11 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   }, [state?.club?.id, state?.year, state?.cupQualifiedForSf, state?.euroQualifiedForSf]);
 
   useEffect(() => {
+    setActivePressureMoment(state?.activePressureMoment && state.activePressureMoment.year === state?.year ? state.activePressureMoment : null);
+    setOpenWinterBreakAfterPressure(false);
+  }, [state?.club?.id]);
+
+  useEffect(() => {
     if (showWinterBreak && state?.year && state.winterBreakSeenYear !== state.year) {
       useGameStore.getState().updateState({ winterBreakSeenYear: state.year });
     }
@@ -375,14 +381,13 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   const anyModalOpen = Boolean(
     showYouth || showTransfers || showLoan || showMarketing || showIPO || showSponsors || showTable || showLedger || showPhilosophy ||
     showSkills || showCustomization || showNewBuild || showProfile || showImpact ||
-    showOvrModal || showLeaderboard || showArenaOverview || showStadium ||
+    showOvrModal || showArenaOverview || showStadium ||
     showAcademy || showMedical || showJobMarket || showTeamBonding ||
-    showPrepInfo || gachaRevealData || showShields || showMorale ||
-    arenaInaugurationData || seasonResultData || showWinterBreak || statusChange ||
-    trophyInfoModal || performanceDealResult || showSimulatingOverlay ||
+    gachaRevealData || arenaInaugurationData || seasonResultData || showWinterBreak || statusChange ||
+    performanceDealResult || showSimulatingOverlay ||
     activeEvent || showRoadmap || showBoardExpectations || showClubProfile ||
     showConfirmReset || showConfirmRetire || pendingMatches.length > 0 || preSeasonSupercupQueue.length > 0 || activeCelebrationToast ||
-    welcomeClub || showInboundOffers
+    welcomeClub || showInboundOffers || activePressureMoment
   );
   const prevAnyModalOpenRef = React.useRef<boolean>(false);
 
@@ -416,7 +421,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           handleCloseCelebrationToast();
           return;
         }
-        if (seasonResultData && !statusChange && !state.bankruptcyPending && !showTable && !performanceDealResult && !showProfile && !showImpact && !showLeaderboard) {
+        if (seasonResultData && !statusChange && !state.bankruptcyPending && !showTable && !performanceDealResult && !showProfile && !showImpact) {
           e.preventDefault();
           handleCloseSeasonFinish();
           return;
@@ -440,9 +445,9 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
       if (e.key === 'Escape') {
         e.preventDefault();
         if (showTable) { setShowTable(false); return; }
+        if (activePressureMoment) { return; }
         if (gachaRevealData) { setGachaRevealData(null); return; }
         if (activeEvent) { return; }
-        if (trophyInfoModal) { setTrophyInfoModal(null); return; }
         if (arenaInaugurationData) { setArenaInaugurationData(null); return; }
         if (activeCelebrationToast) { handleCloseCelebrationToast(); return; }
         if (showConfirmReset) { setShowConfirmReset(false); return; }
@@ -456,17 +461,13 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         if (showAcademy) { setShowAcademy(false); return; }
         if (showMedical) { setShowMedical(false); return; }
         if (showTeamBonding) { setShowTeamBonding(false); return; }
-        if (showPrepInfo) { setShowPrepInfo(false); return; }
         if (showOvrModal) { setShowOvrModal(false); return; }
-        if (showShields) { setShowShields(false); return; }
-        if (showMorale) { setShowMorale(false); return; }
         if (showPhilosophy) { setShowPhilosophy(false); return; }
         if (showSkills) { setShowSkills(false); return; }
         if (showRoadmap) { setShowRoadmap(false); return; }
         if (showBoardExpectations) { setWelcomeClub(null); handleCloseBoardExpectations(); return; }
         if (showCustomization) { setShowCustomization(false); return; }
         if (showClubProfile) { setShowClubProfile(false); return; }
-        if (showLeaderboard) { setShowLeaderboard(false); return; }
         if (showArenaOverview) { setShowArenaOverview(false); return; }
         if (showStadium) { setShowStadium(false); return; }
         if ((showJobMarket || showInboundOffers) && !state.isSacked) {
@@ -506,12 +507,12 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     showWinterBreak, winterBreakPending, pendingCupToasts, queuedCupMatches,
     queuedEuroMatches, queuedSuperGlobeMatches, pendingSeasonResult, performanceDealResult,
     seasonResultData, statusChange, state?.bankruptcyPending, state?.isSacked, state?.year, lastSeenYear,
-    gachaRevealData, activeEvent, trophyInfoModal, arenaInaugurationData,
-    showYouth, showTransfers, showLoan, showMarketing, showIPO, showSponsors, showAcademy, showMedical, showTeamBonding, showPrepInfo,
-    showOvrModal, showShields, showMorale, showPhilosophy, showSkills, showRoadmap, showBoardExpectations,
-    showCustomization, showClubProfile, showLeaderboard, showArenaOverview, showStadium,
+    gachaRevealData, activeEvent, arenaInaugurationData,
+    showYouth, showTransfers, showLoan, showMarketing, showIPO, showSponsors, showAcademy, showMedical, showTeamBonding,
+    showOvrModal, showPhilosophy, showSkills, showRoadmap, showBoardExpectations,
+    showCustomization, showClubProfile, showArenaOverview, showStadium,
     showJobMarket, showInboundOffers, showConfirmReset, showConfirmRetire, showImpact, showTable, showLedger, showNewBuild, showProfile,
-    stagedSeasonResultData, preSeasonSupercupQueue.length
+    stagedSeasonResultData, preSeasonSupercupQueue.length, activePressureMoment
   ]);
 
   // Guardrails & Save-state sanitization
@@ -590,6 +591,205 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     return <div className="min-h-screen w-full bg-[#0d0d0e]" />;
   }
 
+  const triggerMidSeasonPressureOrWinterBreak = (liveMidState: any) => {
+    const tier = liveMidState.club?.tier || 1;
+    const country = liveMidState.club?.country || 'GER';
+    const maxTier = getMaxTier(country);
+    const numTeams = getLeagueSize(tier, country, liveMidState.club?.id, tier, country, clubsDb);
+    const leagueAvgOvr = Math.round(getDynamicLeagueAvgOvr(liveMidState, tier, country));
+    const targetPos = liveMidState.boardTargetPos || Math.max(1, Math.floor(numTeams / 2));
+    const coachDisplay =
+      liveMidState.currentCoach?.name ||
+      (liveMidState.headCoachArchetype && liveMidState.headCoachArchetype !== 'Standard'
+        ? `${lang === 'de' ? 'Cheftrainer' : 'Head Coach'} (${liveMidState.headCoachArchetype})`
+        : lang === 'de'
+        ? 'Cheftrainer'
+        : 'Head Coach');
+
+    const evalResult = evaluateMidSeasonPressure({
+      clubId: liveMidState.club?.id,
+      clubName: liveMidState.club?.name || 'Club',
+      country,
+      year: liveMidState.year,
+      tier,
+      maxTier,
+      numTeams,
+      baseOvr: liveMidState.club?.baseOvr || 65,
+      leagueAvgOvr,
+      morale: liveMidState.club?.morale ?? 75,
+      targetPos,
+      boardExpectsSuccess: Boolean(liveMidState.boardExpectsSuccess),
+      trophyDrought: liveMidState.trophyDrought || 0,
+      consecutiveTitles: liveMidState.consecutiveTitles || 0,
+      tenureYears: liveMidState.tenureYears || 1,
+      isReserve: isReserveClub(liveMidState.club?.name || ''),
+      currentMediaPressure: liveMidState.mediaPressure,
+      currentCoachHeat: liveMidState.coachHeat,
+      currentGmHeat: liveMidState.gmHeat,
+      pendingSeasonState: liveMidState.pendingSeasonState,
+    });
+
+    useGameStore.getState().updateState({
+      mediaPressure: evalResult.mediaPressure,
+      coachHeat: evalResult.coachHeat,
+      gmHeat: evalResult.gmHeat,
+      pressureContext: evalResult.context,
+      pressureHeadline: lang === 'de' ? evalResult.headlineDe : evalResult.headline,
+    });
+
+    if (evalResult.shouldTriggerMoment && liveMidState.pressureMomentYear !== liveMidState.year) {
+      const moment = generatePressureMoment({
+        clubName: liveMidState.club?.name || 'Club',
+        country,
+        year: liveMidState.year,
+        tier,
+        phase: 'midseason',
+        context: evalResult.context,
+        mediaPressure: evalResult.mediaPressure,
+        coachHeat: evalResult.coachHeat,
+        gmHeat: evalResult.gmHeat,
+        targetPos: evalResult.standing.targetPos,
+        currentPos: evalResult.standing.midSeasonPos,
+        numTeams: evalResult.standing.numTeams,
+        coachName: coachDisplay,
+        gmName: liveMidState.managerName || 'Sporting Director',
+        tactic: liveMidState.tactic || 'Balanced 6-0',
+        trophyDrought: liveMidState.trophyDrought || 0,
+      });
+      useGameStore.getState().updateState({
+        pressureMomentYear: liveMidState.year,
+        activePressureMoment: moment,
+      });
+      setOpenWinterBreakAfterPressure(true);
+      setActivePressureMoment(moment);
+      return;
+    }
+
+    if (!liveMidState.midSeasonCrisisTriggered && Math.random() < 0.25) {
+      const crisis = generateMidSeasonCrisis(liveMidState);
+      if (crisis) {
+        useGameStore.getState().updateState({ midSeasonCrisisTriggered: true });
+        setActiveEvent(crisis);
+        return;
+      }
+    }
+
+    useGameStore.getState().updateState({ winterBreakSeenYear: liveMidState.year });
+    setShowWinterBreak(true);
+  };
+
+  const handleOpenPressRoom = () => {
+    const live = useGameStore.getState();
+    if (live.activePressureMoment && live.activePressureMoment.year === live.year) {
+      setOpenWinterBreakAfterPressure(false);
+      setActivePressureMoment(live.activePressureMoment);
+      return;
+    }
+
+    const tier = live.club?.tier || 1;
+    const country = live.club?.country || 'GER';
+    const maxTier = getMaxTier(country);
+    const numTeams = getLeagueSize(tier, country, live.club?.id, tier, country, clubsDb);
+    const leagueAvgOvr = Math.round(getDynamicLeagueAvgOvr(live, tier, country));
+    const targetPos = live.boardTargetPos || Math.max(1, Math.floor(numTeams / 2));
+    const standing = estimateMidSeasonStanding({
+      clubId: live.club?.id,
+      year: live.year,
+      numTeams,
+      baseOvr: live.club?.baseOvr || 65,
+      leagueAvgOvr,
+      morale: live.club?.morale ?? 75,
+      targetPos,
+      boardExpectsSuccess: Boolean(live.boardExpectsSuccess),
+      tier,
+      maxTier,
+      pendingSeasonState: live.pendingSeasonState,
+    });
+    const coachDisplay =
+      live.currentCoach?.name ||
+      (live.headCoachArchetype && live.headCoachArchetype !== 'Standard'
+        ? `${lang === 'de' ? 'Cheftrainer' : 'Head Coach'} (${live.headCoachArchetype})`
+        : lang === 'de'
+        ? 'Cheftrainer'
+        : 'Head Coach');
+
+    const context = live.pressureContext || 'steady';
+    const briefingMoment = generatePressureMoment({
+      clubName: live.club?.name || 'Club',
+      country,
+      year: live.year,
+      tier,
+      phase: 'briefing',
+      context,
+      mediaPressure: live.mediaPressure ?? 15,
+      coachHeat: live.coachHeat ?? 15,
+      gmHeat: live.gmHeat ?? 15,
+      targetPos: standing.targetPos,
+      currentPos: standing.midSeasonPos,
+      numTeams: standing.numTeams,
+      coachName: coachDisplay,
+      gmName: live.managerName || 'Sporting Director',
+      tactic: live.tactic || 'Balanced 6-0',
+      trophyDrought: live.trophyDrought || 0,
+    });
+    setOpenWinterBreakAfterPressure(false);
+    setActivePressureMoment(briefingMoment);
+  };
+
+  const handleSelectPressureChoice = (choiceId: PressureChoice['id']): PressureMoment | undefined => {
+    if (!activePressureMoment) return undefined;
+    const live = useGameStore.getState();
+    const outcome = resolvePressureResponse(
+      activePressureMoment,
+      choiceId,
+      {
+        mediaPressure: live.mediaPressure,
+        coachHeat: live.coachHeat,
+        gmHeat: live.gmHeat,
+        morale: live.club?.morale,
+        reputation: live.reputation,
+        clubImpactScore: live.clubImpactScore,
+      },
+      lang
+    );
+    if (!outcome) return undefined;
+
+    useGameStore.getState().updateState({
+      mediaPressure: outcome.mediaPressure,
+      coachHeat: outcome.coachHeat,
+      gmHeat: outcome.gmHeat,
+      reputation: outcome.reputation,
+      clubImpactScore: outcome.clubImpactScore,
+      club: { ...live.club, morale: outcome.morale },
+      pressureSecondHalfMod: outcome.secondHalfMod,
+      pressureMomentResolvedYear: live.year,
+      activePressureMoment: outcome.resolvedMoment,
+      notifications: [
+        {
+          id: `pm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          type: outcome.toastType === 'warning' ? 'info' : outcome.toastType,
+          category: 'board',
+          title: outcome.resolvedMoment.headline,
+          message: outcome.toastMessage,
+          read: true,
+        },
+        ...(live.notifications || []),
+      ].slice(0, 12),
+    });
+    setActivePressureMoment(outcome.resolvedMoment);
+    return outcome.resolvedMoment;
+  };
+
+  const handleClosePressureMoment = () => {
+    setActivePressureMoment(null);
+    useGameStore.getState().updateState({ activePressureMoment: null });
+    if (openWinterBreakAfterPressure) {
+      setOpenWinterBreakAfterPressure(false);
+      useGameStore.getState().updateState({ winterBreakSeenYear: useGameStore.getState().year });
+      setShowWinterBreak(true);
+    }
+  };
+
   const handleCloseCelebrationToast = () => {
     setActiveCelebrationToast(null);
 
@@ -597,16 +797,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
     if (winterBreakPending) {
       setWinterBreakPending(false);
       const liveStateAfterToast = useGameStore.getState();
-      if (!liveStateAfterToast.midSeasonCrisisTriggered && Math.random() < 0.25) {
-          const crisis = generateMidSeasonCrisis(liveStateAfterToast);
-          if (crisis) {
-              useGameStore.getState().updateState({ midSeasonCrisisTriggered: true });
-              setActiveEvent(crisis);
-              return;
-          }
-      }
-      useGameStore.getState().updateState({ winterBreakSeenYear: liveStateAfterToast.year });
-      setShowWinterBreak(true);
+      triggerMidSeasonPressureOrWinterBreak(liveStateAfterToast);
       return;
     }
 
@@ -719,6 +910,20 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
          return;
       }
       if (latestState.bankruptcyPending) return;
+
+      if (latestState.pendingPostSeasonPressureMoment) {
+        const postMoment = latestState.pendingPostSeasonPressureMoment;
+        latestState.updateState({
+          pendingPostSeasonPressureMoment: null,
+          activePressureMoment: postMoment,
+        });
+        setOpenWinterBreakAfterPressure(false);
+        setActivePressureMoment(postMoment);
+        if (latestState.year > lastSeenYear) {
+          setLastSeenYear(latestState.year);
+        }
+        return;
+      }
       
       // Trigger off-season event (board expectations moved to SeasonFinishModal)
       if (latestState.year > lastSeenYear) {
@@ -797,6 +1002,10 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
 
   const launchSimulationOverlayNow = () => {
     isSimulatingRef.current = true;
+    handleSelectCourtsideTab('overview');
+    if (typeof window !== 'undefined' && window.scrollY > 140) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     const tier = state.club.tier || 5;
     const numTeams = getLeagueSize(tier, state.club.country || 'GER', state.club.id, state.club.tier, state.club.country || 'GER', clubsDb);
     const matchdays = (numTeams - 1) * 2;
@@ -1083,19 +1292,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         }
 
         const liveMidSeasonState = useGameStore.getState();
-        if (!liveMidSeasonState.midSeasonCrisisTriggered && Math.random() < 0.25) { // 25% chance of mid-season crisis
-            const crisis = generateMidSeasonCrisis(liveMidSeasonState);
-            if (crisis) {
-                useGameStore.getState().updateState({ midSeasonCrisisTriggered: true });
-                setActiveEvent(crisis);
-                setSimulationPhase("idle");
-                isSimulatingRef.current = false;
-                return;
-            }
-        }
-
-        useGameStore.getState().updateState({ winterBreakSeenYear: liveMidSeasonState.year });
-        setShowWinterBreak(true);
+        triggerMidSeasonPressureOrWinterBreak(liveMidSeasonState);
         setSimulationPhase("idle");
         isSimulatingRef.current = false;
         return;
@@ -4267,16 +4464,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
             if (winterBreakPending) {
                 setWinterBreakPending(false);
                 const liveAfterMatchState = useGameStore.getState();
-                if (!liveAfterMatchState.midSeasonCrisisTriggered && Math.random() < 0.25) {
-                    const crisis = generateMidSeasonCrisis(liveAfterMatchState);
-                    if (crisis) {
-                        useGameStore.getState().updateState({ midSeasonCrisisTriggered: true });
-                        setActiveEvent(crisis);
-                        return;
-                    }
-                }
-                useGameStore.getState().updateState({ winterBreakSeenYear: liveAfterMatchState.year });
-                setShowWinterBreak(true);
+                triggerMidSeasonPressureOrWinterBreak(liveAfterMatchState);
                 return;
             } else if (newToastToTrigger) {
                 setActiveCelebrationToast(newToastToTrigger);
@@ -4317,246 +4505,249 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
   };
   const financials = calculateClubFinancials(state);
   const rep = Math.min(100, calculateClubReputation(team.baseOvr, team.tier));
+  const simulateBlocked = Boolean(
+    anyModalOpen ||
+      isSimulating ||
+      showSimulatingOverlay ||
+      state.bankruptcyPending ||
+      preSeasonSupercupQueue.length > 0
+  );
+
+  useEffect(() => {
+    const onCommand = (e: Event) => {
+      const cmd = (e as CustomEvent)?.detail;
+      if (!cmd) return;
+      switch (cmd) {
+        case 'simulate':
+          if (!simulateBlocked) handleSimulate();
+          break;
+        case 'transfers':
+          setShowTransfers(true);
+          break;
+        case 'youth':
+          setShowYouth(true);
+          break;
+        case 'youth-tournament': {
+          const activeCohortLen = (state.youthPipeline || []).filter((p: any) => !p.isLoanedOut).length;
+          if (activeCohortLen >= 6 && state.youthChampionshipSimulatedYear !== state.year) {
+            setShowYouthChampionship(true);
+          } else {
+            setShowYouth(true);
+          }
+          break;
+        }
+        case 'team-retreat':
+          if ((state.teamBondingThisSeason || 0) >= 1) {
+            useGameStore.getState().updateState({
+              notifications: [
+                {
+                  id: Math.random().toString(),
+                  type: 'error',
+                  message: 'Team Bonding is only allowed once per season.',
+                  read: false,
+                },
+                ...(useGameStore.getState().notifications || []),
+              ],
+            });
+          } else {
+            setShowTeamBonding(true);
+          }
+          break;
+        case 'loans':
+          setShowLoan(true);
+          break;
+        case 'tactics':
+          setPhilosophyInitialTab('philosophy');
+          setShowPhilosophy(true);
+          break;
+        case 'standings':
+          setShowTable(true);
+          break;
+        case 'sponsors':
+          setSponsorInitialDeal(0);
+          setShowSponsors(true);
+          break;
+        case 'ipo':
+          setShowIPO(true);
+          break;
+        case 'ledger':
+          setShowLedger(true);
+          break;
+        case 'arena':
+          setArenaOverviewInitialTab('market');
+          setShowArenaOverview(true);
+          break;
+        case 'facilities':
+          setShowAcademy(true);
+          break;
+        case 'new-arena':
+          setShowNewBuild(true);
+          break;
+        case 'impact':
+          setShowImpact(true);
+          break;
+        case 'press':
+          handleOpenPressRoom();
+          break;
+        case 'skills':
+          setShowSkills(true);
+          break;
+        case 'jobs':
+          setShowJobMarket(true);
+          break;
+        case 'profile':
+          setShowProfile(true);
+          break;
+        case 'club-profile':
+          setSelectedTeamModalClub(state.club);
+          setClubProfileInitialTab('overview');
+          setShowClubProfile(true);
+          break;
+      }
+    };
+    window.addEventListener('courtside-command', onCommand);
+    return () => window.removeEventListener('courtside-command', onCommand);
+  });
+
+  const latestClubHistory = Array.isArray(state.history) && state.history.length > 0 ? state.history[state.history.length - 1] : undefined;
+  const lastSameClubHist =
+    latestClubHistory &&
+    ((latestClubHistory.clubId !== undefined && state.club?.id !== undefined && String(latestClubHistory.clubId) === String(state.club.id)) ||
+      !latestClubHistory.clubName ||
+      latestClubHistory.clubName === state.club?.name)
+      ? latestClubHistory
+      : undefined;
+  const currentLeagueSize = getLeagueSize(
+    state.club?.tier || 1,
+    state.club?.country || 'GER',
+    state.club?.id,
+    state.club?.tier,
+    state.club?.country,
+    clubsDb
+  );
+  const relegationDepth = currentLeagueSize >= 18 ? 3 : 2;
+  const relegationLine = currentLeagueSize - relegationDepth + 1;
+  const isProvenTopHalf = Boolean(lastSameClubHist && lastSameClubHist.pos <= Math.ceil(currentLeagueSize * 0.5));
+  const finishedInRelegationDanger = Boolean(
+    lastSameClubHist && !lastSameClubHist.relegated && !lastSameClubHist.promoted && lastSameClubHist.pos >= relegationLine
+  );
+  const isNewlyRelegated = Boolean(lastSameClubHist && lastSameClubHist.relegated);
+
+  const isRelegationDanger = Boolean(
+    !isNewlyRelegated &&
+      !isProvenTopHalf &&
+      ((state.boardExpectation || '').toLowerCase().includes('relegat') ||
+        (state.boardExpectation || '').toLowerCase().includes('survival') ||
+        (state.boardExpectation || '').toLowerCase().includes('abstieg') ||
+        finishedInRelegationDanger ||
+        (state.club?.baseOvr || 75) <= getDynamicLeagueAvgOvr(state) - 3)
+  );
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-3.5 max-w-7xl mx-auto w-full pb-36 sm:pb-0">
-      {/* Top Executive Command Deck */}
-      <DashboardHeader 
+    <div className="flex flex-col gap-3.5 max-w-[1440px] mx-auto w-full">
+      <CourtsideWorkspace
+        activeTab={activeCourtsideTab}
+        onSelectTab={handleSelectCourtsideTab}
         state={state}
-        lang={lang} 
+        lang={lang}
+        activeClubs={clubsDb}
         financials={financials}
+        isFirstHalf={state.year > winterBreakSeenYear}
+        supercupMatch={qualifiedSupercups[0]}
+        isRelegationFight={isRelegationDanger}
+        simulateDisabled={simulateBlocked}
+        isSimulatingLive={showSimulatingOverlay}
+        simulationPhase={simulationPhase}
+        totalMatchdays={totalMatchdaysForOverlay}
+        onSimulationComplete={handleSimulateSeasonComplete}
+        onSimulate={handleSimulate}
         onShowTable={() => setShowTable(true)}
         onShowLedger={() => setShowLedger(true)}
+        onShowTransfers={() => setShowTransfers(true)}
+        onShowOvr={() => setShowOvrModal(true)}
         onShowYouth={() => setShowYouth(true)}
-        onOpenPhilosophyModal={() => {
+        onShowYouthTournament={() => {
+          const activeCohortLen = (state.youthPipeline || []).filter((p: any) => !p.isLoanedOut).length;
+          if (activeCohortLen >= 6 && state.youthChampionshipSimulatedYear !== state.year) {
+            setShowYouthChampionship(true);
+          } else {
+            setShowYouth(true);
+          }
+        }}
+        onTeamBonding={() => {
+          if ((state.teamBondingThisSeason || 0) >= 1) {
+            useGameStore.getState().updateState({
+              notifications: [
+                {
+                  id: Math.random().toString(),
+                  type: 'error',
+                  message: 'Team Bonding is only allowed once per season.',
+                  read: false,
+                },
+                ...(useGameStore.getState().notifications || []),
+              ],
+            });
+          } else {
+            setShowTeamBonding(true);
+          }
+        }}
+        onOpenPhilosophy={() => {
           setPhilosophyInitialTab('philosophy');
           setShowPhilosophy(true);
         }}
-        onCoachMarket={() => {
+        onOpenCoachOverview={() => {
           setPhilosophyInitialTab('overview');
           setShowPhilosophy(true);
         }}
-        onOpenCoachDossier={() => {
-          setPhilosophyInitialTab('overview');
+        onOpenRebuild={() => {
+          setPhilosophyInitialTab('rebuild');
           setShowPhilosophy(true);
         }}
-        onOpenSkillsModal={() => setShowSkills(true)}
-        onOpenCustomization={() => setShowCustomization(true)}
-        onOpenClubProfile={() => setShowClubProfile(true)}
+        onOpenTeamModal={(clubObj) => {
+          setSelectedTeamModalClub(clubObj || state.club);
+          setClubProfileInitialTab('overview');
+          setShowClubProfile(true);
+        }}
+        onOpenClubContext={() => {
+          setSelectedTeamModalClub(state.club);
+          setClubProfileInitialTab('overview');
+          setShowClubProfile(true);
+        }}
+        onOpenTrophyCabinet={() => {
+          setSelectedTeamModalClub(state.club);
+          setClubProfileInitialTab('trophies');
+          setShowClubProfile(true);
+        }}
+        onShowSponsors={(dealIndex = 0) => {
+          setSponsorInitialDeal(dealIndex);
+          setShowSponsors(true);
+        }}
+        onShowIPO={() => setShowIPO(true)}
+        onShowMarketing={() => setShowMarketing(true)}
+        onShowLoan={() => setShowLoan(true)}
+        onShowStadium={() => setShowStadium(true)}
+        onShowArenaOverview={(tab = 'market') => {
+          setArenaOverviewInitialTab(tab);
+          setShowArenaOverview(true);
+        }}
         onShowNewBuild={() => setShowNewBuild(true)}
-        onOpenProfile={() => setShowProfile(true)}
-        onShowCareerHistory={() => setShowProfile(true)}
+        onUpgradeAcademy={() => setShowAcademy(true)}
+        onUpgradeMedical={() => setShowMedical(true)}
         onShowImpact={() => setShowImpact(true)}
-        onOpenMoraleModal={() => setShowMorale(true)}
-        onOpenShieldsModal={() => setShowShields(true)}
-        onOpenOvrModal={() => setShowOvrModal(true)}
-        onShowLeaderboard={() => setShowLeaderboard(true)}
+        onOpenPressRoom={handleOpenPressRoom}
+        onOpenRoadmap={() => setShowRoadmap(true)}
+        onOpenSkills={() => setShowSkills(true)}
+        onOpenJobMarket={() => setShowJobMarket(true)}
+        onOpenProfile={() => setShowProfile(true)}
+        onOpenClubProfile={() => {
+          setSelectedTeamModalClub(state.club);
+          setClubProfileInitialTab('overview');
+          setShowClubProfile(true);
+        }}
+        onOpenCustomization={() => setShowCustomization(true)}
+        onOpenBoardExpectations={() => setShowBoardExpectations(true)}
+        onRetire={() => setShowConfirmRetire(true)}
       />
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-3.5 items-start [overflow-anchor:none]">
-        {/* Left Column */}
-        <div className="lg:col-span-5 flex flex-col gap-3 sm:gap-3.5 [overflow-anchor:none]">
-          {/* 5-Year Trophy Drought Alert (Tier 1 & trophyDrought > 4) */}
-          {state.club.tier === 1 && (state.trophyDrought || 0) > 4 && (
-            <div
-              onClick={() => setShowBoardExpectations(true)}
-              className="bg-[#0d0f17]/95 border border-rose-500/30 hover:border-rose-400/50 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 cursor-pointer transition-all duration-200 group active:scale-[0.99]"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center text-xs shrink-0">
-                  <i className="fas fa-triangle-exclamation" />
-                </div>
-                <div className="flex flex-col text-left min-w-0">
-                  <span className="text-xs font-medium text-rose-300 truncate">
-                    {lang === 'de' ? `${state.trophyDrought}-Jahre Titelflaute` : `${state.trophyDrought}-Year Trophy Drought`}
-                  </span>
-                  <span className="text-[11px] text-zinc-400 truncate">
-                    {lang === 'de'
-                      ? 'Vorstand fordert dringend Silberware.'
-                      : 'Board and supporters demand silverware.'}
-                  </span>
-                </div>
-              </div>
-              <span className="text-[10px] font-mono font-medium text-rose-300 bg-rose-500/15 border border-rose-500/30 px-2.5 py-1 rounded-lg shrink-0 group-hover:bg-rose-500 group-hover:text-white transition">
-                {lang === 'de' ? 'Vorgaben →' : 'Board →'}
-              </span>
-            </div>
-          )}
-
-          {/* TREASURY CARD (Matches Reference Left-Top Card) */}
-          <div className="bg-[#12141c] border border-white/[0.06] rounded-[24px] p-4 sm:p-5 shadow-[0_16px_40px_rgba(0,0,0,0.45)] flex flex-col gap-3.5">
-            {/* Header Row */}
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 flex items-center justify-center text-xs shrink-0">
-                <i className="fas fa-wallet" />
-              </div>
-              <span className="text-xs font-semibold uppercase tracking-widest text-zinc-300">
-                TREASURY
-              </span>
-            </div>
-
-            {/* Balance Row */}
-            <div className="flex items-baseline justify-between gap-2 pt-0.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                BALANCE
-              </span>
-              <span className="text-2xl sm:text-3xl font-bold text-white tracking-tight tabular-nums">
-                {formatMoney(state.budget || 0)}
-              </span>
-            </div>
-
-            {/* 3-Column Financial Breakdown Pill Box */}
-            <div className="bg-[#161922] border border-white/[0.05] rounded-2xl grid grid-cols-3 divide-x divide-white/[0.05] py-2.5 px-2">
-              <div className="flex flex-col items-center justify-center gap-0.5 px-1">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
-                  EST. REV
-                </span>
-                <span className="text-xs font-bold text-emerald-400 tabular-nums">
-                  +{formatMoney(financials.estRevenue || 0)}
-                </span>
-              </div>
-              <div className="flex flex-col items-center justify-center gap-0.5 px-1">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
-                  EXPENSES
-                </span>
-                <span className="text-xs font-bold text-rose-400 tabular-nums">
-                  -{formatMoney(Math.max(0, (financials.estRevenue || 0) - (financials.net || 0)))}
-                </span>
-              </div>
-              <div className="flex flex-col items-center justify-center gap-0.5 px-1">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
-                  PROJ. MARGIN
-                </span>
-                <span className={`text-xs font-bold tabular-nums ${financials.net < 0 ? 'text-rose-400' : 'text-sky-400'}`}>
-                  {financials.net >= 0 ? '+' : ''}{formatMoney(financials.net || 0)}
-                </span>
-              </div>
-            </div>
-
-            {/* Standings & Ledger Action Buttons */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowTable(true)}
-                className="bg-[#181b26] hover:bg-[#1f2330] border border-white/[0.07] hover:border-white/[0.14] rounded-xl py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold text-zinc-200 hover:text-white transition cursor-pointer active:scale-[0.99]"
-              >
-                <i className="fas fa-list-ul text-sky-400 text-[11px]" />
-                <span>Standings</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowLedger(true)}
-                className="bg-[#181b26] hover:bg-[#1f2330] border border-white/[0.07] hover:border-white/[0.14] rounded-xl py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold text-zinc-200 hover:text-white transition cursor-pointer active:scale-[0.99]"
-              >
-                <i className="fas fa-file-invoice-dollar text-emerald-400 text-[11px]" />
-                <span>Ledger</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 4-PILL CLUB TELEMETRY STRIP (Matches Reference Middle-Left Card) */}
-          <div className="bg-[#12141c] border border-white/[0.06] rounded-[24px] p-2 sm:p-3 shadow-[0_16px_40px_rgba(0,0,0,0.45)] grid grid-cols-4 gap-1.5 sm:gap-2">
-            <div className="bg-[#161922] border border-white/[0.05] rounded-2xl py-2.5 px-1 sm:px-1.5 flex flex-col items-center justify-center gap-1 min-w-0">
-              <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1 whitespace-nowrap">
-                <i className="fas fa-check text-emerald-400 text-[8px]" />
-                <span>WINS</span>
-              </span>
-              <span className="text-sm sm:text-lg font-bold text-white tracking-tight tabular-nums leading-none">
-                {(state.totals?.wins || 0).toLocaleString()}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setTrophyInfoModal('dom')}
-              className="bg-[#161922] hover:bg-[#1b1f2b] border border-white/[0.05] hover:border-white/[0.12] rounded-2xl py-2.5 px-1 sm:px-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer transition active:scale-95 group min-w-0"
-            >
-              <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-zinc-400 group-hover:text-zinc-300 flex items-center gap-1 whitespace-nowrap">
-                <i className="fas fa-trophy text-amber-400 text-[8px]" />
-                <span className="sm:hidden">DOM.</span>
-                <span className="hidden sm:inline">DOM. TROPHIES</span>
-              </span>
-              <span className="text-sm sm:text-lg font-bold text-amber-400 tracking-tight tabular-nums leading-none">
-                {(state.totals?.domTrophies || 0).toLocaleString()}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTrophyInfoModal('intl')}
-              className="bg-[#161922] hover:bg-[#1b1f2b] border border-white/[0.05] hover:border-white/[0.12] rounded-2xl py-2.5 px-1 sm:px-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer transition active:scale-95 group min-w-0"
-            >
-              <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-zinc-400 group-hover:text-zinc-300 flex items-center gap-1 whitespace-nowrap">
-                <i className="fas fa-globe text-sky-400 text-[8px]" />
-                <span className="sm:hidden">INTL.</span>
-                <span className="hidden sm:inline">INTL. TROPHIES</span>
-              </span>
-              <span className="text-sm sm:text-lg font-bold text-sky-400 tracking-tight tabular-nums leading-none">
-                {(state.totals?.intTrophies || 0).toLocaleString()}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowArenaOverview(true)}
-              title="Inspect Arena Overview & 5-Year Attendance"
-              className="bg-[#161922] hover:bg-[#1b1f2b] border border-white/[0.05] hover:border-white/[0.12] rounded-2xl py-2.5 px-1 sm:px-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer transition active:scale-95 group min-w-0"
-            >
-              <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-zinc-400 group-hover:text-zinc-300 flex items-center gap-1 whitespace-nowrap">
-                <i className="fas fa-landmark text-zinc-400 text-[8px]" />
-                <span>ARENA</span>
-              </span>
-              <span className="text-sm sm:text-lg font-bold text-white tracking-tight tabular-nums leading-none">
-                {(state.club?.stadium || 0).toLocaleString()}
-              </span>
-            </button>
-          </div>
-
-          <ActionPanel 
-            isFirstHalf={state.year > winterBreakSeenYear}
-            state={state}
-            lang={lang}
-            onSimulate={handleSimulate}
-            onOpenJobMarket={() => setShowJobMarket(true)}
-            onShowStadium={() => setShowStadium(true)}
-            onShowArenaOverview={() => setShowArenaOverview(true)}
-            onShowNewBuild={() => setShowNewBuild(true)}
-            onOpenPhilosophy={() => {
-              setPhilosophyInitialTab('philosophy');
-              setShowPhilosophy(true);
-            }}
-            onOpenSkills={() => setShowSkills(true)}
-            onShowTransfers={() => setShowTransfers(true)}
-            onShowLoan={() => setShowLoan(true)}
-            onShowMarketing={() => setShowMarketing(true)}
-            onShowIPO={() => setShowIPO(true)}
-            onShowSponsors={() => setShowSponsors(true)}
-            onUpgradeAcademy={() => setShowAcademy(true)}
-            onUpgradeMedical={() => setShowMedical(true)}
-            onShowYouth={() => setShowYouth(true)}
-            onTeamBonding={() => {
-              if ((state.teamBondingThisSeason || 0) >= 1) {
-                useGameStore.getState().updateState({
-                  notifications: [
-                    { id: Math.random().toString(), type: 'error', message: 'Team Bonding is only allowed once per season.', read: false },
-                    ...(useGameStore.getState().notifications || [])
-                  ]
-                });
-              } else {
-                setShowTeamBonding(true);
-              }
-            }}
-            onShowProfile={() => setShowProfile(true)}
-            onShowImpact={() => setShowImpact(true)}
-            onOpenRoadmap={() => setShowRoadmap(true)}
-            onOpenMoraleModal={() => setShowImpact(true)}
-            onRetire={() => setShowConfirmRetire(true)}
-            onOpenInfo={() => setShowPrepInfo(true)}
-          />
-        </div>
-
-        {/* Right Column: History/Standings */}
-        <div className="lg:col-span-7 block">
-          <SeasonHistoryTable state={state} lang={lang} />
-        </div>
-      </div>
       <AnimatePresence>
       {showTable && (
         <LeagueTableModal key="modal-table" state={state}
@@ -4925,14 +5116,6 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           </motion.div>
         </motion.div>
       )}
-      {showLeaderboard && (
-        <LeaderboardModal
-          key="modal-leaderboard"
-          state={state}
-          lang={lang}
-          onClose={() => setShowLeaderboard(false)}
-        />
-      )}
       {showImpact && (
         <ClubImpactModal key="modal-impact" state={state}
           lang={lang}
@@ -4944,6 +5127,10 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           onOpenClubProfile={() => {
             setShowImpact(false);
             setShowClubProfile(true);
+          }}
+          onOpenPressRoom={() => {
+            setShowImpact(false);
+            handleOpenPressRoom();
           }}
         />
       )}
@@ -4980,16 +5167,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         />
       )}
 
-      {showSimulatingOverlay && (
-        <SimulatingOverlay 
-          key="modal-simulating-overlay"
-          lang={lang} 
-          phase={simulationPhase}
-          totalMatchdays={totalMatchdaysForOverlay} 
-          onComplete={handleSimulateSeasonComplete} 
-          state={state}
-        />
-      )}
+      {/* Live simulation now runs inline over the center handball arena inside CourtSimulationCard */}
 
       {state.bankruptcyPending && pendingMatches.length === 0 && !isSimulating && !showSimulatingOverlay && !activeCelebrationToast && (!pendingSeasonResult || stagedSeasonResultData || seasonResultData) && (
         <BankruptcyModal key="modal-bankruptcy" />
@@ -5043,17 +5221,23 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
              showTransfers || showTeamBonding || showPhilosophy || gachaRevealData || showYouth ||
              showTable || showLoan || showMarketing || showIPO || showSponsors || showAcademy || showMedical ||
              showStadium || showArenaOverview || showNewBuild || showLedger || showSkills ||
-             showProfile || showImpact || showOvrModal || showMorale || showShields ||
-             showLeaderboard || showClubProfile || showCustomization || showRoadmap
+             showProfile || showImpact || showOvrModal ||
+             showClubProfile || showCustomization || showRoadmap || activePressureMoment
            )}
            onReturnToDashboard={() => {
                setShowWinterBreak(false);
+               handleSelectCourtsideTab('overview');
+               if (typeof window !== 'undefined' && window.scrollY > 140) {
+                 window.scrollTo({ top: 0, behavior: 'smooth' });
+               }
            }}
+           onOpenPressRoom={handleOpenPressRoom}
            onContinue={() => {
                setShowWinterBreak(false);
-               isSimulatingRef.current = true;
-               setSimulationPhase("second_half");
-               setShowSimulatingOverlay(true);
+               handleSelectCourtsideTab('overview');
+               if (typeof window !== 'undefined' && window.scrollY > 140) {
+                 window.scrollTo({ top: 0, behavior: 'smooth' });
+               }
            }}
            onTeamBonding={() => {
                // setShowWinterBreak(false); // DO NOT CLOSE
@@ -5071,6 +5255,16 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
                 }
                setShowTransfers(true);
            }}
+        />
+      )}
+      {activePressureMoment && (
+        <PressureMomentModal
+          key={`modal-pressure-${activePressureMoment.id}`}
+          moment={activePressureMoment}
+          club={state.club}
+          lang={lang}
+          onSelectChoice={handleSelectPressureChoice}
+          onClose={handleClosePressureMoment}
         />
       )}
       {showTransfers && (
@@ -5261,9 +5455,12 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
         <SponsorModal
           key="modal-sponsors"
           isOpen={showSponsors}
-          initialDealIndex={0}
+          initialDealIndex={sponsorInitialDeal}
           lang={lang}
-          onClose={() => setShowSponsors(false)}
+          onClose={() => {
+            setShowSponsors(false);
+            setSponsorInitialDeal(0);
+          }}
         />
       )}
       {showYouth && (
@@ -5403,6 +5600,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           onClose={() => setShowStadium(false)}
           onShowArenaOverview={() => {
             setShowStadium(false);
+            setArenaOverviewInitialTab('trend');
             setShowArenaOverview(true);
           }}
           onExpand={(cost, seats, fanBoost) => {
@@ -5471,21 +5669,6 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           lang={lang}
         />
       )}
-      {showMorale && (
-        <MoraleModal key="modal-morale" state={state}
-          lang={lang}
-          onClose={() => setShowMorale(false)}
-        />
-      )}
-      {showShields && (
-        <ShieldsModal key="modal-shields" state={state}
-          lang={lang}
-          onClose={() => setShowShields(false)}
-        />
-      )}
-      {showPrepInfo && (
-        <SeasonPrepInfoModal key="modal-prep-info" isOpen={showPrepInfo} onClose={() => setShowPrepInfo(false)} lang={lang} />
-      )}
       {showTeamBonding && (
         <TeamBondingModal key="modal-bonding" state={state}
           lang={lang}
@@ -5498,18 +5681,111 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           }}
         />
       )}
+      {showYouthChampionship && (
+        <YouthChampionshipModal
+          key="modal-youth-championship-direct"
+          state={state}
+          onClose={() => setShowYouthChampionship(false)}
+          onComplete={(wonTitle) => {
+            const store = useGameStore.getState();
+            const currentNotifications = store.notifications || [];
+            if (wonTitle) {
+              const prevOvr = store.club.baseOvr || 60;
+              const nextOvr = Math.min(store.maxOvrCap || 100, prevOvr + 1);
+              const actualGain = Math.max(0, nextOvr - prevOvr);
+              const nextMorale = Math.min(100, (store.club.morale ?? 100) + 15);
+              const newHistory =
+                actualGain > 0
+                  ? [
+                      {
+                        id: Math.random().toString(36).substring(7),
+                        season: store.year,
+                        change: actualGain,
+                        reason: 'Youth Champions',
+                        reasonDe: 'Jugendmeister',
+                      },
+                      ...(store.ovrHistory || []),
+                    ].slice(0, 30)
+                  : store.ovrHistory || [];
+              const updatedClub = {
+                ...store.club,
+                morale: nextMorale,
+                baseOvr: nextOvr,
+              };
+              store.updateState({
+                youthTitlesWon: (store.youthTitlesWon || 0) + 1,
+                youthChampionshipSimulatedYear: store.year,
+                lastOvr: typeof store.lastOvr === 'number' ? store.lastOvr : prevOvr,
+                startOfSeasonOvr:
+                  typeof store.startOfSeasonOvr === 'number' ? store.startOfSeasonOvr : prevOvr,
+                ovrHistory: newHistory,
+                eventOvrGainThisSeason: (store.eventOvrGainThisSeason || 0) + actualGain,
+                club: updatedClub,
+                worldClubs: {
+                  ...(store.worldClubs || {}),
+                  [store.club.id]: {
+                    ...(store.worldClubs?.[store.club.id] || store.club),
+                    morale: nextMorale,
+                    baseOvr: nextOvr,
+                  },
+                  [String(store.club.id)]: {
+                    ...(store.worldClubs?.[String(store.club.id)] || store.club),
+                    morale: nextMorale,
+                    baseOvr: nextOvr,
+                  },
+                },
+                notifications: [
+                  {
+                    id: Math.random().toString(),
+                    type: 'celebration',
+                    title: 'U19 Youth Champions!',
+                    message:
+                      'Youth Champions! The U19 golden generation gives your senior squad a permanent +1 OVR and +15 Morale boost.',
+                    read: false,
+                  },
+                  ...currentNotifications,
+                ],
+              });
+            } else {
+              store.updateState({
+                youthChampionshipSimulatedYear: store.year,
+                notifications: [
+                  {
+                    id: Math.random().toString(),
+                    type: 'info',
+                    title: 'U19 Championship',
+                    message: 'Your U19 team was eliminated from the championship.',
+                    read: false,
+                  },
+                  ...currentNotifications,
+                ],
+              });
+            }
+          }}
+        />
+      )}
       {showClubProfile && (
         <ClubProfileModal
           key="modal-club-profile"
           state={state}
+          targetClub={selectedTeamModalClub || state.club}
+          initialTab={clubProfileInitialTab}
           lang={lang}
-          onClose={() => setShowClubProfile(false)}
+          onClose={() => {
+            setShowClubProfile(false);
+            setSelectedTeamModalClub(null);
+            setClubProfileInitialTab('overview');
+          }}
           onOpenAcademy={() => {
             setShowClubProfile(false);
+            setSelectedTeamModalClub(null);
+            setClubProfileInitialTab('overview');
             setShowAcademy(true);
           }}
           onOpenMedical={() => {
             setShowClubProfile(false);
+            setSelectedTeamModalClub(null);
+            setClubProfileInitialTab('overview');
             setShowMedical(true);
           }}
         />
@@ -5519,13 +5795,18 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           key="modal-arena-overview"
           state={state} 
           lang={lang} 
+          initialTab={arenaOverviewInitialTab}
           creditLimit={creditLimit}
           onExpand={(cost, seats, fanBoost) => {
             state.expandStadium(cost, seats, fanBoost || 0);
           }}
-          onClose={() => setShowArenaOverview(false)} 
+          onClose={() => {
+            setShowArenaOverview(false);
+            setArenaOverviewInitialTab('market');
+          }} 
           onOpenUpgrades={() => {
              setShowArenaOverview(false);
+             setArenaOverviewInitialTab('market');
              setShowStadium(true);
           }} 
         />
@@ -5539,98 +5820,7 @@ export function Dashboard({ state: propState, lang }: { state: any; lang: any })
           onClose={() => setArenaInaugurationData(null)}
         />
       )}
-      {trophyInfoModal && (
-        <div key="modal-trophy-info" className="fixed inset-0 bg-black/80 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 z-[10050] animate-in fade-in" onClick={() => setTrophyInfoModal(null)}>
-          <div 
-            className="bg-[#14151e] rounded-2xl p-6 sm:p-7 max-w-sm w-full border border-white/[0.04] shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative overflow-hidden" 
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Top Ambient Highlight */}
-            <div className={`absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent ${trophyInfoModal === 'dom' ? 'via-amber-400/30' : 'via-sky-400/30'} to-transparent pointer-events-none`} />
-
-            <button 
-              onClick={() => setTrophyInfoModal(null)} 
-              className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center transition absolute top-4 right-4 cursor-pointer"
-              aria-label="Close"
-            >
-              <i className="fas fa-xmark text-sm" />
-            </button>
-
-            <div className="text-center mb-5 mt-1">
-              <div className={`w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center text-xl border shadow-sm ${trophyInfoModal === 'dom' ? 'bg-amber-500/10 text-amber-300 border-amber-500/20' : 'bg-sky-500/10 text-sky-400 border-sky-500/20'}`}>
-                <i className={`fas ${trophyInfoModal === 'dom' ? 'fa-trophy' : 'fa-globe-americas'}`} />
-              </div>
-              <h2 className="text-xl font-semibold text-white tracking-tight leading-tight">
-                {trophyInfoModal === 'dom' ? 'Domestic Silverware' : 'International Trophies'}
-              </h2>
-              <span className="text-xs text-zinc-400 font-normal mt-0.5 block">
-                {trophyInfoModal === 'dom' ? 'Official Criteria' : 'Continental Criteria'}
-              </span>
-            </div>
-            
-            <div className="bg-[#10121a] rounded-2xl p-4 border border-white/[0.04] space-y-3.5">
-              {trophyInfoModal === 'dom' ? (
-                <>
-                  <p className="text-xs sm:text-[13px] text-zinc-300 font-normal leading-relaxed">
-                    Counts all tier 1 domestic championships and major cups won by this club.
-                  </p>
-                  <div className="space-y-2 text-xs pt-1 border-t border-white/[0.04]">
-                    <div className="flex items-center gap-2 text-zinc-200">
-                      <i className="fas fa-check text-emerald-400 text-xs shrink-0" />
-                      <span>Tier 1 League Championship</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-zinc-200">
-                      <i className="fas fa-check text-emerald-400 text-xs shrink-0" />
-                      <span>Domestic Cup & National Supercup Opener</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-zinc-500">
-                      <i className="fas fa-xmark text-zinc-600 text-xs shrink-0" />
-                      <span>Regional & Lower Divisions (Separate)</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs sm:text-[13px] text-zinc-300 font-normal leading-relaxed">
-                    Records all official continental and intercontinental cup triumphs won by the club.
-                  </p>
-                  <div className="space-y-2 text-xs pt-1 border-t border-white/[0.04]">
-                    <div className="flex items-center gap-2 text-zinc-200">
-                      <i className="fas fa-check text-emerald-400 text-xs shrink-0" />
-                      <span>European Cups (EHF CL, EL & EC)</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-zinc-200">
-                      <i className="fas fa-check text-emerald-400 text-xs shrink-0" />
-                      <span>IHF Super Globe / Club World Cup</span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            
-            <button 
-              onClick={() => setTrophyInfoModal(null)} 
-              className="mt-4 w-full py-3 bg-white/[0.06] hover:bg-white/[0.1] text-white font-semibold text-xs rounded-xl transition active:scale-[0.99] cursor-pointer border border-white/[0.08]"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </AnimatePresence>
-
-    {/* Mobile-Only Dock Clearance Spacer - guarantees content never gets overlapped by the fixed dock on mobile */}
-    <div className="h-32 sm:hidden shrink-0 pointer-events-none" aria-hidden="true" />
-
-    {/* Apple Dynamic Island Matchday Action Dock (1st Half / 2nd Half Season Progression) */}
-    <MatchdayActionDock
-      state={state}
-      isFirstHalf={state.year > winterBreakSeenYear}
-      onSimulate={handleSimulate}
-      lang={lang}
-      disabled={Boolean(anyModalOpen || isSimulating || showSimulatingOverlay || state.bankruptcyPending || preSeasonSupercupQueue.length > 0)}
-      supercupMatch={qualifiedSupercups[0]}
-    />
   </div>
 );
 }
