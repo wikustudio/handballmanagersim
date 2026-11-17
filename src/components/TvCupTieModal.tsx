@@ -83,7 +83,7 @@ export const TvCupTieModal: React.FC<TvCupTieModalProps> = ({
           <div className="grid grid-cols-2 gap-3 items-center text-center">
             {/* User Club */}
             <div className="flex flex-col items-center p-2 rounded-xl bg-white/[0.02]">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center p-1 bg-black/40 border border-white/[0.08] mb-2 shadow-sm">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center p-1 bg-white/95 border border-black/10 mb-2 shadow-sm">
                 <ClubLogo club={userClub} name={userClub.name} color={userClub.color} logo={userClub.logo} className="w-9 h-9 object-contain" />
               </div>
               <span className="text-xs font-bold text-white truncate max-w-[120px]">{userClub.name}</span>
@@ -94,7 +94,7 @@ export const TvCupTieModal: React.FC<TvCupTieModalProps> = ({
 
             {/* Giant Opponent */}
             <div className="flex flex-col items-center p-2 rounded-xl bg-amber-500/[0.06] border border-amber-500/20">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center p-1 bg-black/40 border border-amber-500/30 mb-2 shadow-sm">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center p-1 bg-white/95 border border-amber-500/30 mb-2 shadow-sm">
                 <ClubLogo name={opponent.name} color={opponent.color} logo={opponent.logo} className="w-9 h-9 object-contain" />
               </div>
               <span className="text-xs font-bold text-amber-200 truncate max-w-[120px] flex items-center gap-1 justify-center">

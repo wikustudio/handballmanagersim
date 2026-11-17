@@ -16,6 +16,7 @@ import {
   getClubHomeArena,
 } from '../data/gameConstants';
 import { ClubLogo } from './ClubLogo';
+import { CompetitionLogo } from './CompetitionLogo';
 import { ModSelectionModal } from './ModSelectionModal';
 import { isRealDataModActive, getCustomDb, REALDATA_MOD_NAME } from '../utils/modManager';
 import { generateBoardRoadmap } from '../utils/roadmapManager';
@@ -1250,7 +1251,12 @@ export const Onboarding: React.FC<OnboardingProps> = ({
                     {/* Top Row: Unboxed League & OVR Readout */}
                     <div className="flex items-center justify-between gap-2 mb-3 w-full">
                       <div className="text-[11px] font-semibold text-[#525866] flex items-center gap-1.5 truncate">
-                        <span>{countryInfo?.flag || '🏁'}</span>
+                        <CompetitionLogo
+                          kind="league"
+                          country={clubCountry}
+                          tier={c.tier}
+                          className="w-4 h-4 object-contain shrink-0"
+                        />
                         <span className="truncate text-[#14161D]">{countryInfo?.name || clubCountry}</span>
                         <span aria-hidden="true" className="text-[#686D7B]">·</span>
                         <span className="text-[#525866] font-medium">Tier {c.tier}</span>

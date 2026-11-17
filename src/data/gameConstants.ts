@@ -7,6 +7,7 @@ import { LeagueInfo, PhilosophyInfo, Club } from '../types';
 import handballBaseDatabase from '../mod-data/handball_base_database.json';
 import { getActiveClubs, mergeClubWithWorldState, isAnyModActive } from '../utils/modManager';
 import { coerceCountryString } from '../utils/crashResilience';
+import { getCompetitionLogoDataUri, getLeagueLogoDataUri } from './competitionLogos';
 export { calculateLiveScore } from '../utils/leaderboard';
 
 export const MAX_SEASONS = 35;
@@ -358,9 +359,13 @@ export const getLeagueInfo = (tier: number, country: string = 'GER'): LeagueInfo
   const normCountry = normalizeCountry(country) || 'GER';
   const countryLeagues = COUNTRY_LEAGUES[normCountry] || COUNTRY_LEAGUES['GER'];
   const safeTier = Math.max(1, tier || 1);
+  const dynamicLogo = getLeagueLogoDataUri(normCountry, safeTier, isAnyModActive());
   
   if (countryLeagues && countryLeagues[safeTier]) {
-    return countryLeagues[safeTier];
+    return {
+      ...countryLeagues[safeTier],
+      logo: dynamicLogo,
+    };
   }
 
   const countryNames: Record<string, string> = {
@@ -386,6 +391,7 @@ export const getLeagueInfo = (tier: number, country: string = 'GER'): LeagueInfo
     ...baseLeagueInfo,
     name: defaultName,
     tag: `DIV ${safeTier}`,
+    logo: dynamicLogo,
     avgOvr: Math.max(32, Math.round((baseLeagueInfo.avgOvr || 45) - extraDepth * 5)),
     wages: Math.max(5000, Math.floor(baseLeagueInfo.wages * cMult * depthScale)),
     tvPrize: Math.max(1000, Math.floor(baseLeagueInfo.tvPrize * cMult * depthScale)),
@@ -486,10 +492,15 @@ export const getDynamicLeagueAvgOvr = (
 export const getDomesticCupInfo = (country: string = 'GER', tier: number = 1) => {
   const norm = normalizeCountry(country);
   const isRegional = tier >= 4;
+  const modOn = isAnyModActive();
   let name = isRegional ? 'Regional Cup' : 'National Cup';
-  let logo = '';
+  const logo = getCompetitionLogoDataUri(isRegional ? 'reg' : 'dfb', {
+    country: norm,
+    tier,
+    isModActive: modOn,
+  });
   
-  if (!isRegional) {
+  if (!isRegional && modOn) {
     if (norm === 'GER') { name = 'DHB-Pokal'; }
     else if (norm === 'ESP') { name = 'Copa del Rey'; }
     else if (norm === 'FRA') { name = 'Coupe de France'; }
@@ -1015,13 +1026,27 @@ export const getMaxYouthPullsPerSeason = (tier: number, academyLevel: number = 1
 };
 
 export const TOURNAMENT_LOGOS: Record<string, string> = {
-  dfbPokal: "",
-  supercup: "",
-  cl: "", // EHF Champions League
-  el: "", // EHF European League
-  ecl: "", // EHF European Cup
-  dfbTeam: "",
-  cwc: "", // IHF Super Globe
+  get dfbPokal() {
+    return getCompetitionLogoDataUri('dfb', { country: 'GER', isModActive: isAnyModActive() });
+  },
+  get supercup() {
+    return getCompetitionLogoDataUri('sc', { country: 'GER', isModActive: isAnyModActive() });
+  },
+  get cl() {
+    return getCompetitionLogoDataUri('cl', { isModActive: isAnyModActive() });
+  },
+  get el() {
+    return getCompetitionLogoDataUri('el', { isModActive: isAnyModActive() });
+  },
+  get ecl() {
+    return getCompetitionLogoDataUri('ecl', { isModActive: isAnyModActive() });
+  },
+  get dfbTeam() {
+    return getCompetitionLogoDataUri('dfb', { country: 'GER', isModActive: isAnyModActive() });
+  },
+  get cwc() {
+    return getCompetitionLogoDataUri('cwc', { isModActive: isAnyModActive() });
+  },
 };
 
 export const COUNTRIES: Record<string, { name: string; flag: string; active: boolean }> = {

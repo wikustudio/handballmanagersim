@@ -352,25 +352,22 @@ export const ClubLogo: React.FC<ClubLogoProps & { club?: any; clubName?: string;
     finalColor = '#' + finalColor;
   }
   const isLight = isLightHex(finalColor) || Boolean(color && ['ffffff', 'fff', '#ffffff', '#fff'].includes(color.toLowerCase()));
-  const isWiesbaden = name.toLowerCase().includes('wiesbaden') || (propClubId === 171) || (club?.id === 171) || (matchedClub?.id === 171);
-  const needsContrastContainer = isLight || isWiesbaden;
 
   // Real logo display (active when mod is active and valid crest asset is available)
   if (modActive && currentSrc && !imgError) {
     const isFull = displayClass.includes('w-full') || displayClass.includes('h-full');
+    const isJpeg = /\.jpe?g(\?|$)/i.test(currentSrc);
     return (
       <div 
         data-club-logo="true"
-        className={`relative inline-flex items-center justify-center shrink-0 select-none ${isFull ? 'w-full h-full' : ''} ${
-          needsContrastContainer ? 'bg-[#18191F] rounded-lg p-0.5 border border-black/10 shadow-xs' : ''
-        }`} 
+        className={`relative inline-flex items-center justify-center shrink-0 select-none ${isFull ? 'w-full h-full' : ''}`} 
         aria-hidden={alt === '' ? true : undefined}
       >
         <img
           src={currentSrc}
           alt={alt}
           aria-hidden={alt === '' ? true : undefined}
-          className={`${baseClassName} ${displayClass}`}
+          className={`${baseClassName} ${displayClass} ${isJpeg ? 'mix-blend-multiply' : 'drop-shadow-[0_1px_1.5px_rgba(15,23,42,0.12)]'}`}
           onError={handleError}
           decoding="async"
           loading="eager"
@@ -385,9 +382,7 @@ export const ClubLogo: React.FC<ClubLogoProps & { club?: any; clubName?: string;
   }
 
   // Procedural Monogram Generation (used when mod is inactive or no crest asset is available)
-  // User confirmed: "In mod, the real club logo first. If not subtle dark badge container with club accent border"
   const hash = hashCode(name);
-  const textColor = isLight ? '#fbbf24' : getTextColor(finalColor);
   const initials = getInitials(name);
   
   let sizeClass = 'text-xs';
@@ -397,13 +392,33 @@ export const ClubLogo: React.FC<ClubLogoProps & { club?: any; clubName?: string;
   
   const fontStyle = 'font-sans font-extrabold tracking-tight';
   
-  const resolvedColor2 = propColor2 || club?.color2 || matchedClub?.color2;
-  const shapeClass = getShapeStyles(hash, finalColor);
-  const patternStyle = isLight 
-    ? { background: 'linear-gradient(135deg, #181922 0%, #0d0e13 100%)' }
-    : { background: getPatternStyles(hash, finalColor, resolvedColor2) };
+  const rawColor2 = propColor2 || club?.color2 || matchedClub?.color2;
+  const resolvedColor2 = rawColor2 && !rawColor2.startsWith('#') ? `#${rawColor2}` : rawColor2;
+  const isNearBlack = (hex?: string) => {
+    if (!hex) return false;
+    const h = hex.replace('#', '');
+    const cleanHex = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+    const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
+    const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
+    const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
+    return r <= 28 && g <= 28 && b <= 35;
+  };
+  const safeColor1 = isNearBlack(finalColor) ? '#334155' : finalColor;
+  const safeColor2 = resolvedColor2 && isNearBlack(resolvedColor2) ? '#334155' : resolvedColor2;
+  const hasDistinctColor2 = Boolean(safeColor2 && !isLightHex(safeColor2));
+  const shapeClass = getShapeStyles(hash, safeColor1);
+  const patternStyle = isLight
+    ? hasDistinctColor2
+      ? { background: getPatternStyles(hash, safeColor2!, '#F8FAFC') }
+      : { background: 'linear-gradient(135deg, #FFFFFF 0%, #E6E2D6 100%)' }
+    : { background: getPatternStyles(hash, safeColor1, safeColor2) };
+  const textColor = isLight
+    ? hasDistinctColor2
+      ? '#FFFFFF'
+      : '#14161D'
+    : getTextColor(safeColor1);
   
-  const borderClass = isLight ? 'border border-amber-400/50 shadow-xs' : 'border border-black/15 shadow-xs';
+  const borderClass = 'border border-black/15 shadow-xs';
 
   return (
     <div data-club-logo="true" className="relative inline-block shrink-0 select-none" aria-hidden={alt === '' ? true : undefined}>
@@ -411,7 +426,7 @@ export const ClubLogo: React.FC<ClubLogoProps & { club?: any; clubName?: string;
         className={`flex items-center justify-center shrink-0 ${fallbackDisplayClass} ${shapeClass} overflow-hidden ${borderClass} relative group`}
         style={patternStyle}
       >
-        <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/15 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-black/10 via-transparent to-white/15 pointer-events-none" />
         <span 
           className={`${fontStyle} ${sizeClass} uppercase z-10 drop-shadow-xs transition-transform group-hover:scale-105`}
           style={{ color: textColor }}

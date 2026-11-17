@@ -396,4 +396,42 @@ test('simulated live standings converge 1:1 with end-of-season table and prevent
   assert.equal(reconciledClose.decisionDay?.rivalPts, topAiRunnerUp.pts);
 });
 
+test('competitionLogos serves official EHF, IHF, HBL, DHB-Pokal & Tier 1 league logos when Mod is ON and trademark-free fallbacks when Mod is OFF', async () => {
+  const { buildCompetitionSvgMarkup, getCompetitionLogoDataUri, getLeagueLogoDataUri } = await import('../data/competitionLogos');
+
+  // 1. EHF & IHF Competitions (Mod ON -> official /assets/competitions/ files; Mod OFF -> generic SVG data URIs)
+  assert.equal(getCompetitionLogoDataUri('cl', { isModActive: true }), '/assets/competitions/ehf_cl.svg');
+  assert.equal(getCompetitionLogoDataUri('el', { isModActive: true }), '/assets/competitions/ehf_el.svg');
+  assert.equal(getCompetitionLogoDataUri('ecl', { isModActive: true }), '/assets/competitions/ehf_ec.png');
+  assert.equal(getCompetitionLogoDataUri('cwc', { isModActive: true }), '/assets/competitions/ihf_super_globe.svg');
+  assert.equal(getCompetitionLogoDataUri('euro_supercup', { isModActive: true }), '/assets/competitions/ehf_logo.svg');
+
+  const clModOff = buildCompetitionSvgMarkup('cl', { isModActive: false });
+  const elModOff = buildCompetitionSvgMarkup('el', { isModActive: false });
+  const cwcModOff = buildCompetitionSvgMarkup('cwc', { isModActive: false });
+  assert.ok(!clModOff.includes('EHF'), 'Mod OFF CL fallback must not contain EHF trademark');
+  assert.ok(!elModOff.includes('EHF'), 'Mod OFF EL fallback must not contain EHF');
+  assert.ok(!cwcModOff.includes('IHF'), 'Mod OFF global cup fallback must not contain IHF');
+
+  // 2. German League Tiers, National Cup (DHB-Pokal), and Supercup (HBL-Supercup)
+  assert.equal(getLeagueLogoDataUri('GER', 1, true), '/assets/competitions/ger_t1.svg');
+  assert.equal(getLeagueLogoDataUri('GER', 2, true), '/assets/competitions/ger_t2.svg');
+  assert.equal(getLeagueLogoDataUri('GER', 3, true), '/assets/competitions/ger_t3.svg');
+  assert.equal(getCompetitionLogoDataUri('dfb', { country: 'GER', isModActive: true }), '/assets/competitions/ger_cup_square.png');
+  assert.equal(getCompetitionLogoDataUri('sc', { country: 'GER', isModActive: true }), '/assets/competitions/ger_supercup.svg');
+
+  // 3. Other European Tier 1 Leagues & Cups (Mod ON)
+  assert.equal(getLeagueLogoDataUri('FRA', 1, true), '/assets/competitions/fra_t1.png');
+  assert.equal(getLeagueLogoDataUri('FRA', 2, true), '/assets/competitions/fra_t2.svg');
+  assert.equal(getCompetitionLogoDataUri('dfb', { country: 'FRA', isModActive: true }), '/assets/competitions/fra_cup.svg');
+  assert.equal(getCompetitionLogoDataUri('sc', { country: 'FRA', isModActive: true }), '/assets/competitions/fra_supercup.svg');
+  assert.equal(getLeagueLogoDataUri('ESP', 1, true), '/assets/competitions/esp_t1.svg');
+  assert.equal(getLeagueLogoDataUri('DEN', 1, true), '/assets/competitions/den_t1.svg');
+
+  // 4. Mod OFF returns clean fallback SVG data URIs
+  const hblOff = buildCompetitionSvgMarkup('league', { country: 'GER', tier: 1, isModActive: false });
+  assert.ok(!hblOff.includes('HBL') && hblOff.includes('PRO DIV 1'), 'GER Tier 1 Mod OFF must render generic PRO DIV 1 shield');
+  assert.ok(getCompetitionLogoDataUri('cl', { isModActive: false }).startsWith('data:image/svg+xml;utf8,'));
+  assert.ok(getLeagueLogoDataUri('GER', 1, false).startsWith('data:image/svg+xml;utf8,'));
+});
 

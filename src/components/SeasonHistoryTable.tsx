@@ -3,6 +3,7 @@ import { GameState, Language, TrophiesObj } from '../types';
 import { formatOrganicAttendance, getMaxTier, isReserveClub } from '../data/gameConstants';
 import { getLeagueSize } from '../engine/engine';
 import { ClubLogo } from './ClubLogo';
+import { CompetitionLogo } from './CompetitionLogo';
 import { ALL_CLUBS } from '../data/clubsData';
 import { getActiveClubs, isAnyModActive } from '../utils/modManager';
 import {
@@ -436,6 +437,16 @@ export const SeasonHistoryTable: React.FC<SeasonHistoryTableProps> = ({
             >
               {activeTrophyBreakdown.pedestals.map((slot) => {
                 const won = slot.count > 0;
+                const compKindMap: Record<TrophyIconKind, string> = {
+                  league: 'league',
+                  cup: 'dfb',
+                  supercup: 'sc',
+                  champions: 'cl',
+                  euro: 'el',
+                  globe: 'cwc',
+                  division: 'lower',
+                };
+                const compKind = compKindMap[slot.iconKind] || 'league';
                 return (
                   <button
                     key={slot.id}
@@ -450,7 +461,15 @@ export const SeasonHistoryTable: React.FC<SeasonHistoryTableProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-1">
-                      <TrophySilhouetteIcon kind={slot.iconKind} won={won} />
+                      <CompetitionLogo
+                        kind={compKind}
+                        country={state.club?.country || 'GER'}
+                        tier={slot.iconKind === 'division' ? 2 : 1}
+                        className={`w-5 h-5 object-contain transition ${
+                          won ? 'opacity-100 drop-shadow-2xs' : 'opacity-65 grayscale-[0.35]'
+                        }`}
+                        alt={slot.fullName}
+                      />
                       <span
                         className={`text-[13px] font-extrabold tabular-nums leading-none ${
                           won ? 'text-[#14161D]' : 'text-[#525866]'

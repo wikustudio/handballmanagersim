@@ -21,6 +21,7 @@ import { getOrGenerateRoadmap } from '../utils/roadmapManager';
 import { evaluateIPOEligibility } from '../utils/ipoEligibility';
 import { useGameStore } from '../store/useGameStore';
 import { ClubLogo } from './ClubLogo';
+import { CompetitionLogo } from './CompetitionLogo';
 import { CourtSimulationCard } from './CourtSimulationCard';
 import { ClubOfficeExteriorCard } from './ClubOfficeExteriorCard';
 import { TrainingGymWarmupCard } from './TrainingGymWarmupCard';
@@ -601,13 +602,23 @@ export const CourtsideWorkspace: React.FC<CourtsideWorkspaceProps> = ({
             >
               <div className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <h2 className="text-[15px] font-bold tracking-tight text-[#14161D]">
-                      Standings
-                    </h2>
-                    <p className="text-[10px] text-[#525866] truncate">
-                      {analytics.leagueName}
-                    </p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CompetitionLogo
+                      kind="league"
+                      country={state.club?.country || 'GER'}
+                      tier={state.club?.tier || 1}
+                      className="w-7 h-7 object-contain drop-shadow-2xs shrink-0"
+                      alt={analytics.leagueName}
+                      title={analytics.leagueName}
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-[15px] font-bold tracking-tight text-[#14161D]">
+                        Standings
+                      </h2>
+                      <p className="text-[10px] text-[#525866] truncate">
+                        {analytics.leagueName}
+                      </p>
+                    </div>
                   </div>
                   <button
                     type="button"
