@@ -4,7 +4,7 @@ import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { calculateProbabilisticSeason, generateYouthProspect, getLeagueSize } from '../engine/engine';
 import { simulateGlobalLeagues } from '../engine/leagueSimulation';
 import { calculateClubFinancials, getLeagueScaledVal, getStartingBudget, getCreditLimit, formatMoney, isReserveClub, getMaxTier, calculateInitialReputation, getLeagueInfo, getRegionalTourCost, getClubHistoricContext, normalizeCountry, getRequiredAcademyLevelForYouthPull, getMaxYouthPullsPerSeason, getClubCatchmentCeiling, getCalibratedStartingFanbase, getCountryEconomicProfile, getCountryMult, getPinnacleArenaCapacity, formatOrganicAttendance, setActiveCountryCode, MANAGER_SKILLS, getDynamicSponsorPitchTerms, getSponsorBrandForClub } from '../data/gameConstants';
-import { generateLeagueTable } from '../utils/leagueTableGenerator';
+import { generateLeagueTable, reconcileSeasonStatsWithLeagueTable } from '../utils/leagueTableGenerator';
 import { ALL_CLUBS } from '../data/clubsData';
 import { getActiveClubs, mergeClubWithWorldState } from '../utils/modManager';
 import { saveHighscore, calculateLiveScore } from '../utils/leaderboard';
@@ -2772,7 +2772,7 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         const currentTacticTenure = Math.max(consecutiveTacticSeasons + 1, recentTacticUsage + 1);
 
         // Safely deep-clone the pending state to prevent Zustand Strict Mode mutation crashes
-        const seasonStats = state.pendingSeasonState 
+        const rawSeasonStats = state.pendingSeasonState 
           ? JSON.parse(JSON.stringify(state.pendingSeasonState)) 
           : calculateProbabilisticSeason(
             simulationClub, 
@@ -2806,6 +2806,21 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
                 clubsPool: mergedAllClubsSim
             }
         );
+
+        const shouldReconcileFullPos = !state.pendingSeasonState || Boolean((state.pendingSeasonState as any)?._meta);
+        const reconciledStats = reconcileSeasonStatsWithLeagueTable(
+            { ...state, club: simulationClub } as any,
+            mergedAllClubsSim,
+            playedTier,
+            rawSeasonStats,
+            state.year
+        );
+        const seasonStats = shouldReconcileFullPos
+            ? reconciledStats
+            : {
+                ...rawSeasonStats,
+                decisionDay: rawSeasonStats.decisionDay !== undefined ? rawSeasonStats.decisionDay : reconciledStats.decisionDay,
+            };
         
         let clubImpact = state.clubImpactScore !== undefined ? state.clubImpactScore : 50;
         
@@ -3023,11 +3038,18 @@ export const useGameStore = create<GameStore>()(persist((set, get) => ({
         if (pointsDeducted > 0) {
             seasonStats.pointsDeducted = pointsDeducted;
             const prevPosBeforeDeduction = seasonStats.pos;
+            const postDeductionReconciled = reconcileSeasonStatsWithLeagueTable(
+                { ...state, club: simulationClub } as any,
+                mergedAllClubsSim,
+                playedTier,
+                seasonStats,
+                state.year
+            );
             const posPenalty = Math.max(1, Math.ceil(pointsDeducted / 2));
-            seasonStats.pos = Math.min(w, seasonStats.pos + posPenalty);
-            if (seasonStats.decisionDay?.type === 'title' && seasonStats.pos > 2) {
-                seasonStats.decisionDay = null;
-            }
+            seasonStats.pos = shouldReconcileFullPos
+                ? Math.max(prevPosBeforeDeduction, postDeductionReconciled.pos)
+                : Math.min(w, seasonStats.pos + posPenalty);
+            seasonStats.decisionDay = postDeductionReconciled.decisionDay;
             if (prevPosBeforeDeduction === 1 && seasonStats.pos > 1 && leaguePrize > 0) {
                 budget -= leaguePrize;
                 financials.estRevenue -= leaguePrize;

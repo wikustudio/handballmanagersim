@@ -1506,7 +1506,10 @@ export function Dashboard({
              const rivalPts = (decisionDayData?.type === 'title' && decisionDayData.rivalPts !== undefined)
                  ? decisionDayData.rivalPts
                  : (userPos === 1 ? Math.max(0, userPts - 1) : userPts + 1);
-             const rivalGd = Math.max(40, Math.round((result.seasonStats.gf - result.seasonStats.ga) * 0.85));
+             const rivalGdFromDecider = userPos === 1 ? decisionDayData?.trailerGd : decisionDayData?.leaderGd;
+             const rivalGd = typeof rivalGdFromDecider === 'number'
+                 ? rivalGdFromDecider
+                 : Math.max(40, Math.round((result.seasonStats.gf - result.seasonStats.ga) * 0.85));
              
              const remoteCandidates = clubsDb.filter(c => c.tier === tier && normalizeCountry(c.country || 'GER') === clubCountry && c.name !== rivalName && c.name !== state.club.name && !isReserveClub(c.name));
              const chosenOpponent = directMatch 

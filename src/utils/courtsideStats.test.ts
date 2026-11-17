@@ -306,3 +306,94 @@ test('deriveArenaName resolves ThSV Eisenach to Werner-Aßmann-Halle and respect
   assert.equal(analytics.arenaName, 'Würth Arena');
 });
 
+test('simulated live standings converge 1:1 with end-of-season table and prevent false Decision Day when > 2 pts ahead', async () => {
+  const { buildLiveLeagueStandings, reconcileSeasonStatsWithLeagueTable, generateLeagueTable } = await import('./leagueTableGenerator');
+  const magdeburg = ALL_CLUBS.find((c) => c.name === 'SC Magdeburg')!;
+  const state = createMockGameState({
+    year: 2027,
+    club: { ...magdeburg, tier: 1, country: 'GER', baseOvr: 88 },
+    history: [],
+  });
+
+  // 1. Dominant 1st place finish (62 pts, 8 points ahead of #2 AI rival at 54 pts)
+  const dominantRaw = {
+    wins: 30,
+    draws: 2,
+    losses: 2,
+    pts: 62,
+    gf: 1120,
+    ga: 880,
+    pos: 1,
+    decisionDay: {
+      type: 'title',
+      rivalName: 'THW Kiel',
+      rivalPts: 61,
+      leaderGd: 240,
+      trailerGd: 150,
+    },
+  };
+
+  const reconciledDominant = reconcileSeasonStatsWithLeagueTable(state, ALL_CLUBS, 1, dominantRaw, 2027);
+  assert.equal(reconciledDominant.pos, 1);
+  assert.equal(reconciledDominant.pts, 62);
+  assert.equal(
+    reconciledDominant.decisionDay,
+    null,
+    'Clinched title (> 2 pts ahead of #2) must NOT trigger a Decision Day or inflate rival points'
+  );
+
+  // Verify live standings on Matchday 34 match the completed season table 1:1 with zero re-calibration jump
+  const liveMd34 = buildLiveLeagueStandings(
+    state,
+    ALL_CLUBS,
+    1,
+    34,
+    { wins: 30, draws: 2, losses: 2, gf: 1120, ga: 880 },
+    2027
+  );
+  const completedTable = generateLeagueTable(state, ALL_CLUBS, 1, {
+    year: 2027,
+    clubName: magdeburg.name,
+    country: 'GER',
+    tier: 1,
+    wins: reconciledDominant.wins,
+    draws: reconciledDominant.draws,
+    losses: reconciledDominant.losses,
+    pts: reconciledDominant.pts,
+    pos: reconciledDominant.pos,
+    gf: reconciledDominant.gf,
+    ga: reconciledDominant.ga,
+  });
+
+  assert.equal(liveMd34.length, completedTable.length);
+  for (let i = 0; i < liveMd34.length; i++) {
+    assert.equal(liveMd34[i].name, completedTable[i].name, `Row ${i + 1} team name must match between live MD34 and final table`);
+    assert.equal(liveMd34[i].pts, completedTable[i].pts, `Row ${i + 1} points must match without end-of-season re-calibration`);
+    assert.equal(liveMd34[i].gd, completedTable[i].gd, `Row ${i + 1} GD must match without end-of-season re-calibration`);
+  }
+
+  // 2. Genuine close title race (within <= 2 points of top AI rival)
+  const topAiRunnerUp = liveMd34[1];
+  const closeWins = Math.floor((topAiRunnerUp.pts + 1) / 2);
+  const closeDraws = (topAiRunnerUp.pts + 1) - closeWins * 2;
+  const closeLosses = 34 - closeWins - closeDraws;
+  const closeRaw = {
+    wins: closeWins,
+    draws: closeDraws,
+    losses: closeLosses,
+    pts: topAiRunnerUp.pts + 1,
+    gf: 1060,
+    ga: 880,
+    pos: 4,
+    decisionDay: null,
+  };
+
+  const reconciledClose = reconcileSeasonStatsWithLeagueTable(state, ALL_CLUBS, 1, closeRaw, 2027);
+  assert.equal(reconciledClose.pos, 1);
+  assert.ok(reconciledClose.decisionDay, 'Genuine 1-point lead on final matchday must trigger Title Decision Day');
+  assert.equal(reconciledClose.decisionDay?.type, 'title');
+  assert.equal(reconciledClose.decisionDay?.rivalName, topAiRunnerUp.name);
+  assert.equal(reconciledClose.decisionDay?.rivalPts, topAiRunnerUp.pts);
+});
+
+

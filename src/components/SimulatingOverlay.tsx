@@ -9,6 +9,7 @@ import { getBroadcastingPackage } from '../data/broadcastingPackages';
 import { useGameStore } from '../store/useGameStore';
 import { TvCupTieModal } from './TvCupTieModal';
 import { calculateProbabilisticSeason } from '../engine/engine';
+import { reconcileSeasonStatsWithLeagueTable } from '../utils/leagueTableGenerator';
 import type { LiveSeasonProgress } from '../utils/courtsideStats';
 
 export interface SimulatingOverlayProps {
@@ -448,21 +449,37 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
         updatedStats.ga * ((totalMatchdays - halfMatchdays) / totalMatchdays)
       );
 
-      const initialPts = meta.initialPts ?? prevPending.pts;
       const initialPos = meta.initialPos ?? prevPending.pos;
-      const ptsDelta = pts - initialPts;
-      const posShift = Math.round(ptsDelta / 2.2);
-      const pos = Math.max(1, Math.min(leagueSize, initialPos - posShift));
+      const reconciledSecondHalf = state
+        ? reconcileSeasonStatsWithLeagueTable(
+            state,
+            activeClubs,
+            tier,
+            {
+              ...prevPending,
+              wins,
+              draws,
+              losses,
+              pts,
+              gf: rawGf,
+              ga: rawGa,
+              pos: initialPos,
+            },
+            state.year
+          )
+        : {
+            ...prevPending,
+            wins,
+            draws,
+            losses,
+            pts,
+            gf: rawGf,
+            ga: rawGa,
+            pos: initialPos,
+          };
 
       return {
-        ...prevPending,
-        wins,
-        draws,
-        losses,
-        pts,
-        gf: rawGf,
-        ga: rawGa,
-        pos,
+        ...reconciledSecondHalf,
         _meta: {
           ...meta,
           secondHalfOutcomes,
@@ -544,11 +561,15 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
       }
     );
 
+    const reconciledBase = state
+      ? reconcileSeasonStatsWithLeagueTable(state, activeClubs, tier, baseStats, state.year)
+      : baseStats;
+
     const rng = createPRNG(seed);
     const outcomePool: ('W' | 'D' | 'L')[] = [
-      ...Array(baseStats.wins).fill('W'),
-      ...Array(baseStats.draws).fill('D'),
-      ...Array(baseStats.losses).fill('L'),
+      ...Array(reconciledBase.wins).fill('W'),
+      ...Array(reconciledBase.draws).fill('D'),
+      ...Array(reconciledBase.losses).fill('L'),
     ];
     for (let i = outcomePool.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
@@ -559,17 +580,17 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
     const secondHalfOutcomes = outcomePool.slice(halfMatchdays, totalMatchdays);
 
     return {
-      ...baseStats,
+      ...reconciledBase,
       _meta: {
         initialOvr: playerOvr,
         initialMorale: morale,
         initialTactic: tactic,
-        initialPts: baseStats.pts,
-        initialPos: baseStats.pos,
-        initialRawGf: baseStats.gf,
-        initialRawGa: baseStats.ga,
-        rawGf: baseStats.gf,
-        rawGa: baseStats.ga,
+        initialPts: reconciledBase.pts,
+        initialPos: reconciledBase.pos,
+        initialRawGf: reconciledBase.gf,
+        initialRawGa: reconciledBase.ga,
+        rawGf: reconciledBase.gf,
+        rawGa: reconciledBase.ga,
         firstHalfOutcomes,
         secondHalfOutcomes,
         allOutcomes: outcomePool,
@@ -689,28 +710,43 @@ export const SimulatingOverlay: React.FC<SimulatingOverlayProps> = ({
     const currentPending = state?.pendingSeasonState as any;
     const targetMeta = (exactSeasonStats as any)?._meta;
 
+    const reconciledWithFixtures = state
+      ? reconcileSeasonStatsWithLeagueTable(
+          state,
+          activeClubs,
+          tier,
+          {
+            ...exactSeasonStats,
+            gf: totalGf,
+            ga: totalGa,
+          },
+          state.year
+        )
+      : {
+          ...exactSeasonStats,
+          gf: totalGf,
+          ga: totalGa,
+        };
+
     const needsSync =
       !currentPending ||
-      currentPending.pts !== exactSeasonStats.pts ||
-      currentPending.wins !== exactSeasonStats.wins ||
-      currentPending.draws !== exactSeasonStats.draws ||
-      currentPending.losses !== exactSeasonStats.losses ||
-      currentPending.pos !== exactSeasonStats.pos ||
+      currentPending.pts !== reconciledWithFixtures.pts ||
+      currentPending.wins !== reconciledWithFixtures.wins ||
+      currentPending.draws !== reconciledWithFixtures.draws ||
+      currentPending.losses !== reconciledWithFixtures.losses ||
+      currentPending.pos !== reconciledWithFixtures.pos ||
       currentPending.gf !== totalGf ||
       currentPending.ga !== totalGa ||
+      JSON.stringify(currentPending.decisionDay ?? null) !== JSON.stringify(reconciledWithFixtures.decisionDay ?? null) ||
       currentPending._meta?.secondHalfAppliedKey !== targetMeta?.secondHalfAppliedKey ||
       !currentPending._meta?.firstHalfOutcomes;
 
     if (needsSync) {
       useGameStore.getState().updateState({
-        pendingSeasonState: {
-          ...exactSeasonStats,
-          gf: totalGf,
-          ga: totalGa,
-        },
+        pendingSeasonState: reconciledWithFixtures,
       });
     }
-  }, [exactSeasonStats, fixtures, state?.pendingSeasonState]);
+  }, [exactSeasonStats, fixtures, state, activeClubs, tier]);
 
   const currentFixtureIndex = Math.max(0, Math.min(fixtures.length - 1, matchday - 1));
   const currentFixture = fixtures[currentFixtureIndex] || fixtures[0];

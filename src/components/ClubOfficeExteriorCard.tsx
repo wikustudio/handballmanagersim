@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { formatMoney, formatNum } from '../data/gameConstants';
+import { formatMoney, formatNum, getCorporateEntityInfo, getCurrencyForCountry } from '../data/gameConstants';
 import {
   buildOfficeArchitectureModel,
   OfficeArchitectureModel,
@@ -114,6 +114,8 @@ export const ClubOfficeExteriorCard: React.FC<ClubOfficeExteriorCardProps> = ({
 
   const resolvedAcademyLevel = academyLevel ?? club?.academyLevel ?? 1;
   const resolvedMedicalLevel = medicalLevel ?? club?.medicalLevel ?? 1;
+  const corpInfo = useMemo(() => getCorporateEntityInfo(country), [country]);
+  const currencySymbol = useMemo(() => getCurrencyForCountry(country).symbol, [country]);
 
   const officeModel: OfficeArchitectureModel = useMemo(
     () =>
@@ -763,25 +765,42 @@ export const ClubOfficeExteriorCard: React.FC<ClubOfficeExteriorCardProps> = ({
       }
 
       if (model.hasStockTickerFascia) {
+        const tickerZBot = floorH + 0.36;
+        const tickerZTop = floorH + 0.7;
+        const tickerZMid = (tickerZBot + tickerZTop) * 0.5;
         fillPoly(
           ctx,
           [
-            project(-4.45, -0.36, floorH + 0.35),
-            project(4.45, -0.36, floorH + 0.35),
-            project(4.45, -0.36, floorH + 0.62),
-            project(-4.45, -0.36, floorH + 0.62),
+            project(-4.45, -0.36, tickerZBot),
+            project(4.45, -0.36, tickerZBot),
+            project(4.45, -0.36, tickerZTop),
+            project(-4.45, -0.36, tickerZTop),
           ],
           '#111726',
           'rgba(52, 211, 153, 0.55)',
           0.9
         );
-        const tickerMid = project(0, -0.34, floorH + 0.48);
+        const tickerMid = project(0, -0.34, tickerZMid);
+        const tickerLeft = project(-4.1, -0.34, tickerZMid);
+        const tickerRight = project(4.1, -0.34, tickerZMid);
+        const tickerAngle = Math.atan2(tickerRight.y - tickerLeft.y, tickerRight.x - tickerLeft.x);
+        const maxTickerWidth = Math.hypot(tickerRight.x - tickerLeft.x, tickerRight.y - tickerLeft.y) * 0.9;
+        const tickerLabel = `${corpInfo.legalForm} LISTED · ${currencySymbol}${model.effectiveStockPrice.toFixed(2)}`;
+
         ctx.save();
+        ctx.translate(tickerMid.x, tickerMid.y);
+        ctx.rotate(tickerAngle);
+        let tickerFontPx = Math.max(7, Math.min(10, Math.round(scaleBase * 0.25)));
+        ctx.font = `700 ${tickerFontPx}px ui-monospace, SFMono-Regular, monospace`;
+        const measuredW = ctx.measureText(tickerLabel).width;
+        if (measuredW > maxTickerWidth && measuredW > 0) {
+          tickerFontPx = Math.max(6, Math.floor(tickerFontPx * (maxTickerWidth / measuredW)));
+          ctx.font = `700 ${tickerFontPx}px ui-monospace, SFMono-Regular, monospace`;
+        }
         ctx.fillStyle = '#34D399';
-        ctx.font = `700 ${Math.max(8, Math.round(scaleBase * 0.34))}px ui-monospace, SFMono-Regular, monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`PLC LISTED · ${model.effectiveStockPrice.toFixed(2)}`, tickerMid.x, tickerMid.y);
+        ctx.fillText(tickerLabel, 0, 0);
         ctx.restore();
       }
 
@@ -1174,7 +1193,7 @@ export const ClubOfficeExteriorCard: React.FC<ClubOfficeExteriorCardProps> = ({
               onClick={onOpenIPO}
               className="hidden sm:inline-flex py-1.5 px-2.5 rounded-full bg-[#F3F1EC] hover:bg-[#E7E4DC] text-[#14161D] text-[10px] sm:text-[11px] font-semibold transition cursor-pointer whitespace-nowrap"
             >
-              {isPublic ? 'PLC Shares' : 'Valuation'}
+              {isPublic ? `${corpInfo.legalForm} Shares` : 'Valuation'}
             </button>
           </div>
         </div>
@@ -1189,7 +1208,7 @@ export const ClubOfficeExteriorCard: React.FC<ClubOfficeExteriorCardProps> = ({
           <div className="flex items-center justify-between gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-medium text-[#525866]">
             <span>Club Valuation</span>
             <span className="font-semibold text-[#14161D]">
-              {isPublic ? 'Listed PLC' : 'Private'}
+              {isPublic ? `Listed ${corpInfo.legalForm}` : 'Private'}
             </span>
           </div>
           <div className="mt-0.5 sm:mt-1 text-[15px] sm:text-[19px] font-extrabold text-[#14161D] tracking-tight tabular-nums leading-tight">

@@ -8,6 +8,7 @@ import {
   getPinnacleArenaCapacity,
   getDynamicSponsorPitchTerms,
   getCurrencyForCountry,
+  getCorporateEntityInfo,
   getLeagueScaledVal,
   MANAGER_SKILLS,
 } from '../data/gameConstants';
@@ -178,6 +179,7 @@ export const CourtsideWorkspace: React.FC<CourtsideWorkspaceProps> = ({
   const mediaStatusLabel =
     mediaScore >= 68 ? 'Hot seat' : mediaScore >= 45 ? 'Elevated' : 'Calm';
   const country = state.club?.country || 'GER';
+  const corpInfo = useMemo(() => getCorporateEntityInfo(country), [country]);
 
   const filteredMarkers = useMemo(() => {
     if (shotUnitFilter === 'All players') return analytics.shotChart.markers;
@@ -529,7 +531,7 @@ export const CourtsideWorkspace: React.FC<CourtsideWorkspaceProps> = ({
                 </h2>
                 <span className="text-[11px] font-medium text-[#525866]">
                   {state.club?.isPublic
-                    ? 'Listed PLC'
+                    ? `Listed ${corpInfo.legalForm}`
                     : state.activeLoan
                     ? 'Credit active'
                     : 'Debt-free'}
@@ -1558,7 +1560,7 @@ export const CourtsideWorkspace: React.FC<CourtsideWorkspaceProps> = ({
                     }`}
                   >
                     {state.club?.isPublic
-                      ? 'Listed PLC'
+                      ? `Listed ${corpInfo.legalForm}`
                       : ipoEligibility.eligible
                       ? 'IPO Eligible'
                       : ipoEligibility.primaryBlocker || 'IPO Locked'}

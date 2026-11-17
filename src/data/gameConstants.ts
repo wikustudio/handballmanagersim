@@ -270,6 +270,42 @@ export function getCorporateEntityInfo(countryRaw?: string): CorporateEntityInfo
       headerBadge: 'Listed Corporation (AD)'
     };
   }
+  if (c === 'ITA') {
+    return {
+      legalForm: 'S.p.A.',
+      fullName: 'Joint-Stock Company (S.p.A.)',
+      fullNameDe: 'Börsennotierte Aktiengesellschaft (S.p.A.)',
+      tickerLabel: 'Ticker',
+      headerBadge: 'Listed Corporation (S.p.A.)'
+    };
+  }
+  if (c === 'SUI') {
+    return {
+      legalForm: 'SA',
+      fullName: 'Public Limited Corporation (SA)',
+      fullNameDe: 'Börsennotierte Kapitalgesellschaft (SA)',
+      tickerLabel: 'Ticker',
+      headerBadge: 'Listed Corporation (SA)'
+    };
+  }
+  if (c === 'AUT') {
+    return {
+      legalForm: 'SE',
+      fullName: 'Public European Corporation (SE)',
+      fullNameDe: 'Börsennotierte Kapitalgesellschaft (SE)',
+      tickerLabel: 'Ticker',
+      headerBadge: 'Listed Corporation (SE)'
+    };
+  }
+  if (c === 'ISL') {
+    return {
+      legalForm: 'hf.',
+      fullName: 'Public Limited Company (hf.)',
+      fullNameDe: 'Börsennotierte Kapitalgesellschaft (hf.)',
+      tickerLabel: 'Ticker',
+      headerBadge: 'Listed Corporation (hf.)'
+    };
+  }
   return {
     legalForm: 'PLC',
     fullName: 'Public Limited Company (PLC)',

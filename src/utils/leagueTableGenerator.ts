@@ -334,13 +334,10 @@ export const generateLeagueTable = (
   let rivalClub: any = null;
   let rivalPos = -1;
 
-  // Remove user (and designated decider rival) from AI pool
+  // Remove user club from AI pool first so AI club sorting is identical between live and completed tables
   if (isUserInThisTier) {
     for (let i = leagueClubs.length - 1; i >= 0; i--) {
-      if (leagueClubs[i].name === historyClubName || (hasSpecificRivalDecider && leagueClubs[i].name === historyRivalName)) {
-        if (hasSpecificRivalDecider && leagueClubs[i].name === historyRivalName) {
-          rivalClub = leagueClubs[i];
-        }
+      if (leagueClubs[i].name === historyClubName) {
         leagueClubs.splice(i, 1);
       }
     }
@@ -423,8 +420,77 @@ export const generateLeagueTable = (
     }
   }
 
-  // Rival club setup
-  if (hasSpecificRivalDecider) {
+  // Base point curves for European handball leagues with deterministic year-to-year campaign spread
+  const getRealisticBasePoints = (p: number) => {
+    const norm = (p - 1) / Math.max(1, targetTotalClubs - 1); // 0.0 at 1st, 1.0 at last
+    const maxPts = totalMatches * 2;
+    const seasonPaceShift = (seededRandom(simYear * 73 + currentTier * 19) - 0.5) * 0.06; // Champion pace varies ~82% to 88%
+    const championPts = Math.round(maxPts * (0.85 + seasonPaceShift));
+    const bottomPts = Math.round(maxPts * (0.12 + (seededRandom(simYear * 41 + currentTier * 11) - 0.5) * 0.04));
+    const rawCurve = Math.round(championPts - norm * (championPts - bottomPts));
+    const rowJitter = seededRand(simYear * 109 + currentTier * 23 + p * 37, -1, 1);
+    return Math.max(2, Math.min(maxPts - 2, rawCurve + rowJitter));
+  };
+
+  // Build natural deterministic full-season AI rows (shared 1:1 with buildLiveLeagueStandings at matchday === totalMatches)
+  const naturalAiRows: TableRow[] = [];
+  if (isUserInThisTier && !cameFromCachedDivTable) {
+    let prevAiPts = totalMatches * 2;
+    let prevAiGd = 999;
+    leagueClubs.slice(0, targetAiCount).forEach((club, aiIdx) => {
+      const slotP = aiIdx + 2;
+      let ptsTarget = Math.min(prevAiPts, Math.max(0, getRealisticBasePoints(slotP)));
+      const gdBase = Math.round(((targetTotalClubs + 1) / 2 - slotP) * (totalMatches * 0.6));
+      const gd = ptsTarget === prevAiPts ? Math.min(prevAiGd - 1, gdBase) : gdBase;
+
+      let w = Math.min(totalMatches, Math.floor(ptsTarget / 2));
+      let d = ptsTarget - w * 2;
+      if (d < 4 && w > 2 && w + d + 1 <= totalMatches) {
+        w -= 1;
+        d += 2;
+      }
+      if (w + d > totalMatches) {
+        d = totalMatches - w;
+      }
+      if (d < 0) d = 0;
+      const l = Math.max(0, totalMatches - w - d);
+      const actualPts = w * 2 + d;
+
+      const goalsPerMatch = 28 + (targetTotalClubs - slotP) * 0.15 + (seededRandom(simYear * 31 + slotP) * 2 - 1);
+      const baseGoals = Math.round(totalMatches * goalsPerMatch);
+      const gf = Math.round(baseGoals + gd / 2);
+      const ga = gf - gd;
+
+      naturalAiRows.push({
+        id: club.id,
+        pos: slotP,
+        name: club.name,
+        color: club.color,
+        logo: club.logo,
+        fallbackLogo: club.fallbackLogo,
+        w,
+        d,
+        l,
+        pts: actualPts,
+        gd: gd > 0 ? '+' + gd : `${gd}`,
+        gf,
+        ga,
+        isUser: false,
+      });
+
+      prevAiPts = actualPts;
+      prevAiGd = gd;
+    });
+  }
+
+  // Rival club setup (for synthetic overrides or post-Decision-Day position swaps)
+  if (isUserInThisTier && hasSpecificRivalDecider) {
+    for (let i = leagueClubs.length - 1; i >= 0; i--) {
+      if (leagueClubs[i].name === historyRivalName) {
+        rivalClub = leagueClubs[i];
+        leagueClubs.splice(i, 1);
+      }
+    }
     if (!rivalClub) {
       const found = clubsPool.find(c => c.name === historyRivalName) || clubsDb.find(c => c.name === historyRivalName);
       rivalClub = found ? { ...found } : {
@@ -457,41 +523,63 @@ export const generateLeagueTable = (
     else rivalPos = userPos - 1 > 0 ? userPos - 1 : 2;
   }
 
-  // Base point curves for European handball leagues with deterministic year-to-year campaign spread
-  const getRealisticBasePoints = (p: number) => {
-    const norm = (p - 1) / Math.max(1, targetTotalClubs - 1); // 0.0 at 1st, 1.0 at last
-    const maxPts = totalMatches * 2;
-    const seasonPaceShift = (seededRandom(simYear * 73 + currentTier * 19) - 0.5) * 0.06; // Champion pace varies ~82% to 88%
-    const championPts = Math.round(maxPts * (0.85 + seasonPaceShift));
-    const bottomPts = Math.round(maxPts * (0.12 + (seededRandom(simYear * 41 + currentTier * 11) - 0.5) * 0.04));
-    const rawCurve = Math.round(championPts - norm * (championPts - bottomPts));
-    const rowJitter = seededRand(simYear * 109 + currentTier * 23 + p * 37, -1, 1);
-    return Math.max(2, Math.min(maxPts - 2, rawCurve + rowJitter));
+  const userTableRow: TableRow = {
+    id: (state.club.name === historyClubName ? state.club.id : lastHist?.clubId) || state.club.id,
+    pos: userPos,
+    name: historyClubName,
+    color: (state.club.name === historyClubName ? state.club.color : lastHist?.color) || clubsDb.find(c => c.name === historyClubName)?.color || '#ffffff',
+    logo: (state.club.name === historyClubName ? state.club.logo : lastHist?.logo) || clubsDb.find(c => c.name === historyClubName)?.logo || undefined,
+    fallbackLogo: (state.club.name === historyClubName ? state.club.fallbackLogo : lastHist?.fallbackLogo) || clubsDb.find(c => c.name === historyClubName)?.fallbackLogo || undefined,
+    w: userWins,
+    d: userDraws,
+    l: userLosses,
+    pts: userPts,
+    gd: userGDStr,
+    gf: rawGf,
+    ga: rawGa,
+    isUser: true,
+    pointsDeducted: userPointsDeducted > 0 ? userPointsDeducted : undefined,
   };
 
-  const rows: TableRow[] = [];
+  let rows: TableRow[] = [];
+  let usedNaturalFullTable = false;
+
+  if (isUserInThisTier && !cameFromCachedDivTable && naturalAiRows.length === targetAiCount) {
+    const candidateRows: TableRow[] = [userTableRow, ...naturalAiRows.map(r => ({ ...r }))];
+    candidateRows.sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      const gdA = parseInt(String(a.gd).replace('+', ''), 10) || 0;
+      const gdB = parseInt(String(b.gd).replace('+', ''), 10) || 0;
+      if (gdB !== gdA) return gdB - gdA;
+      const gfDiff = (b.gf || 0) - (a.gf || 0);
+      if (gfDiff !== 0) return gfDiff;
+      if (a.isUser !== b.isUser) return a.isUser ? -1 : 1;
+      return 0;
+    });
+    candidateRows.forEach((r, idx) => {
+      r.pos = idx + 1;
+    });
+
+    const natUser = candidateRows.find(r => r.isUser);
+    let matchesNatural = Boolean(natUser && natUser.pos === userPos);
+    if (matchesNatural && hasSpecificRivalDecider) {
+      const natRival = candidateRows.find(r => r.name === historyRivalName);
+      if (!natRival || natRival.pos !== rivalPos || natRival.pts !== resolvedRivalPts) {
+        matchesNatural = false;
+      }
+    }
+    if (matchesNatural) {
+      rows = candidateRows;
+      usedNaturalFullTable = true;
+    }
+  }
+
   let lastPts = totalMatches * 2;
   let lastGd = 999;
 
-  for (let p = 1; p <= targetTotalClubs; p++) {
+  for (let p = 1; !usedNaturalFullTable && p <= targetTotalClubs; p++) {
     if (isUserInThisTier && p === userPos) {
-      rows.push({
-        id: (state.club.name === historyClubName ? state.club.id : lastHist?.clubId) || state.club.id,
-        pos: userPos,
-        name: historyClubName,
-        color: (state.club.name === historyClubName ? state.club.color : lastHist?.color) || clubsDb.find(c => c.name === historyClubName)?.color || '#ffffff',
-        logo: (state.club.name === historyClubName ? state.club.logo : lastHist?.logo) || clubsDb.find(c => c.name === historyClubName)?.logo || undefined,
-        fallbackLogo: (state.club.name === historyClubName ? state.club.fallbackLogo : lastHist?.fallbackLogo) || clubsDb.find(c => c.name === historyClubName)?.fallbackLogo || undefined,
-        w: userWins,
-        d: userDraws,
-        l: userLosses,
-        pts: userPts,
-        gd: userGDStr,
-        gf: rawGf,
-        ga: rawGa,
-        isUser: true,
-        pointsDeducted: userPointsDeducted > 0 ? userPointsDeducted : undefined,
-      });
+      rows.push({ ...userTableRow, pos: userPos });
       lastPts = userPts;
       lastGd = rawGd;
     } else if (isUserInThisTier && hasSpecificRivalDecider && p === rivalPos && rivalClub) {
@@ -924,3 +1012,464 @@ export const getDecisionDayStandingsSlice = (
     };
   });
 };
+
+export function buildLiveLeagueStandings(
+  state: GameState,
+  clubsDb: Club[],
+  targetTier: number | undefined,
+  played: number,
+  userStats: { wins: number; draws: number; losses: number; gf: number; ga: number; pointsDeducted?: number },
+  simYearOverride?: number
+): TableRow[] {
+  const simYear = simYearOverride ?? state?.year ?? 2024;
+  const currentTier = targetTier ?? state?.club?.tier ?? 1;
+  const currentCountry = normalizeCountry(state?.club?.country || 'GER');
+  const currentLeagueInfo = getLeagueInfo(currentTier, currentCountry);
+
+  if (played <= 0) {
+    return generateLeagueTable(state, clubsDb, currentTier);
+  }
+
+  const clubsPool = clubsDb.map((c) => mergeClubWithWorldState(c, state?.worldClubs?.[c.id]));
+  const userClubId = state?.club?.id;
+  const userClubName = state?.club?.name || 'Club';
+
+  const leagueClubs: Club[] = clubsPool
+    .filter(
+      (c) =>
+        c.tier === currentTier &&
+        normalizeCountry(c.country || 'GER') === currentCountry &&
+        c.id !== userClubId &&
+        c.name !== userClubName
+    )
+    .map((c) => ({ ...c }));
+
+  const targetTotalClubs = getLeagueSize(
+    currentTier,
+    currentCountry,
+    userClubId,
+    currentTier,
+    currentCountry,
+    clubsDb
+  );
+  const targetAiCount = Math.max(1, targetTotalClubs - 1);
+
+  const heavyweightSet = new Set([
+    'Kiel', 'Flensburg', 'Magdeburg', 'Rhein-Neckar', 'Berlin Foxes',
+    'Paris HB', 'Montpellier', 'Veszprem', 'Szeged', 'Kielce', 'Barcelona HB'
+  ]);
+  const existingClubIds = new Set([userClubId, ...leagueClubs.map((c) => c.id)]);
+  if (leagueClubs.length < targetAiCount) {
+    const sameCountryOtherClubs = clubsPool.filter(
+      (c) =>
+        normalizeCountry(c.country || 'GER') === currentCountry &&
+        !existingClubIds.has(c.id) &&
+        c.tier > currentTier &&
+        c.baseOvr < 78 &&
+        !heavyweightSet.has(c.name)
+    );
+    for (const c of sameCountryOtherClubs) {
+      if (leagueClubs.length >= targetAiCount) break;
+      existingClubIds.add(c.id);
+      leagueClubs.push({ ...c, tier: currentTier });
+    }
+  }
+
+  const countryRegionalFallbacks: Record<string, string[]> = {
+    GER: ['SG Pforzheim/Eutingen', 'HC Oppenweiler/Backnang', 'TV Emsdetten', 'HSG Krefeld Niederrhein', 'TuS Spenge', 'SGSH Dragons', 'TV Gelnhausen', 'HC Empor Rostock', 'Oranienburger HC', 'MTV Braunschweig', 'TSG Altenhagen-Heepen', 'HG Saarlouis'],
+    ESP: ['BM Alcobendas', 'BM Zamora', 'BM Soria', 'BM Lanzarote', 'BM Oviedo', 'BM Alarcos Ciudad Real', 'BM Sant Quirze', 'BM Trapagaran', 'BM Reconquista Vigo', 'BM Romo'],
+    FRA: ['Bordeaux Bruges Lormont', 'Annecy CSAV HB', 'Mulhouse Sud Alsace', 'Élite Val d\'Oise', 'Saintes HB', 'Hazebrouck HB', 'Gonfreville HB', 'Dreux AC HB', 'Bagnols GRHB', 'Vernon Saint-Marcel'],
+    DEN: ['Rækker Mølle Håndbold', 'Odder Håndbold', 'HC Midtjylland', 'FIF Håndbold', 'Ajax København', 'HØJ Elite', 'Roskilde Håndbold', 'Vendsyssel Håndbold'],
+    HUN: ['Békési FKC', 'Ceglédi KKSE', 'Szigetszentmiklósi KSK', 'Ózdi KC', 'Pécsi VSE', 'DEAC Kézilabda', 'Mezőkövesdi KC', 'Vecsés SE'],
+    POL: ['Padwa Zamość', 'Stal Gorzów', 'Jurand Ciechanów', 'Nielba Wągrowiec', 'Miedź Legnica', 'Grunwald Poznań', 'Anilana Łódź', 'Olimpia Piekary Śląskie'],
+    SWE: ['Tumba HBK', 'AIK Handboll', 'Kungälvs HK', 'Vinslövs HK', 'Anderstorps SK', 'IFK Karlskrona', 'Rimbo HK', 'Skånela IF'],
+    NOR: ['Bodø Håndballklubb', 'Follo HK', 'ROS Håndball', 'Ryger Stavanger', 'Melhus Håndball', 'Charlottenlund SK', 'Falk Horten', 'Nøtterøy Håndball'],
+    ISL: ['Kórdrengir', 'Hörður Ísafirði', 'Vængir Júpiters', 'Berserkir', 'ÍH Hafnarfjörður', 'Mílan', 'Hamrarnir', 'Árborg'],
+    POR: ['Boa-Hora FC', 'SC Horta', 'Nazaré Dom Fuas', 'Arsenal da Devesa', 'Sanjoanense', 'Almada AC', 'Xico Andebol', 'GC Santo Tirso'],
+    CRO: ['RK Bjelovar', 'RK Đakovo', 'RK Zamet Rijeka', 'RK Umag', 'RK Buzet', 'RK Split', 'RK Zadar 1954', 'RK Sisak'],
+    SLO: ['RK Maribor Branik', 'RD Izola', 'RK Črnomelj', 'MRK Nova Gorica', 'RK Sevnica', 'RK Brežice', 'RK Grosuplje', 'ŠD Škofljica'],
+    SRB: ['RK Crvenka', 'RK Kikinda', 'RK Proleter Zrenjanin', 'RK Šamot 65', 'RK Rudar Kostolac', 'RK Spartak Subotica', 'RK Kolubara', 'RK Železničar Niš'],
+    MKD: ['RK Prilep', 'RK Radoviš', 'RK Struga', 'RK Kumanovo', 'RK Borec Veles', 'RK Prespa', 'RK Skopje 2020', 'RK Aerodrom'],
+    ROU: ['CSU Suceava', 'CSM Focșani', 'CSM Alexandria', 'CSU Cluj-Napoca', 'CSM Oradea', 'CSM Reșița', 'CS Medgidia', 'CSU Galați'],
+    AUT: ['UHC Tulln', 'WAT Atzgersdorf', 'Union Korneuburg', 'HIB Graz', 'HC Lustenau', 'Spiders Wels', 'UHC Salzburg', 'SG Traun'],
+    SUI: ['TV Steffisburg', 'Handball Stäfa', 'CS Chênois Genève', 'SG Wädenswil/Horgen', 'TV Birsfelden', 'TV Solothurn', 'HC Arbon', 'STV Baden'],
+  };
+
+  const fallbackList = countryRegionalFallbacks[currentCountry] || [
+    `${currentCountry} Regional HC I`,
+    `${currentCountry} Regional HC II`,
+    `${currentCountry} Athletic HB`,
+    `${currentCountry} Union HB`,
+    `${currentCountry} Sporting HB`,
+    `${currentCountry} Municipal HB`,
+    `${currentCountry} Olympic HB`,
+    `${currentCountry} Central HB`,
+  ];
+
+  const allCountryNames = new Set<string>([
+    ...clubsPool
+      .filter((c) => normalizeCountry(c.country || 'GER') === currentCountry)
+      .map((c) => (c.name || '').trim().toLowerCase()),
+    ...leagueClubs.map((c) => (c.name || '').trim().toLowerCase()),
+    userClubName.trim().toLowerCase(),
+  ]);
+
+  const neededFillers = Math.max(0, targetAiCount - leagueClubs.length);
+  for (let i = 0; i < neededFillers; i++) {
+    const availableFallback =
+      fallbackList.find((n) => !allCountryNames.has(n.trim().toLowerCase())) ||
+      `${currentCountry} Regional HC ${i + 1}`;
+    allCountryNames.add(availableFallback.trim().toLowerCase());
+    leagueClubs.push({
+      id: 9900 + i,
+      name: availableFallback,
+      tier: currentTier,
+      baseOvr: Math.max(42, currentLeagueInfo.avgOvr - 4 + seededRand(simYear + i, -3, 1)),
+      color: '#' + Math.floor(seededRandom(simYear * 10 + i) * 16777215).toString(16).padStart(6, '0'),
+      stadium: 2500,
+      country: currentCountry,
+      _isSyntheticFiller: true,
+    } as any);
+  }
+
+  const getClubSeedHash = (c: { id?: number | string; name?: string }) => {
+    const str = `${c.id ?? ''}_${c.name ?? ''}`;
+    let h = 0;
+    for (let i = 0; i < str.length; i++) {
+      h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  };
+
+  leagueClubs.sort((a, b) => {
+    const getEffectiveSeasonRating = (c: any) => {
+      const h = getClubSeedHash(c);
+      const baseNoise = (seededRandom(simYear * 97 + currentTier * 31 + (h % 9973)) - 0.5) * 9;
+      const specialRoll = seededRandom(simYear * 193 + currentTier * 53 + (h % 7919));
+      let narrativeSwing = 0;
+      if ((c as any).isCinderellaActive || (c as any).isNemesisActive) {
+        narrativeSwing += 3.5;
+      }
+      if (specialRoll > 0.90 && c.baseOvr < currentLeagueInfo.avgOvr + 6) {
+        narrativeSwing += 5.5;
+      } else if (specialRoll < 0.08 && c.baseOvr > currentLeagueInfo.avgOvr) {
+        narrativeSwing -= 4.5;
+      }
+      return c.baseOvr + baseNoise + narrativeSwing;
+    };
+    if ((a as any)._isSyntheticFiller && !(b as any)._isSyntheticFiller) return 1;
+    if (!(a as any)._isSyntheticFiller && (b as any)._isSyntheticFiller) return -1;
+    return getEffectiveSeasonRating(b) - getEffectiveSeasonRating(a);
+  });
+
+  if (leagueClubs.length > 1 && isReserveClub(leagueClubs[0].name)) {
+    const firstNonReserveIdx = leagueClubs.findIndex((c) => !isReserveClub(c.name) && !(c as any)._isSyntheticFiller);
+    if (firstNonReserveIdx > 0) {
+      const [topNonReserve] = leagueClubs.splice(firstNonReserveIdx, 1);
+      leagueClubs.unshift(topNonReserve);
+    }
+  }
+
+  const totalMatches = (targetTotalClubs - 1) * 2;
+  const clampedPlayed = Math.max(1, Math.min(totalMatches, played));
+
+  const getRealisticBasePoints = (p: number) => {
+    const norm = (p - 1) / Math.max(1, targetTotalClubs - 1);
+    const maxPts = totalMatches * 2;
+    const seasonPaceShift = (seededRandom(simYear * 73 + currentTier * 19) - 0.5) * 0.06;
+    const championPts = Math.round(maxPts * (0.85 + seasonPaceShift));
+    const bottomPts = Math.round(maxPts * (0.12 + (seededRandom(simYear * 41 + currentTier * 11) - 0.5) * 0.04));
+    const rawCurve = Math.round(championPts - norm * (championPts - bottomPts));
+    const rowJitter = seededRand(simYear * 109 + currentTier * 23 + p * 37, -1, 1);
+    return Math.max(2, Math.min(maxPts - 2, rawCurve + rowJitter));
+  };
+
+  let prevAiPts = totalMatches * 2;
+  let prevAiGd = 999;
+
+  const aiRows: TableRow[] = leagueClubs.slice(0, targetAiCount).map((club, aiIdx) => {
+    const slotP = aiIdx + 2;
+    const ptsTarget = Math.min(prevAiPts, Math.max(0, getRealisticBasePoints(slotP)));
+    const gdBase = Math.round(((targetTotalClubs + 1) / 2 - slotP) * (totalMatches * 0.6));
+    const fullGd = ptsTarget === prevAiPts ? Math.min(prevAiGd - 1, gdBase) : gdBase;
+
+    let fullW = Math.min(totalMatches, Math.floor(ptsTarget / 2));
+    let fullD = ptsTarget - fullW * 2;
+    if (fullD < 4 && fullW > 2 && fullW + fullD + 1 <= totalMatches) {
+      fullW -= 1;
+      fullD += 2;
+    }
+    if (fullW + fullD > totalMatches) {
+      fullD = totalMatches - fullW;
+    }
+    if (fullD < 0) fullD = 0;
+    const fullL = Math.max(0, totalMatches - fullW - fullD);
+    const fullPts = fullW * 2 + fullD;
+
+    const goalsPerMatch = 28 + (targetTotalClubs - slotP) * 0.15 + (seededRandom(simYear * 31 + slotP) * 2 - 1);
+    const baseGoals = Math.round(totalMatches * goalsPerMatch);
+    const fullGf = Math.round(baseGoals + fullGd / 2);
+    const fullGa = fullGf - fullGd;
+
+    prevAiPts = fullPts;
+    prevAiGd = fullGd;
+
+    if (clampedPlayed >= totalMatches) {
+      return {
+        id: club.id,
+        pos: slotP,
+        name: club.name,
+        color: club.color,
+        logo: club.logo,
+        fallbackLogo: club.fallbackLogo,
+        w: fullW,
+        d: fullD,
+        l: fullL,
+        pts: fullPts,
+        gd: fullGd > 0 ? `+${fullGd}` : String(fullGd),
+        gf: fullGf,
+        ga: fullGa,
+        isUser: false,
+      };
+    }
+
+    const clubHash = getClubSeedHash(club);
+    const outcomes: ('W' | 'D' | 'L')[] = [
+      ...Array(fullW).fill('W'),
+      ...Array(fullD).fill('D'),
+      ...Array(fullL).fill('L'),
+    ];
+    for (let i = outcomes.length - 1; i > 0; i--) {
+      const r = seededRandom(simYear * 997 + currentTier * 131 + (clubHash % 9973) + i * 37);
+      const j = Math.floor(r * (i + 1));
+      [outcomes[i], outcomes[j]] = [outcomes[j], outcomes[i]];
+    }
+
+    let w = 0;
+    let d = 0;
+    let l = 0;
+    let gf = 0;
+    let ga = 0;
+    let remGf = fullGf;
+    let remGa = fullGa;
+
+    for (let m = 1; m <= clampedPlayed; m++) {
+      const out = outcomes[m - 1] || 'L';
+      if (out === 'W') w++;
+      else if (out === 'D') d++;
+      else l++;
+
+      const left = totalMatches - m + 1;
+      const avgGf = remGf / Math.max(1, left);
+      const avgGa = remGa / Math.max(1, left);
+      const jitter = Math.round((seededRandom(clubHash + simYear * 53 + m * 19) - 0.5) * 4);
+      let mGf = Math.max(18, Math.round(avgGf + jitter));
+      let mGa = Math.max(18, Math.round(avgGa - jitter));
+      const margin = 1 + Math.floor(seededRandom(clubHash + simYear * 71 + m * 29) * 4);
+
+      if (out === 'W') {
+        if (mGf <= mGa) mGf = mGa + margin;
+      } else if (out === 'D') {
+        const mid = Math.round((mGf + mGa) / 2);
+        mGf = mid;
+        mGa = mid;
+      } else {
+        if (mGa <= mGf) mGa = mGf + margin;
+      }
+
+      remGf -= mGf;
+      remGa -= mGa;
+      gf += mGf;
+      ga += mGa;
+    }
+
+    const pts = w * 2 + d;
+    const diff = gf - ga;
+    return {
+      id: club.id,
+      pos: slotP,
+      name: club.name,
+      color: club.color,
+      logo: club.logo,
+      fallbackLogo: club.fallbackLogo,
+      w,
+      d,
+      l,
+      pts,
+      gd: diff > 0 ? `+${diff}` : String(diff),
+      gf,
+      ga,
+      isUser: false,
+    };
+  });
+
+  const userDeducted = userStats.pointsDeducted || 0;
+  const userPts = Math.max(0, userStats.wins * 2 + userStats.draws - userDeducted);
+  const userDiff = userStats.gf - userStats.ga;
+  const userRow: TableRow = {
+    id: state?.club?.id,
+    pos: 1,
+    name: userClubName,
+    color: state?.club?.color || '#ffffff',
+    logo: state?.club?.logo,
+    fallbackLogo: state?.club?.fallbackLogo,
+    w: userStats.wins,
+    d: userStats.draws,
+    l: userStats.losses,
+    pts: userPts,
+    gd: userDiff > 0 ? `+${userDiff}` : String(userDiff),
+    gf: userStats.gf,
+    ga: userStats.ga,
+    isUser: true,
+    pointsDeducted: userDeducted > 0 ? userDeducted : undefined,
+  };
+
+  const combined = [userRow, ...aiRows];
+  combined.sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    const gdA = parseInt(String(a.gd).replace('+', ''), 10) || 0;
+    const gdB = parseInt(String(b.gd).replace('+', ''), 10) || 0;
+    if (gdB !== gdA) return gdB - gdA;
+    const gfDiff = (b.gf || 0) - (a.gf || 0);
+    if (gfDiff !== 0) return gfDiff;
+    if (a.isUser !== b.isUser) return a.isUser ? -1 : 1;
+    return 0;
+  });
+
+  return combined.map((r, i) => ({ ...r, pos: i + 1 }));
+}
+
+export function reconcileSeasonStatsWithLeagueTable<T extends {
+  wins: number;
+  draws: number;
+  losses: number;
+  pts: number;
+  gf: number;
+  ga: number;
+  pos: number;
+  pointsDeducted?: number;
+  decisionDay?: any;
+}>(
+  state: GameState,
+  clubsDb: Club[],
+  targetTier: number | undefined,
+  rawStats: T,
+  simYearOverride?: number
+): T {
+  const currentTier = targetTier ?? state?.club?.tier ?? 1;
+  const currentCountry = normalizeCountry(state?.club?.country || 'GER');
+  const targetTotalClubs = getLeagueSize(
+    currentTier,
+    currentCountry,
+    state?.club?.id,
+    currentTier,
+    currentCountry,
+    clubsDb
+  );
+  const totalMatches = (targetTotalClubs - 1) * 2;
+
+  const fullTable = buildLiveLeagueStandings(
+    state,
+    clubsDb,
+    currentTier,
+    totalMatches,
+    {
+      wins: rawStats.wins,
+      draws: rawStats.draws,
+      losses: rawStats.losses,
+      gf: rawStats.gf,
+      ga: rawStats.ga,
+      pointsDeducted: rawStats.pointsDeducted,
+    },
+    simYearOverride
+  );
+
+  const userRow = fullTable.find((r) => r.isUser);
+  if (!userRow) return rawStats;
+
+  const parseGd = (gdStr: string | undefined) => parseInt(String(gdStr || '0').replace('+', ''), 10) || 0;
+  const actualPos = userRow.pos;
+  const actualPts = userRow.pts;
+  const userGd = parseGd(userRow.gd);
+  const relegationThreshold = Math.max(1, targetTotalClubs - 1);
+  const isMaxTier = currentTier >= getMaxTier(currentCountry);
+  const isReservePromoBarred = isReserveClub(state?.club?.name || '') && currentTier === 2;
+
+  let decisionDay: {
+    type: 'title' | 'promotion_playoff' | 'relegation_battle';
+    rivalName: string;
+    rivalPts: number;
+    leaderGd: number;
+    trailerGd: number;
+  } | null = null;
+
+  if (actualPos === 1 && !isReservePromoBarred) {
+    const runnerUp = fullTable.find((r) => !r.isUser && !(currentTier === 2 && isReserveClub(r.name))) || fullTable[1];
+    if (runnerUp) {
+      const gap = actualPts - runnerUp.pts;
+      if (gap >= 0 && gap <= 2) {
+        decisionDay = {
+          type: 'title',
+          rivalName: runnerUp.name,
+          rivalPts: runnerUp.pts,
+          leaderGd: userGd,
+          trailerGd: parseGd(runnerUp.gd),
+        };
+      }
+    }
+  } else if (actualPos === 2 && !isReservePromoBarred) {
+    const leader = fullTable[0];
+    if (leader && !leader.isUser && !(currentTier === 2 && isReserveClub(leader.name))) {
+      const gap = leader.pts - actualPts;
+      if (gap >= 0 && gap <= 2) {
+        decisionDay = {
+          type: 'title',
+          rivalName: leader.name,
+          rivalPts: leader.pts,
+          leaderGd: parseGd(leader.gd),
+          trailerGd: userGd,
+        };
+      }
+    }
+  } else if (actualPos === 3 && currentTier > 1 && !isReservePromoBarred) {
+    const secondRow = fullTable[1];
+    decisionDay = {
+      type: 'promotion_playoff',
+      rivalName: secondRow?.name || 'Promotion Rival',
+      rivalPts: secondRow?.pts ?? actualPts + 1,
+      leaderGd: parseGd(secondRow?.gd),
+      trailerGd: userGd,
+    };
+  } else if (!isMaxTier && actualPos === relegationThreshold - 1) {
+    const dropRow = fullTable[relegationThreshold - 1];
+    decisionDay = {
+      type: 'relegation_battle',
+      rivalName: dropRow?.name || 'Drop Zone Rival',
+      rivalPts: dropRow?.pts ?? Math.max(0, actualPts - 1),
+      leaderGd: userGd,
+      trailerGd: parseGd(dropRow?.gd),
+    };
+  } else if (!isMaxTier && actualPos >= relegationThreshold) {
+    const safetyRow = fullTable[relegationThreshold - 2];
+    if (safetyRow && !safetyRow.isUser) {
+      const gapToSafety = safetyRow.pts - actualPts;
+      if (gapToSafety >= 0 && gapToSafety <= 2) {
+        decisionDay = {
+          type: 'relegation_battle',
+          rivalName: safetyRow.name,
+          rivalPts: safetyRow.pts,
+          leaderGd: parseGd(safetyRow.gd),
+          trailerGd: userGd,
+        };
+      }
+    }
+  }
+
+  return {
+    ...rawStats,
+    pos: actualPos,
+    pts: actualPts,
+    decisionDay,
+  };
+}
+

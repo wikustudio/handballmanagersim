@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 
 import { Club, GameState, Language, UniverseMovement } from '../types';
 import { getLeagueInfo, getDomesticCupInfo, getDomesticSupercupInfo, isReserveClub, getMaxTier, getCountryFlag, normalizeCountry } from '../data/gameConstants';
-import { generateLeagueTable, calculateLeagueStakes } from '../utils/leagueTableGenerator';
+import { generateLeagueTable, buildLiveLeagueStandings, calculateLeagueStakes } from '../utils/leagueTableGenerator';
 import { ALL_CLUBS } from '../data/clubsData';
 import { isAnyModActive } from '../utils/modManager';
 import { getAlmanacEntries, getAlmanacAvailableYears, AlmanacCompetitionFilter } from '../data/almanacHistory';
@@ -256,6 +256,37 @@ export const LeagueTableModal: React.FC<LeagueTableModalProps> = ({
         userPlayedTier: currentSelectedHist.tier
       });
     }
+    const isUserCurrentDivision =
+      selectedYear === state.year &&
+      normalizeCountry(selectedCountry) === normalizeCountry(state.club.country || 'GER') &&
+      effectiveTier === state.club.tier;
+    const pendingMeta = (state.pendingSeasonState as any)?._meta;
+    const fhOutcomes: ('W' | 'D' | 'L')[] | undefined = pendingMeta?.firstHalfOutcomes;
+    if (
+      isUserCurrentDivision &&
+      state.winterBreakSeenYear === state.year &&
+      Array.isArray(fhOutcomes) &&
+      fhOutcomes.length > 0
+    ) {
+      const wins = fhOutcomes.filter((o) => o === 'W').length;
+      const draws = fhOutcomes.filter((o) => o === 'D').length;
+      const losses = fhOutcomes.filter((o) => o === 'L').length;
+      const played = fhOutcomes.length;
+      const totalOutcomes = Array.isArray(pendingMeta?.allOutcomes) ? pendingMeta.allOutcomes.length : played * 2;
+      const rawGf = pendingMeta?.initialRawGf ?? (state.pendingSeasonState as any)?.gf ?? played * 29;
+      const rawGa = pendingMeta?.initialRawGa ?? (state.pendingSeasonState as any)?.ga ?? played * 28;
+      const midGf = Math.round(rawGf * (played / Math.max(1, totalOutcomes)));
+      const midGa = Math.round(rawGa * (played / Math.max(1, totalOutcomes)));
+      return buildLiveLeagueStandings(
+        state,
+        clubsDb,
+        effectiveTier,
+        played,
+        { wins, draws, losses, gf: midGf, ga: midGa },
+        selectedYear
+      );
+    }
+
     return generateLeagueTable(state, clubsDb, effectiveTier, {
       year: selectedYear,
       country: selectedCountry,

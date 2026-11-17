@@ -14,7 +14,7 @@ import {
   COUNTRIES,
 } from '../data/gameConstants';
 import { getLeagueSize } from '../engine/engine';
-import { generateLeagueTable, TableRow } from './leagueTableGenerator';
+import { generateLeagueTable, buildLiveLeagueStandings, TableRow } from './leagueTableGenerator';
 import { ArenaDesignId, ArenaColorScheme } from './arenaArchitecture';
 export type { ArenaColorScheme };
 import { getContinentalCupNames } from './regionHelpers';
@@ -1050,98 +1050,20 @@ export function sliceAdjacentStandings(
 }
 
 function buildPartialStandingsTable(
-  baseZeroTable: TableRow[],
+  state: GameState,
   registryPool: any[],
-  avgPeerOvr: number,
+  effectiveTier: number,
   year: number,
   played: number,
-  userStats: { wins: number; draws: number; losses: number; gf: number; ga: number }
+  userStats: { wins: number; draws: number; losses: number; gf: number; ga: number },
+  fallbackZeroTable: TableRow[]
 ): TableRow[] {
-  if (played <= 0 || baseZeroTable.length === 0) return baseZeroTable;
-
-  const computed = baseZeroTable.map((row, idx) => {
-    if (row.isUser) {
-      const pts = userStats.wins * 2 + userStats.draws;
-      const diff = userStats.gf - userStats.ga;
-      return {
-        ...row,
-        w: userStats.wins,
-        d: userStats.draws,
-        l: userStats.losses,
-        gf: userStats.gf,
-        ga: userStats.ga,
-        pts,
-        gd: diff > 0 ? `+${diff}` : String(diff),
-      };
-    }
-
-    const clubObj =
-      registryPool.find(
-        (c) =>
-          (row.id !== undefined && String(c.id) === String(row.id)) ||
-          (c.name && row.name && c.name.toLowerCase() === row.name.toLowerCase())
-      ) ||
-      ALL_CLUBS.find(
-        (c) =>
-          (row.id !== undefined && String(c.id) === String(row.id)) ||
-          (c.name && row.name && c.name.toLowerCase() === row.name.toLowerCase())
-      );
-
-    const aiOvr = clubObj?.baseOvr || avgPeerOvr;
-    const rowSeed = hashSeed(`${row.name}-${year}-live`);
-    let w = 0;
-    let d = 0;
-    let l = 0;
-    let gf = 0;
-    let ga = 0;
-    const winProb = Math.max(0.16, Math.min(0.84, 0.46 + (aiOvr - avgPeerOvr) * 0.032));
-    const drawProb = 0.09;
-
-    for (let m = 1; m <= played; m++) {
-      const r = seededRand(rowSeed + idx * 17, m * 3);
-      const gR1 = seededRand(rowSeed + idx * 17, m * 3 + 1);
-      const gR2 = seededRand(rowSeed + idx * 17, m * 3 + 2);
-      const baseGoals = Math.round(26 + (aiOvr - 72) * 0.22 + gR1 * 6);
-      if (r < winProb) {
-        w++;
-        const margin = 1 + Math.floor(gR2 * 5);
-        gf += baseGoals + Math.ceil(margin / 2);
-        ga += Math.max(18, baseGoals - Math.floor(margin / 2));
-      } else if (r < winProb + drawProb) {
-        d++;
-        gf += baseGoals;
-        ga += baseGoals;
-      } else {
-        l++;
-        const margin = 1 + Math.floor(gR2 * 5);
-        gf += Math.max(18, baseGoals - Math.ceil(margin / 2));
-        ga += baseGoals + Math.floor(margin / 2);
-      }
-    }
-
-    const pts = w * 2 + d;
-    const diff = gf - ga;
-    return {
-      ...row,
-      w,
-      d,
-      l,
-      gf,
-      ga,
-      pts,
-      gd: diff > 0 ? `+${diff}` : String(diff),
-    };
-  });
-
-  computed.sort((a, b) => {
-    if (b.pts !== a.pts) return b.pts - a.pts;
-    const gdA = parseInt(String(a.gd).replace('+', ''), 10) || 0;
-    const gdB = parseInt(String(b.gd).replace('+', ''), 10) || 0;
-    if (gdB !== gdA) return gdB - gdA;
-    return (b.gf || 0) - (a.gf || 0);
-  });
-
-  return computed.map((r, i) => ({ ...r, pos: i + 1 }));
+  if (played <= 0) return fallbackZeroTable;
+  try {
+    return buildLiveLeagueStandings(state, registryPool, effectiveTier, played, userStats, year);
+  } catch {
+    return fallbackZeroTable;
+  }
 }
 
 export function buildCourtsideAnalytics(
@@ -1263,12 +1185,13 @@ export function buildCourtsideAnalytics(
     lastFive = [...recent, ...Array(Math.max(0, 5 - recent.length)).fill('—')] as FormSlot[];
 
     fullLeagueTable = buildPartialStandingsTable(
-      fullLeagueTable,
+      state,
       registryPool,
-      avgPeerOvr,
+      effectiveTier,
       selectedYear,
       gamesPlayed,
-      { wins, draws, losses, gf: seasonGf, ga: seasonGa }
+      { wins, draws, losses, gf: seasonGf, ga: seasonGa },
+      fullLeagueTable
     );
     rankPos = fullLeagueTable.find((r) => r.isUser)?.pos || rankPos;
   } else if (isCurrentActiveSeason && !isFirstHalf) {
@@ -1322,12 +1245,13 @@ export function buildCourtsideAnalytics(
     }
 
     fullLeagueTable = buildPartialStandingsTable(
-      fullLeagueTable,
+      state,
       registryPool,
-      avgPeerOvr,
+      effectiveTier,
       selectedYear,
       gamesPlayed,
-      { wins, draws, losses, gf: seasonGf, ga: seasonGa }
+      { wins, draws, losses, gf: seasonGf, ga: seasonGa },
+      fullLeagueTable
     );
     rankPos = fullLeagueTable.find((r) => r.isUser)?.pos || rankPos;
   } else {
